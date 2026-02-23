@@ -13,15 +13,15 @@ object GetFormatter:
     val companion = renderCompanion(sym)
     val subtypes  = renderSubtypes(sym)
 
-    val sb = new StringBuilder
-    sb.append(s"## $fqn\n")
-    sb.append(s"```scala\n$signature\n```\n")
-    if flags.nonEmpty then sb.append(s"**Flags:** $flags\n")
-    sb.append(s"**Origin:** $origin\n")
-    members.foreach(m => sb.append(s"**Members:**\n```scala\n$m\n```\n"))
-    companion.foreach(c => sb.append(s"**Companion members:** $c\n"))
-    subtypes.foreach(s => sb.append(s"**Known subtypes:** $s\n"))
-    sb.toString
+    List(
+      Some(s"## $fqn"),
+      Some(s"```scala\n$signature\n```"),
+      Option.when(flags.nonEmpty)(s"**Flags:** $flags"),
+      Some(s"**Origin:** $origin"),
+      members.map(m => s"**Members:**\n```scala\n$m\n```"),
+      companion.map(c => s"**Companion members:** $c"),
+      subtypes.map(s => s"**Known subtypes:** $s")
+    ).flatten.mkString("", "\n", "\n")
 
   def formatGetResult(@annotation.unused fqn: String, symbols: List[Symbol])(using ctx: Context): String =
     symbols.map(formatSymbol).mkString("\n\n---\n\n")
