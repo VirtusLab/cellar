@@ -21,11 +21,15 @@ object ListHandler:
         result   <- ContextResource.makeFromCoord(coord, jrePaths, extraRepositories).use { (ctx, _) =>
           given tastyquery.Contexts.Context = ctx
           SymbolLister.resolve(fqn).flatMap {
-            case None =>
+            case ListResolveResult.NotFound =>
               Console[IO]
                 .errorln(s"'$fqn' not found in '${coord.render}'.")
                 .as(ExitCode.Error)
-            case Some(target) =>
+            case ListResolveResult.PartialMatch(resolvedFqn, missingMember) =>
+              Console[IO]
+                .errorln(CellarError.PartialResolution(fqn, coord, resolvedFqn, missingMember).getMessage)
+                .as(ExitCode.Error)
+            case ListResolveResult.Found(target) =>
               val memberStream = SymbolLister
                 .listMembers(target)
                 .evalMap(sym => IO.blocking(LineFormatter.formatLine(sym)))

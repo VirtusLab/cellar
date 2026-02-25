@@ -10,19 +10,23 @@ object ListTarget:
   final case class Package(sym: PackageSymbol) extends ListTarget
   final case class Cls(sym: ClassSymbol)       extends ListTarget
 
+sealed trait ListResolveResult
+object ListResolveResult:
+  final case class Found(target: ListTarget)                                   extends ListResolveResult
+  final case class PartialMatch(resolvedFqn: String, missingMember: String)    extends ListResolveResult
+  case object NotFound                                                         extends ListResolveResult
+
 object SymbolLister:
-  def resolve(fqn: String)(using ctx: Context): IO[Option[ListTarget]] =
+  def resolve(fqn: String)(using ctx: Context): IO[ListResolveResult] =
     IO.blocking {
       val pkgOpt =
         try Some(ctx.findPackage(fqn))
         catch case _: Exception => None
-      pkgOpt.map(ListTarget.Package.apply).orElse {
-        val clsOpt =
-          try Some(ctx.findStaticClass(fqn))
-          catch case _: Exception => None
-        clsOpt
-          .orElse(try Some(ctx.findStaticModuleClass(fqn)) catch case _: Exception => None)
-          .map(ListTarget.Cls.apply)
+      pkgOpt.map(p => ListResolveResult.Found(ListTarget.Package(p))).getOrElse {
+        SymbolResolver.resolveToClass(fqn) match
+          case Right(cls) => ListResolveResult.Found(ListTarget.Cls(cls))
+          case Left(Some(partial)) => ListResolveResult.PartialMatch(partial.resolvedFqn, partial.missingMember)
+          case Left(None) => ListResolveResult.NotFound
       }
     }
 

@@ -74,3 +74,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 5. Don't write tests that test the compiler
 
 Examples are testing match exhaustivity, typesystem etc.
+
+## Documentation / Development history
+
+All plans, decision and architecture designs are available in ai/ folder

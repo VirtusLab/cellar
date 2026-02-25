@@ -4,7 +4,7 @@ import tastyquery.Contexts.Context
 import tastyquery.Symbols.{ClassSymbol, Symbol, TermOrTypeSymbol, TermSymbol, TypeSymbol}
 
 object GetFormatter:
-  def formatSymbol(sym: Symbol)(using ctx: Context): String =
+  def formatSymbol(sym: Symbol, docstring: Option[String] = None)(using ctx: Context): String =
     val fqn       = sym.displayFullName
     val signature = TypePrinter.printSymbolSignature(sym)
     val flags     = renderFlags(sym)
@@ -16,6 +16,9 @@ object GetFormatter:
     val sb = new StringBuilder
     sb.append(s"## $fqn\n")
     sb.append(s"```scala\n$signature\n```\n")
+    docstring.map(cleanDocstring).filter(_.nonEmpty).foreach { doc =>
+      sb.append(s"$doc\n\n")
+    }
     if flags.nonEmpty then sb.append(s"**Flags:** $flags\n")
     sb.append(s"**Origin:** $origin\n")
     members.foreach(m => sb.append(s"**Members:**\n```scala\n$m\n```\n"))
@@ -23,8 +26,18 @@ object GetFormatter:
     subtypes.foreach(s => sb.append(s"**Known subtypes:** $s\n"))
     sb.toString
 
-  def formatGetResult(@annotation.unused fqn: String, symbols: List[Symbol])(using ctx: Context): String =
-    symbols.map(formatSymbol).mkString("\n\n---\n\n")
+  def formatGetResult(@annotation.unused fqn: String, symbols: List[Symbol], docstring: Option[String] = None)(using ctx: Context): String =
+    symbols.zipWithIndex.map { (sym, i) =>
+      formatSymbol(sym, if i == 0 then docstring else None)
+    }.mkString("\n\n---\n\n")
+
+  private def cleanDocstring(raw: String): String =
+    raw.stripPrefix("/**").stripSuffix("*/").trim
+      .linesIterator
+      .map(_.replaceAll("""^\s*\*\s?""", "").stripTrailing())
+      .filter(_.nonEmpty)
+      .mkString("\n")
+      .trim
 
   private def renderFlags(sym: Symbol)(using Context): String =
     val flags = sym match

@@ -18,6 +18,11 @@ object CellarError:
       if nearMatches.isEmpty then base
       else s"$base Did you mean one of: ${nearMatches.mkString(", ")}?"
 
+  final case class PartialResolution(fqn: String, coord: MavenCoordinate, resolvedFqn: String, missingMember: String)
+      extends CellarError:
+    override def getMessage: String =
+      s"Symbol '$fqn' not found in '${coord.render}'. Resolved up to '$resolvedFqn' but member '$missingMember' was not found."
+
   final case class PackageGivenToGet(fqn: String) extends CellarError:
     override def getMessage: String =
       s"'$fqn' is a package, not a symbol. Use 'cellar list ${fqn}' to explore package contents."

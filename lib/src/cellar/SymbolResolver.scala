@@ -3,22 +3,24 @@ package cellar
 import cats.effect.IO
 import tastyquery.Contexts.Context
 import tastyquery.Exceptions.MemberNotFoundException
-import tastyquery.Names.termName
-import tastyquery.Symbols.Symbol
+import tastyquery.Names.{termName, typeName}
+import tastyquery.Symbols.{ClassSymbol, Symbol}
 
 sealed trait LookupResult
 object LookupResult:
-  final case class Found(symbols: List[Symbol]) extends LookupResult
-  case object IsPackage                          extends LookupResult
-  case object NotFound                           extends LookupResult
+  final case class Found(symbols: List[Symbol])                              extends LookupResult
+  case object IsPackage                                                      extends LookupResult
+  case object NotFound                                                       extends LookupResult
+  final case class PartialMatch(resolvedFqn: String, missingMember: String)  extends LookupResult
 
 object SymbolResolver:
   def resolve(fqn: String)(using ctx: Context): IO[LookupResult] =
     IO.blocking(tryTopLevel(fqn)).flatMap {
       case Some(result) => IO.pure(result)
-      case None         => IO.blocking(tryMemberLookup(fqn)).map(_.getOrElse(LookupResult.NotFound))
+      case None         => IO.blocking(tryNestedLookup(fqn)).map(_.getOrElse(LookupResult.NotFound))
     }
 
+  /** Try to resolve as a top-level class, module, term, type, or package. */
   private def tryTopLevel(fqn: String)(using ctx: Context): Option[LookupResult] =
     tryOrNone(ctx.findStaticClass(fqn)).map(s => LookupResult.Found(List(s)))
       .orElse(tryOrNone(ctx.findStaticModuleClass(fqn)).map(s => LookupResult.Found(List(s))))
@@ -26,22 +28,122 @@ object SymbolResolver:
       .orElse(tryOrNone(ctx.findStaticType(fqn)).map(s => LookupResult.Found(List(s))))
       .orElse(tryOrNone(ctx.findPackage(fqn)).map(_ => LookupResult.IsPackage))
 
-  private def tryMemberLookup(fqn: String)(using ctx: Context): Option[LookupResult] =
-    val lastDot = fqn.lastIndexOf('.')
-    if lastDot <= 0 then return None
-    val ownerFqn  = fqn.substring(0, lastDot)
-    val memberStr = fqn.substring(lastDot + 1)
+  /**
+   * Multi-segment nested member walk.
+   * Splits the FQN into segments, finds the longest top-level prefix,
+   * then walks remaining segments as member lookups.
+   */
+  private def tryNestedLookup(fqn: String)(using ctx: Context): Option[LookupResult] =
+    val segments = fqn.split('.')
+    if segments.length < 2 then return None
 
-    val ownerOpt =
-      tryOrNone(ctx.findStaticClass(ownerFqn))
-        .orElse(tryOrNone(ctx.findStaticModuleClass(ownerFqn)))
+    findTopLevelRoot(segments) match
+      case None => None
+      case Some((root, rootIdx)) =>
+        val resolvedSoFar = segments.take(rootIdx).mkString(".")
+        walkMembers(root, segments, rootIdx, resolvedSoFar)
 
-    ownerOpt.map { owner =>
-      val overloads = owner.getAllOverloadedDecls(termName(memberStr))
-      val public    = overloads.filter(PublicApiFilter.isPublic)
-      if public.isEmpty then LookupResult.NotFound
-      else LookupResult.Found(public)
+  /**
+   * Walk remaining segments as nested member lookups on the given ClassSymbol.
+   * At the final segment, collect both term overloads and type members.
+   * At intermediate segments, resolve to a ClassSymbol to continue walking.
+   */
+  private def walkMembers(
+      owner: ClassSymbol,
+      segments: Array[String],
+      fromIdx: Int,
+      resolvedSoFar: String
+  )(using ctx: Context): Option[LookupResult] =
+    if fromIdx >= segments.length then
+      return Some(LookupResult.Found(List(owner)))
+
+    var current: ClassSymbol = owner
+    var currentResolved      = resolvedSoFar
+    var i                    = fromIdx
+
+    while i < segments.length - 1 do
+      val seg = segments(i)
+      findClassMember(current, seg) match
+        case Some(cls) =>
+          currentResolved = s"$currentResolved.$seg"
+          current = cls
+          i += 1
+        case None =>
+          return Some(LookupResult.PartialMatch(currentResolved, seg))
+
+    // Final segment: walk linearization for term overloads + type members
+    val finalSeg = segments(segments.length - 1)
+    val tName = termName(finalSeg)
+    val tyName = typeName(finalSeg)
+    val linearization =
+      try current.linearization
+      catch case _: Exception => List(current)
+    val seen = scala.collection.mutable.Set.empty[Symbol]
+    val results = List.newBuilder[Symbol]
+    for klass <- linearization do
+      for sym <- klass.getAllOverloadedDecls(tName) if !seen.contains(sym) do
+        seen += sym
+        results += sym
+      for sym <- klass.getDecl(tyName) if !seen.contains(sym) do
+        seen += sym
+        results += sym
+    val all = results.result().filter(PublicApiFilter.isPublic)
+
+    if all.isEmpty then Some(LookupResult.PartialMatch(currentResolved, finalSeg))
+    else Some(LookupResult.Found(all))
+
+  /**
+   * Find a nested class member by name, walking the linearization.
+   * Tries type members first (traits, classes), then term members (objects).
+   */
+  private[cellar] def findClassMember(owner: ClassSymbol, name: String)(using ctx: Context): Option[ClassSymbol] =
+    val byType = owner.getMember(typeName(name)).collect { case cs: ClassSymbol => cs }
+    byType.orElse {
+      owner.getMember(termName(name)).flatMap(_.moduleClass)
     }
+
+  /**
+   * Resolve an FQN to a ClassSymbol, supporting nested types.
+   * Shared helper used by both SymbolResolver and SymbolLister.
+   */
+  def resolveToClass(fqn: String)(using ctx: Context): Either[Option[LookupResult.PartialMatch], ClassSymbol] =
+    tryOrNone(ctx.findStaticClass(fqn)).orElse(tryOrNone(ctx.findStaticModuleClass(fqn))) match
+      case Some(cls) => Right(cls)
+      case None =>
+        val segments = fqn.split('.')
+        if segments.length < 2 then return Left(None)
+
+        findTopLevelRoot(segments) match
+          case None => Left(None)
+          case Some((root, rootIdx)) =>
+            var current: ClassSymbol = root
+            var currentResolved = segments.take(rootIdx).mkString(".")
+            var i = rootIdx
+            while i < segments.length do
+              val seg = segments(i)
+              findClassMember(current, seg) match
+                case Some(cls) =>
+                  currentResolved = s"$currentResolved.$seg"
+                  current = cls
+                  i += 1
+                case None =>
+                  return Left(Some(LookupResult.PartialMatch(currentResolved, seg)))
+            Right(current)
+
+  /**
+   * Try progressively longer prefixes of segments as a top-level class/module.
+   * Returns the longest matching ClassSymbol and the index past the root segments.
+   */
+  private def findTopLevelRoot(segments: Array[String])(using ctx: Context): Option[(ClassSymbol, Int)] =
+    var best: Option[(ClassSymbol, Int)] = None
+    var i = 1
+    while i < segments.length do
+      val prefix = segments.take(i + 1).mkString(".")
+      val found = tryOrNone(ctx.findStaticClass(prefix))
+        .orElse(tryOrNone(ctx.findStaticModuleClass(prefix)))
+      if found.isDefined then best = Some((found.get, i + 1))
+      i += 1
+    best
 
   private def tryOrNone[A](thunk: => A): Option[A] =
     try Some(thunk)

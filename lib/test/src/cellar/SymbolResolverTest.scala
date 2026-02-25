@@ -63,11 +63,57 @@ class SymbolResolverTest extends CatsEffectSuite:
       }
     }
 
-  test("resolve non-existent method returns NotFound"):
+  test("resolve non-existent method returns PartialMatch"):
     withCtx { ctx =>
       given Context = ctx
       SymbolResolver.resolve("cellar.fixture.scala3.CellarADT.nonExistentXYZ").map {
-        case LookupResult.NotFound => ()
-        case other                 => fail(s"Expected NotFound, got $other")
+        case LookupResult.PartialMatch(resolved, missing) =>
+          assert(resolved.contains("CellarADT"), s"Expected resolved to contain CellarADT, got $resolved")
+          assertEquals(missing, "nonExistentXYZ")
+        case other => fail(s"Expected PartialMatch, got $other")
+      }
+    }
+
+  test("resolve nested type returns Found"):
+    withCtx { ctx =>
+      given Context = ctx
+      SymbolResolver.resolve("cellar.fixture.scala3.CellarOuter.InnerTrait").map {
+        case LookupResult.Found(syms) =>
+          assert(syms.nonEmpty)
+        case other => fail(s"Expected Found for nested type, got $other")
+      }
+    }
+
+  test("resolve 2-level nested type returns Found"):
+    withCtx { ctx =>
+      given Context = ctx
+      SymbolResolver.resolve("cellar.fixture.scala3.CellarOuter.InnerTrait.innerMethod").map {
+        case LookupResult.Found(syms) =>
+          assert(syms.nonEmpty)
+          assert(syms.exists(_.name.toString == "innerMethod"))
+        case other => fail(s"Expected Found for 2-level nested member, got $other")
+      }
+    }
+
+  test("resolve inherited method returns Found"):
+    withCtx { ctx =>
+      given Context = ctx
+      // midMethod is declared on CellarMid, should be found via CellarLeaf's linearization
+      SymbolResolver.resolve("cellar.fixture.scala3.CellarLeaf.midMethod").map {
+        case LookupResult.Found(syms) =>
+          assert(syms.nonEmpty)
+          assert(syms.exists(_.name.toString == "midMethod"))
+        case other => fail(s"Expected Found for inherited method, got $other")
+      }
+    }
+
+  test("resolve inherited nested type returns Found"):
+    withCtx { ctx =>
+      given Context = ctx
+      // InnerTrait is declared on CellarOuter, should be found via CellarLeaf's linearization
+      SymbolResolver.resolve("cellar.fixture.scala3.CellarLeaf.InnerTrait").map {
+        case LookupResult.Found(syms) =>
+          assert(syms.nonEmpty)
+        case other => fail(s"Expected Found for inherited nested type, got $other")
       }
     }

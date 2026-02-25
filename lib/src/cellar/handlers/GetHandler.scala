@@ -23,9 +23,11 @@ object GetHandler:
           given Context = ctx
           SymbolResolver.resolve(fqn).flatMap {
             case LookupResult.Found(symbols) =>
+              val jars = classpath.filter(_.toString.endsWith(".jar")).map(e => Path.of(e.toString)).toSeq
               for
                 _         <- warnShadedDuplicate(fqn, classpath)
-                formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols))
+                docstring <- IO.blocking(DocstringExtractor.extract(jars, coord, fqn))
+                formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols, docstring))
                 _         <- Console[IO].println(formatted)
                 _         <- warnScala2(symbols)
               yield ExitCode.Success
@@ -33,8 +35,12 @@ object GetHandler:
               Console[IO].errorln(
                 s"'$fqn' is a package. Use 'cellar list $fqn' to explore package contents."
               ).as(ExitCode.Error)
+            case LookupResult.PartialMatch(resolvedFqn, missingMember) =>
+              IO.raiseError(CellarError.PartialResolution(fqn, coord, resolvedFqn, missingMember))
             case LookupResult.NotFound =>
-              IO.raiseError(CellarError.SymbolNotFound(fqn, coord, Nil))
+              NearMatchFinder.findNearMatches(fqn, classpath).flatMap { nearMatches =>
+                IO.raiseError(CellarError.SymbolNotFound(fqn, coord, nearMatches))
+              }
           }
         }
       yield result

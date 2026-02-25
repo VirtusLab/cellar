@@ -20,13 +20,15 @@ object GetSourceHandler:
     val program =
       for
         jrePaths <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
-        result   <- ContextResource.makeFromCoord(coord, jrePaths, extraRepositories).use { (ctx, _) =>
+        result   <- ContextResource.makeFromCoord(coord, jrePaths, extraRepositories).use { (ctx, classpath) =>
           given Context = ctx
           SymbolResolver.resolve(fqn).flatMap {
             case LookupResult.IsPackage =>
               Console[IO].errorln(s"'$fqn' is a package, not a symbol.").as(ExitCode.Error)
             case LookupResult.NotFound =>
-              IO.raiseError(CellarError.SymbolNotFound(fqn, coord, Nil))
+              NearMatchFinder.findNearMatches(fqn, classpath).flatMap { nearMatches =>
+                IO.raiseError(CellarError.SymbolNotFound(fqn, coord, nearMatches))
+              }
             case LookupResult.Found(symbols) =>
               IO.blocking(sourceRef(symbols.head)).flatMap {
                 case None =>

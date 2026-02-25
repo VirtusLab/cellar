@@ -146,6 +146,54 @@ class IntegrationTest extends CatsEffectSuite:
         assert(console.outBuf.toString.nonEmpty)
       }
 
+  private val scalaLibCoord = MavenCoordinate("org.scala-lang", "scala-library", "3.8.1")
+
+  test("get: nested type Quotes.reflectModule resolves"):
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetHandler
+      .run(scalaLibCoord, "scala.quoted.Quotes.reflectModule")
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        val out = console.outBuf.toString
+        assert(out.contains("reflectModule"), s"Output: $out")
+      }
+
+  test("get: 2-level nested Quotes.reflectModule.SymbolMethods resolves"):
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetHandler
+      .run(scalaLibCoord, "scala.quoted.Quotes.reflectModule.SymbolMethods")
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        val out = console.outBuf.toString
+        assert(out.contains("SymbolMethods"), s"Output: $out")
+      }
+
+  test("list: nested type Quotes.reflectModule lists members"):
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.ListHandler
+      .run(scalaLibCoord, "scala.quoted.Quotes.reflectModule", limit = 50)
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        val out = console.outBuf.toString
+        assert(out.nonEmpty, "Expected non-empty list output")
+      }
+
+  test("get: partial resolution shows helpful error"):
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetHandler
+      .run(scalaLibCoord, "scala.quoted.Quotes.nonExistent")
+      .map { code =>
+        assertEquals(code, ExitCode.Error)
+        val err = console.errBuf.toString
+        assert(err.contains("Resolved up to"), s"Stderr: $err")
+        assert(err.contains("scala.quoted.Quotes"), s"Stderr: $err")
+        assert(err.contains("nonExistent"), s"Stderr: $err")
+      }
+
   test("get: non-existent FQN exits 1 and stderr contains 'not found'"):
     TestFixtures.assumeFixturesAvailable()
     val console = CapturingConsole()
