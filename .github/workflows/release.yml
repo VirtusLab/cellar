@@ -5,11 +5,6 @@ on:
     tags:
       - 'v*'
 
-# OIDC token for cosign keyless signing; write access for release publishing
-permissions:
-  contents: write
-  id-token: write
-
 jobs:
   build:
     name: Build (${{ matrix.target }})
@@ -25,11 +20,13 @@ jobs:
             target: macos-arm64
 
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -55,7 +52,7 @@ jobs:
           tar -czf "${ARCHIVE}" -C staging .
           echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: ${{ matrix.target }}
           path: ${{ env.ARCHIVE }}
@@ -64,10 +61,14 @@ jobs:
     name: Publish Release
     needs: build
     runs-on: ubuntu-latest
+    # OIDC token for cosign keyless signing; write access for release publishing
+    permissions:
+      contents: write
+      id-token: write
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           path: artifacts/
           merge-multiple: true
@@ -77,14 +78,14 @@ jobs:
         run: sha256sum *.tar.gz > checksums.txt
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
 
       - name: Sign checksums (keyless OIDC)
         working-directory: artifacts
         run: cosign sign-blob --yes checksums.txt --bundle checksums.txt.bundle
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
           files: artifacts/*
           generate_release_notes: true

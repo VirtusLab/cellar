@@ -61,7 +61,7 @@ object cli extends CommonScalaModule with NativeImageModule {
 
   def generatedSources = Task {
     val dir = Task.dest
-    val safeVersion = cellarVersion().replace("\\", "\\\\").replace("\"", "\\\"")
+    val safeVersion = cellarVersion().replace("\\", "\\\\").replace("\"", "\\\"").replaceAll("[\r\n]", "")
     os.write(
       dir / "BuildInfo.scala",
       s"""package cellar.cli
