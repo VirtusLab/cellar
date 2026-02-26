@@ -21,8 +21,6 @@ jobs:
             target: linux-x86_64
           - os: ubuntu-24.04-arm
             target: linux-aarch64
-          - os: macos-13
-            target: macos-x86_64
           - os: macos-latest
             target: macos-arm64
 
