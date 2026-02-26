@@ -38,18 +38,24 @@ object lib extends CommonScalaModule {
       mvn"org.scalameta::munit:1.0.4",
       mvn"org.typelevel::munit-cats-effect:2.0.0"
     )
-    def forkArgs = Seq(
-      s"-Dcellar.test.localM2=${os.home / ".m2" / "repository"}",
-      s"-Dcellar.test.fixtureJavaGroup=cellar.test",
-      s"-Dcellar.test.fixtureJavaArtifact=cellar-fixture-java",
-      s"-Dcellar.test.fixtureJavaVersion=0.1.0-SNAPSHOT",
-      s"-Dcellar.test.fixtureScala2Group=cellar.test",
-      s"-Dcellar.test.fixtureScala2Artifact=cellar-fixture-scala2_2.13",
-      s"-Dcellar.test.fixtureScala2Version=0.1.0-SNAPSHOT",
-      s"-Dcellar.test.fixtureScala3Group=cellar.test",
-      s"-Dcellar.test.fixtureScala3Artifact=cellar-fixture-scala3_3",
-      s"-Dcellar.test.fixtureScala3Version=0.1.0-SNAPSHOT"
-    )
+    def forkArgs = Task {
+      // Publish fixtures to ~/.m2 before running tests
+      fixtureJava.publishM2LocalCached()
+      fixtureScala2.publishM2LocalCached()
+      fixtureScala3.publishM2LocalCached()
+      Seq(
+        s"-Dcellar.test.localM2=${os.home / ".m2" / "repository"}",
+        s"-Dcellar.test.fixtureJavaGroup=cellar.test",
+        s"-Dcellar.test.fixtureJavaArtifact=cellar-fixture-java",
+        s"-Dcellar.test.fixtureJavaVersion=0.1.0-SNAPSHOT",
+        s"-Dcellar.test.fixtureScala2Group=cellar.test",
+        s"-Dcellar.test.fixtureScala2Artifact=cellar-fixture-scala2_2.13",
+        s"-Dcellar.test.fixtureScala2Version=0.1.0-SNAPSHOT",
+        s"-Dcellar.test.fixtureScala3Group=cellar.test",
+        s"-Dcellar.test.fixtureScala3Artifact=cellar-fixture-scala3_3",
+        s"-Dcellar.test.fixtureScala3Version=0.1.0-SNAPSHOT"
+      )
+    }
   }
 }
 
@@ -87,9 +93,7 @@ object cli extends CommonScalaModule with NativeImageModule {
   }
 }
 
-/** Publish all three fixture artifacts to ~/.m2 before running integration tests.
-  * Usage: ./mill publishFixtures && ./mill lib.test
-  */
+/** Publish all three fixture artifacts to ~/.m2. */
 def publishFixtures() = Task.Command {
   fixtureJava.publishM2Local()()
   fixtureScala2.publishM2Local()()

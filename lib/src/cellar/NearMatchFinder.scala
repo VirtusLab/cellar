@@ -13,7 +13,7 @@ object NearMatchFinder:
       val lowerName = simpleName.toLowerCase
 
       classpath.to(LazyList)
-        .flatMap(entry => try ctx.findSymbolsByClasspathEntry(entry).to(LazyList) catch case _: Exception => Nil)
+        .flatMap(entry => try ctx.findSymbolsByClasspathEntry(entry).toList catch case _: Throwable => Nil)
         .filter(sym => PublicApiFilter.isPublic(sym) && sym.name.toString.toLowerCase == lowerName)
         .map(_.displayFullName)
         .take(10)
