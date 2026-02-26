@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# OIDC token for cosign keyless signing; write access for release publishing
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+          - os: ubuntu-24.04-arm
+            target: linux-aarch64
+          - os: macos-13
+            target: macos-x86_64
+          - os: macos-latest
+            target: macos-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # Static linking on Linux requires zlib headers
+      - name: Install native-image prerequisites (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y libz-dev
+
+      - name: Build native image
+        run: ./mill cli.nativeImage
+
+      - name: Package artifact
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE="cellar-${VERSION}-${{ matrix.target }}.tar.gz"
+          mkdir staging
+          cp out/cli/nativeImage.dest/cli staging/cellar
+          cp README.md staging/
+          tar -czf "${ARCHIVE}" -C staging .
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.ARCHIVE }}
+
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          merge-multiple: true
+
+      - name: Generate SHA256 checksums
+        working-directory: artifacts
+        run: sha256sum *.tar.gz > checksums.txt
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign checksums (keyless OIDC)
+        working-directory: artifacts
+        run: cosign sign-blob --yes checksums.txt --bundle checksums.txt.bundle
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
