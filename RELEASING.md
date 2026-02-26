@@ -27,7 +27,6 @@ No container images are built or published by this release flow.
 |---|---|---|
 | Linux x86_64 | `ubuntu-latest` | `cellar-<version>-linux-x86_64.tar.gz` |
 | Linux aarch64 | `ubuntu-24.04-arm` | `cellar-<version>-linux-aarch64.tar.gz` |
-| macOS x86_64 | `macos-13` | `cellar-<version>-macos-x86_64.tar.gz` |
 | macOS arm64 | `macos-latest` | `cellar-<version>-macos-arm64.tar.gz` |
 
 > **Windows** — not currently supported. The Mill build uses a Unix shell launcher (`./mill`). Windows support can be added when a `mill.bat` launcher is available in the repository.

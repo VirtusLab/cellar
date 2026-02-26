@@ -47,7 +47,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           ARCHIVE="cellar-${VERSION}-${{ matrix.target }}.tar.gz"
           mkdir staging
-          cp out/cli/nativeImage.dest/cli staging/cellar
+          cp out/cli/nativeImage.dest/native-executable staging/cellar
           cp README.md staging/
           tar -czf "${ARCHIVE}" -C staging .
           echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
