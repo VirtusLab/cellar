@@ -23,4 +23,4 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - run: ./mill lib.test
+      - run: ./mill _.test
