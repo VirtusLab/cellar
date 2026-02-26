@@ -28,12 +28,13 @@ class CoursierFetchClientTest extends CatsEffectSuite:
       assert(paths.forall(p => java.nio.file.Files.exists(p)))
     }
 
-  test("fetchClasspath with non-existent version raises CoordinateNotFound"):
+  test("fetchClasspath with non-existent version raises CoordinateNotFound with suggestions"):
     val bad = MavenCoordinate("org.typelevel", "cats-core_3", "99.99.99")
     CoursierFetchClient.fetchClasspath(bad).attempt.map {
       case Left(e: CellarError.CoordinateNotFound) =>
         assertEquals(e.coord, bad)
         assert(e.getCause != null)
+        assert(e.suggestions.nonEmpty, "Expected suggestions for existing artifact with wrong version")
       case Left(e)  => fail(s"Expected CoordinateNotFound, got ${e.getClass}: ${e.getMessage}")
       case Right(_) => fail("Expected failure for non-existent version")
     }

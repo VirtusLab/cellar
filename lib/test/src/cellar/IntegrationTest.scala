@@ -388,3 +388,37 @@ class IntegrationTest extends CatsEffectSuite:
     handlers.DepsHandler.run(bad).map { code =>
       assertEquals(code, ExitCode.Error)
     }
+
+  // ─── coordinate suggestions ────────────────────────────────────────────────
+
+  test("get: wrong version shows 'Artifact exists' with latest version"):
+    val console = CapturingConsole()
+    given Console[IO] = console
+    val bad = MavenCoordinate("org.typelevel", "cats-core_3", "9.9.9")
+    handlers.GetHandler.run(bad, "cats.Monad").map { code =>
+      assertEquals(code, ExitCode.Error)
+      val err = console.errBuf.toString
+      assert(err.contains("Artifact exists."), s"Stderr: $err")
+      assert(err.contains("Latest version:"), s"Stderr: $err")
+    }
+
+  test("get: wrong artifact shows 'Did you mean?' suggestions"):
+    val console = CapturingConsole()
+    given Console[IO] = console
+    val bad = MavenCoordinate("com.lihaoyi", "mill-scalalib_3", "1.1.1")
+    handlers.GetHandler.run(bad, "mill.javalib.NativeImageModule").map { code =>
+      assertEquals(code, ExitCode.Error)
+      val err = console.errBuf.toString
+      assert(err.contains("Could not resolve"), s"Stderr: $err")
+    }
+
+  test("get: completely wrong coordinate shows generic error without suggestions"):
+    val console = CapturingConsole()
+    given Console[IO] = console
+    val bad = MavenCoordinate("com.nonexistent.x12345", "foo", "1.0.0")
+    handlers.GetHandler.run(bad, "bar.Baz").map { code =>
+      assertEquals(code, ExitCode.Error)
+      val err = console.errBuf.toString
+      assert(err.contains("Check that the group ID"), s"Stderr: $err")
+      assert(!err.contains("Did you mean?"), s"Stderr: $err")
+    }

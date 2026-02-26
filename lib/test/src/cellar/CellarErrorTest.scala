@@ -46,6 +46,27 @@ class CellarErrorTest extends munit.FunSuite:
     assert(e.getMessage.contains("/tmp/b.jar"))
     assert(e.getMessage.contains("com.Foo"))
 
+  test("CoordinateNotFound with suggestions renders 'Did you mean?'"):
+    val cause = new RuntimeException("not found")
+    val suggestions = List("org.example:lib_3:2.0.0", "org.example:lib_2.13:2.0.0")
+    val e = CellarError.CoordinateNotFound(coord, cause, suggestions)
+    assert(e.getMessage.contains("Did you mean?"))
+    assert(e.getMessage.contains("org.example:lib_3:2.0.0"))
+    assert(e.getMessage.contains("org.example:lib_2.13:2.0.0"))
+
+  test("CoordinateNotFound with version hint renders without 'Did you mean?'"):
+    val cause = new RuntimeException("not found")
+    val suggestions = List("Artifact exists. Latest version: 2.13.0")
+    val e = CellarError.CoordinateNotFound(coord, cause, suggestions)
+    assert(e.getMessage.contains("Artifact exists. Latest version: 2.13.0"))
+    assert(!e.getMessage.contains("Did you mean?"))
+
+  test("CoordinateNotFound with empty suggestions renders generic message"):
+    val cause = new RuntimeException("not found")
+    val e = CellarError.CoordinateNotFound(coord, cause)
+    assert(e.getMessage.contains("Check that the group ID"))
+    assert(!e.getMessage.contains("Did you mean?"))
+
   test("CellarError subtypes can be caught as CellarError"):
     val e: CellarError = CellarError.PackageGivenToGet("cats")
     intercept[CellarError](throw e)

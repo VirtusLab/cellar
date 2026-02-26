@@ -5,10 +5,20 @@ import java.nio.file.Path
 sealed trait CellarError extends Throwable
 
 object CellarError:
-  final case class CoordinateNotFound(coord: MavenCoordinate, cause: Throwable)
-      extends CellarError:
+  final case class CoordinateNotFound(
+      coord: MavenCoordinate,
+      cause: Throwable,
+      suggestions: List[String] = List.empty
+  ) extends CellarError:
     override def getMessage: String =
-      s"Could not resolve '${coord.render}'. Check that the group ID, artifact ID, and version are correct and that the artifact is available in Maven Central (or your configured repositories). Cause: ${cause.getMessage}"
+      val base = s"Could not resolve '${coord.render}'."
+      if suggestions.isEmpty then
+        s"$base Check that the group ID, artifact ID, and version are correct."
+      else if suggestions.head.startsWith("Artifact exists.") then
+        s"$base\n\n${suggestions.head}"
+      else
+        val hint = suggestions.map(s => s"  $s").mkString("\n")
+        s"$base\n\nDid you mean?\n$hint"
     override def getCause: Throwable = cause
 
   final case class SymbolNotFound(fqn: String, coord: MavenCoordinate, nearMatches: List[String])

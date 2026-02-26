@@ -1,7 +1,6 @@
 package cellar
 
 import cats.effect.IO
-import cats.syntax.all.*
 import coursierapi.{Cache, Dependency, Fetch, Repository}
 import scala.jdk.CollectionConverters.*
 
@@ -21,6 +20,8 @@ object CoursierResolveClient:
       val deps   = result.getDependencies.asScala.toSeq
         .sortBy(d => s"${d.getModule.getOrganization}:${d.getModule.getName}:${d.getVersion}")
       ResolvedDeps(coord, deps)
-    }.adaptError { case e: coursierapi.error.FetchError =>
-      CellarError.CoordinateNotFound(coord, e)
+    }.handleErrorWith { case e: coursierapi.error.FetchError =>
+      CoordinateCompleter.suggest(coord, extraRepositories).flatMap { suggestions =>
+        IO.raiseError(CellarError.CoordinateNotFound(coord, e, suggestions))
+      }
     }
