@@ -2,13 +2,8 @@ package cellar
 
 object DepsFormatter:
   def format(resolved: ResolvedDeps): String =
-    val sb = new StringBuilder
-    sb.append(s"${resolved.root.render}\n")
-    sb.append(s"  (${resolved.deps.size} transitive dependencies)\n\n")
-    resolved.deps.foreach { dep =>
-      val g = dep.getModule.getOrganization
-      val a = dep.getModule.getName
-      val v = dep.getVersion
-      sb.append(s"  $g:$a:$v\n")
-    }
-    sb.toString.stripTrailing()
+    val header = s"${resolved.root.render}\n  (${resolved.deps.size} transitive dependencies)"
+    val deps   = resolved.deps
+      .map(d => s"  ${d.getModule.getOrganization}:${d.getModule.getName}:${d.getVersion}")
+      .mkString("\n")
+    if deps.isEmpty then header else s"$header\n\n$deps"

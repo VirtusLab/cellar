@@ -12,19 +12,10 @@ object NearMatchFinder:
         case idx => fqn.substring(idx + 1)
       val lowerName = simpleName.toLowerCase
 
-      val matches = List.newBuilder[String]
-      var count   = 0
-      val entries = classpath.iterator
-      while entries.hasNext && count < 10 do
-        val entry = entries.next()
-        try
-          val syms = ctx.findSymbolsByClasspathEntry(entry)
-          val it   = syms.iterator
-          while it.hasNext && count < 10 do
-            val sym = it.next()
-            if PublicApiFilter.isPublic(sym) && sym.name.toString.toLowerCase == lowerName then
-              matches += sym.displayFullName
-              count += 1
-        catch case _: Exception => ()
-      matches.result()
+      classpath.to(LazyList)
+        .flatMap(entry => try ctx.findSymbolsByClasspathEntry(entry).to(LazyList) catch case _: Exception => Nil)
+        .filter(sym => PublicApiFilter.isPublic(sym) && sym.name.toString.toLowerCase == lowerName)
+        .map(_.displayFullName)
+        .take(10)
+        .toList
     }
