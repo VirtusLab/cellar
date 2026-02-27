@@ -1,6 +1,7 @@
 package cellar
 
 import cats.effect.IO
+import cats.syntax.monadError.*
 import java.net.{URI, URLClassLoader}
 import java.nio.file.{Files, FileSystems, Path}
 import scala.jdk.CollectionConverters.*
@@ -12,9 +13,15 @@ object JreClasspath:
     * not the JRT root `/`, so that relative class paths resolve correctly.
     */
   def jrtPath(): IO[Seq[Path]] =
-    IO.blocking {
-      val fs = FileSystems.getFileSystem(URI.create("jrt:/"))
-      Files.list(fs.getPath("modules")).iterator().asScala.toSeq
+    sys.env.get("JAVA_HOME").map(h => jrtPath(Path.of(h))).getOrElse {
+      IO.blocking {
+        val fs = FileSystems.getFileSystem(URI.create("jrt:/"))
+        Files.list(fs.getPath("modules")).iterator().asScala.toSeq
+      }.adaptError { case _ =>
+        new RuntimeException(
+          "Could not locate JRE classpath. Set JAVA_HOME or pass --java-home pointing to a JDK installation."
+        )
+      }
     }
 
   def jrtPath(javaHome: Path): IO[Seq[Path]] =
