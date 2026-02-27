@@ -55,38 +55,6 @@ object cli extends CommonScalaModule with NativeImageModule {
   def moduleDeps = Seq(lib)
   def mainClass = Some("cellar.cli.CellarApp")
 
-  def bundledJreJar: T[PathRef] = Task {
-    import java.net.URI
-    import java.nio.file.{Files, FileSystems}
-    import java.util.jar.{JarEntry, JarOutputStream}
-    import scala.jdk.CollectionConverters.*
-
-    val dest = Task.dest / "jre.jar"
-    val fs   = FileSystems.getFileSystem(URI.create("jrt:/"))
-    val jos  = new JarOutputStream(java.io.FileOutputStream(dest.toIO))
-    val seen = scala.collection.mutable.Set[String]()
-
-    Files.list(fs.getPath("modules")).iterator().asScala.toList.foreach { modPath =>
-      Files.walk(modPath).iterator().asScala
-        .filterNot(Files.isDirectory(_))
-        .foreach { p =>
-          val name = p.getFileName.toString
-          if (name.endsWith(".class") || name.endsWith(".tasty")) && name != "module-info.class" then
-            val rel       = modPath.relativize(p)
-            val entryName = (0 until rel.getNameCount).map(i => rel.getName(i).toString).mkString("/")
-            if !seen(entryName) then
-              seen += entryName
-              jos.putNextEntry(new JarEntry(entryName))
-              jos.write(Files.readAllBytes(p))
-              jos.closeEntry()
-        }
-    }
-    jos.close()
-    PathRef(Task.dest)
-  }
-
-  override def resources = super.resources() ++ Seq(bundledJreJar())
-
   def cellarVersion: T[String] = Task.Input {
     sys.env.getOrElse("CELLAR_VERSION", "0.1.0-SNAPSHOT").stripPrefix("v")
   }
@@ -124,8 +92,7 @@ object cli extends CommonScalaModule with NativeImageModule {
     Assembly.Rule.ExcludePattern("META-INF/.*\\.SF"),
     Assembly.Rule.ExcludePattern("META-INF/.*\\.DSA"),
     Assembly.Rule.ExcludePattern("META-INF/.*\\.RSA"),
-    Assembly.Rule.ExcludePattern("module-info.class"),
-    Assembly.Rule.ExcludePattern("jre.jar")
+    Assembly.Rule.ExcludePattern("module-info.class")
   ) ++ Assembly.defaultRules
 
   object test extends ScalaTests with TestModule.Munit {
