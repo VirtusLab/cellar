@@ -18,8 +18,8 @@ object GetHandler:
   )(using Console[IO]): IO[ExitCode] =
     val program =
       for
-        jrePaths <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
-        result   <- ContextResource.makeFromCoord(coord, jrePaths, extraRepositories).use { (ctx, classpath) =>
+        jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
+        result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, classpath) =>
           given Context = ctx
           SymbolResolver.resolve(fqn).flatMap {
             case LookupResult.Found(symbols) =>

@@ -17,12 +17,12 @@ object SearchHandler:
   )(using Console[IO]): IO[ExitCode] =
     val program =
       for
-        jrePaths <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
-        result   <- ContextResource.makeFromCoord(coord, jrePaths, extraRepositories).use { (ctx, classpath) =>
+        jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
+        result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, classpath) =>
           given tastyquery.Contexts.Context = ctx
           val lowerQuery = query.toLowerCase
           val matchingStream = AllSymbolsStream
-            .stream(classpath, jrePaths)
+            .stream(classpath, jreClasspath)
             .filter(sym => sym.name.toString.toLowerCase.contains(lowerQuery))
           // Collect all matches, sort shortest name first (closest match), then apply limit
           matchingStream.compile.toList.flatMap { allMatches =>

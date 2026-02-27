@@ -6,24 +6,15 @@ import java.nio.file.{Files, Path}
 
 class JreClasspathTest extends CatsEffectSuite:
 
-  test("zero-arg jrtPath returns paths with jrt URI scheme"):
-    JreClasspath.jrtPath().map { paths =>
-      assert(paths.nonEmpty)
-      assert(paths.forall(p => p.toUri.getScheme == "jrt" || p.toString.contains("jrt:")),
-        s"Expected all paths to have jrt scheme, got: ${paths.map(_.toUri).mkString(", ")}")
-    }
-
-  test("zero-arg jrtPath returns non-empty seq of directories"):
-    JreClasspath.jrtPath().map { paths =>
-      assert(paths.nonEmpty)
-      assert(paths.forall(p => Files.isDirectory(p)),
-        s"Expected all paths to be directories: ${paths.mkString(", ")}")
+  test("zero-arg jrtPath returns non-empty classpath"):
+    JreClasspath.jrtPath().map { classpath =>
+      assert(classpath.nonEmpty)
     }
 
   test("one-arg jrtPath with current java.home succeeds"):
     val javaHome = Path.of(System.getProperty("java.home"))
-    JreClasspath.jrtPath(javaHome).map { paths =>
-      assert(paths.nonEmpty)
+    JreClasspath.jrtPath(javaHome).map { classpath =>
+      assert(classpath.nonEmpty)
     }
 
   test("one-arg jrtPath with non-existent path raises error"):

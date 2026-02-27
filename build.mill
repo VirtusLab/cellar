@@ -7,7 +7,6 @@ import mill.scalalib.Assembly
 import mill.scalalib.publish._
 import mill.javalib.NativeImageModule
 import com.goyeau.mill.scalafix.ScalafixModule
-import scala.jdk.CollectionConverters.*
 
 trait CommonScalaModule extends ScalaModule with ScalafixModule {
   def scalaVersion = "3.8.1"
@@ -73,34 +72,14 @@ object cli extends CommonScalaModule with NativeImageModule {
     super.generatedSources() ++ Seq(PathRef(dir))
   }
 
-  def bundledJreJar: T[PathRef] = Task {
-    val fs      = java.nio.file.FileSystems.getFileSystem(java.net.URI.create("jrt:/"))
-    val base    = fs.getPath("modules", "java.base")
-    val jarPath = Task.dest / "jre.jar"
-    val jos     = new java.util.jar.JarOutputStream(new java.io.FileOutputStream(jarPath.toIO))
-    try
-      java.nio.file.Files.walk(base).iterator().asScala
-        .filter(java.nio.file.Files.isRegularFile(_))
-        .foreach { p =>
-          jos.putNextEntry(new java.util.jar.JarEntry(base.relativize(p).toString))
-          jos.write(java.nio.file.Files.readAllBytes(p))
-          jos.closeEntry()
-        }
-    finally jos.close()
-    PathRef(Task.dest)
-  }
-
-  override def resources: T[Seq[PathRef]] = Task {
-    super.resources() :+ bundledJreJar()
-  }
-
   def jvmVersion = "graalvm-community:23.0.2"
 
   def nativeImageOptions = Seq(
     "--no-fallback",
     "--enable-url-protocols=http,https",
     "-H:+ReportExceptionStackTraces",
-    "-H:+AllowJRTFileSystem"
+    "-H:+AllowJRTFileSystem",
+    "--add-opens=java.base/jdk.internal.jrtfs=ALL-UNNAMED"
   )
 
   def mvnDeps = Seq(
