@@ -26,6 +26,8 @@ object lib extends CommonScalaModule {
 
 
   object test extends ScalaTests with TestModule.Munit {
+    private val millBinaryPath = lib.moduleDir / os.up / "mill"
+
     def mvnDeps = super.mvnDeps() ++ Seq(
       mvn"org.scalameta::munit:1.0.4",
       mvn"org.typelevel::munit-cats-effect:2.0.0"
@@ -36,6 +38,7 @@ object lib extends CommonScalaModule {
       fixtureScala2.publishM2LocalCached()
       fixtureScala3.publishM2LocalCached()
       Seq(
+        s"-Dcellar.test.millBinary=$millBinaryPath",
         s"-Dcellar.test.localM2=${os.home / ".m2" / "repository"}",
         s"-Dcellar.test.fixtureJavaGroup=cellar.test",
         s"-Dcellar.test.fixtureJavaArtifact=cellar-fixture-java",

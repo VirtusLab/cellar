@@ -1,5 +1,6 @@
 package cellar
 
+import cellar.build.BuildToolKind
 import java.nio.file.Path
 
 sealed trait CellarError extends Throwable
@@ -45,3 +46,35 @@ object CellarError:
       extends CellarError:
     override def getMessage: String =
       s"Symbol '$fqn' exists in multiple JARs on the classpath: '$firstJar' and '$duplicateJar'."
+
+  // --- Project-aware errors ---
+
+  final case class BuildToolNotOnPath(tool: BuildToolKind, binary: String, markerFile: String)
+      extends CellarError:
+    override def getMessage: String =
+      s"${toolName(tool)} detected ($markerFile found) but '$binary' is not on PATH."
+
+  final case class ModuleRequired(tool: BuildToolKind) extends CellarError:
+    override def getMessage: String =
+      s"--module is required for ${toolName(tool)} projects."
+
+  final case class ModuleNotSupported(tool: BuildToolKind) extends CellarError:
+    override def getMessage: String =
+      s"--module is not supported for ${toolName(tool)} projects."
+
+  final case class CompilationFailed(tool: BuildToolKind, stderr: String) extends CellarError:
+    override def getMessage: String =
+      s"Compilation failed:\n$stderr"
+
+  final case class ClasspathExtractionFailed(tool: BuildToolKind, details: String) extends CellarError:
+    override def getMessage: String =
+      s"Failed to extract classpath from ${toolName(tool)}: $details"
+
+  final case class ModuleNotFound(tool: BuildToolKind, module: String) extends CellarError:
+    override def getMessage: String =
+      s"Module '$module' not found."
+
+  private def toolName(kind: BuildToolKind): String = kind match
+    case BuildToolKind.Mill     => "Mill"
+    case BuildToolKind.Sbt      => "sbt"
+    case BuildToolKind.ScalaCli => "scala-cli"

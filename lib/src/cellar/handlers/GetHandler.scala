@@ -21,33 +21,53 @@ object GetHandler:
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
         result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, classpath) =>
           given Context = ctx
-          SymbolResolver.resolve(fqn).flatMap {
-            case LookupResult.Found(symbols) =>
-              val jars = classpath.filter(_.toString.endsWith(".jar")).map(e => Path.of(e.toString)).toSeq
-              for
-                _         <- warnShadedDuplicate(fqn, classpath)
-                docstring <- IO.blocking(DocstringExtractor.extract(jars, coord, fqn))
-                formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols, docstring))
-                _         <- Console[IO].println(formatted)
-                _         <- warnScala2(symbols)
-              yield ExitCode.Success
-            case LookupResult.IsPackage =>
-              Console[IO].errorln(
-                s"'$fqn' is a package. Use 'cellar list $fqn' to explore package contents."
-              ).as(ExitCode.Error)
-            case LookupResult.PartialMatch(resolvedFqn, missingMember) =>
-              IO.raiseError(CellarError.PartialResolution(fqn, coord, resolvedFqn, missingMember))
-            case LookupResult.NotFound =>
-              NearMatchFinder.findNearMatches(fqn, classpath).flatMap { nearMatches =>
-                IO.raiseError(CellarError.SymbolNotFound(fqn, coord, nearMatches))
-              }
-          }
+          runCore(fqn, classpath, Some(coord))
         }
       yield result
 
     program.handleErrorWith {
       case e: CellarError => Console[IO].errorln(e.getMessage).as(ExitCode.Error)
       case e: Throwable   => Console[IO].errorln(e.getMessage).as(ExitCode.Error)
+    }
+
+  /** Core get logic shared by coordinate-based and project-aware flows. */
+  def runCore(
+      fqn: String,
+      classpath: Classpath,
+      coord: Option[MavenCoordinate]
+  )(using Context, Console[IO]): IO[ExitCode] =
+    SymbolResolver.resolve(fqn).flatMap {
+      case LookupResult.Found(symbols) =>
+        val jars = classpath.filter(_.toString.endsWith(".jar")).map(e => Path.of(e.toString)).toSeq
+        for
+          _         <- warnShadedDuplicate(fqn, classpath)
+          docstring <- coord.fold(IO.pure(Option.empty[String]))(c => IO.blocking(DocstringExtractor.extract(jars, c, fqn)))
+          formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols, docstring))
+          _         <- Console[IO].println(formatted)
+          _         <- warnScala2(symbols)
+        yield ExitCode.Success
+      case LookupResult.IsPackage =>
+        Console[IO].errorln(
+          s"'$fqn' is a package. Use 'cellar list $fqn' to explore package contents."
+        ).as(ExitCode.Error)
+      case LookupResult.PartialMatch(resolvedFqn, missingMember) =>
+        val msg = coord match
+          case Some(c) => CellarError.PartialResolution(fqn, c, resolvedFqn, missingMember).getMessage
+          case None    => s"Symbol '$fqn' not found. Resolved up to '$resolvedFqn' but member '$missingMember' was not found."
+        Console[IO].errorln(msg).as(ExitCode.Error)
+      case LookupResult.NotFound =>
+        coord match
+          case Some(c) =>
+            NearMatchFinder.findNearMatches(fqn, classpath).flatMap { nearMatches =>
+              IO.raiseError(CellarError.SymbolNotFound(fqn, c, nearMatches))
+            }
+          case None =>
+            NearMatchFinder.findNearMatches(fqn, classpath).flatMap { nearMatches =>
+              val base = s"Symbol '$fqn' not found."
+              val msg = if nearMatches.isEmpty then base
+                else s"$base Did you mean one of: ${nearMatches.mkString(", ")}?"
+              Console[IO].errorln(msg).as(ExitCode.Error)
+            }
     }
 
   /** Warns to stderr if the target FQN exists in more than one JAR on the classpath. */
