@@ -18,7 +18,7 @@ class SbtBuildTool(cwd: Path) extends BuildTool:
 
   def extractClasspath(module: Option[String]): IO[List[Path]] =
     requireModule(module).flatMap { mod =>
-      ProcessRunner.run(List("sbt", "--batch", s"$mod/export compile:fullClasspath"), Some(cwd)).flatMap { result =>
+      ProcessRunner.run(List("sbt", "--batch", s"export $mod/compile:fullClasspath"), Some(cwd)).flatMap { result =>
         if result.exitCode != 0 then
           IO.raiseError(CellarError.CompilationFailed(BuildToolKind.Sbt, extractErrors(result.stdout, result.stderr)))
         else

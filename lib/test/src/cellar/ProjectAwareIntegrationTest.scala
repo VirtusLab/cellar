@@ -12,7 +12,7 @@ import java.nio.file.{Files, Path}
   */
 class ProjectAwareIntegrationTest extends CatsEffectSuite:
 
-  override def munitTimeout = scala.concurrent.duration.Duration(120, "s")
+  override def munitIOTimeout = scala.concurrent.duration.Duration(300, "s")
 
   private lazy val millBinary: String =
     Option(System.getProperty("cellar.test.millBinary")).getOrElse("mill")
@@ -469,7 +469,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         )
       } >>
         handlers.ProjectGetHandler.run("example.SbtClass", module = Some("cellar-test"), cwd = Some(dir)).map { code =>
-          assertEquals(code, ExitCode.Success)
+          assertEquals(code, ExitCode.Success, s"Stderr: ${console.errBuf}")
           assert(console.outBuf.toString.contains("SbtClass"), s"Output: ${console.outBuf}")
         }
     }
