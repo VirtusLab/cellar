@@ -1,0 +1,9 @@
+{
+  "resources": {
+    "includes": [
+      {"pattern": "\\Qcoursier/coursier.properties\\E"},
+      {"pattern": "\\Qcoursier/launcher/coursier.properties\\E"},
+      {"pattern": "\\Qlibrary.properties\\E"}
+    ]
+  }
+}

@@ -16,7 +16,7 @@ object ProjectSearchHandler:
       cwd: Option[Path] = None,
       millBinary: String = "./mill"
   )(using Console[IO]): IO[ExitCode] =
-    ProjectHandler.run(javaHome, cwd, module, noCache, millBinary) { (ctx, classpath, jrePaths) =>
+    ProjectHandler.run(javaHome, cwd, module, noCache, millBinary) { (ctx, classpath, jreClasspath) =>
       given Context = ctx
-      SearchHandler.runCore(query, limit, classpath, jrePaths)
+      SearchHandler.runCore(query, limit, classpath, jreClasspath)
     }

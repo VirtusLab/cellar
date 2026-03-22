@@ -8,9 +8,9 @@ import tastyquery.Symbols.TermOrTypeSymbol
 
 object AllSymbolsStream:
   /** Streams all public symbols from the classpath, excluding the given JRE entries. */
-  def stream(classpath: Classpath, jrePaths: Seq[java.nio.file.Path])(using ctx: Context): Stream[IO, TermOrTypeSymbol] =
-    val jreStrings = jrePaths.map(_.toString).toSet
-    val libEntries: List[ClasspathEntry] = classpath.filterNot(e => jreStrings.contains(e.toString))
+  def stream(classpath: Classpath, jreClasspath: Classpath)(using ctx: Context): Stream[IO, TermOrTypeSymbol] =
+    val jreEntries = jreClasspath.toSet
+    val libEntries: List[ClasspathEntry] = classpath.filterNot(jreEntries.contains)
     Stream
       .emits(libEntries)
       .flatMap { entry =>

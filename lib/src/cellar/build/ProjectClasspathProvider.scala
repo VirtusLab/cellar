@@ -10,12 +10,12 @@ object ProjectClasspathProvider:
   def provide(
       cwd: Path,
       module: Option[String],
-      jrePaths: Seq[Path],
+      jreClasspath: Classpath,
       noCache: Boolean,
       millBinary: String = "./mill"
   ): Resource[IO, (Context, Classpath)] =
     Resource.eval(resolveClasspath(cwd, module, noCache, millBinary)).flatMap { paths =>
-      ContextResource.make(paths, jrePaths)
+      ContextResource.make(paths, jreClasspath)
     }
 
   private def resolveClasspath(cwd: Path, module: Option[String], noCache: Boolean, millBinary: String): IO[List[Path]] =

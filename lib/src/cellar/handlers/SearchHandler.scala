@@ -33,11 +33,11 @@ object SearchHandler:
       query: String,
       limit: Int,
       classpath: tastyquery.Classpaths.Classpath,
-      jrePaths: Seq[Path]
+      jreClasspath: tastyquery.Classpaths.Classpath
   )(using tastyquery.Contexts.Context, Console[IO]): IO[ExitCode] =
     val lowerQuery = query.toLowerCase
     val matchingStream = AllSymbolsStream
-      .stream(classpath, jrePaths)
+      .stream(classpath, jreClasspath)
       .filter(sym => sym.name.toString.toLowerCase.contains(lowerQuery))
     // Collect all matches, sort shortest name first (closest match), then apply limit
     matchingStream.compile.toList.flatMap { allMatches =>
