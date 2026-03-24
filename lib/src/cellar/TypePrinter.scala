@@ -93,8 +93,10 @@ object TypePrinter:
 
       case term: TermSymbol =>
         val keyword = termKeyword(term)
-        val sig     = printMethodic(term.declaredType)
-        s"$keyword ${term.name}$sig"
+        if term.isModuleVal then s"$keyword ${term.name}"
+        else
+          val sig = printMethodic(term.declaredType)
+          s"$keyword ${term.name}$sig"
 
       case other => other.toString
 
