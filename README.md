@@ -24,17 +24,10 @@ Cellar gives agents — and humans — a single shell command that returns exact
 
 ## Installation
 
-Download the native binary for your platform from the [latest release](https://github.com/simple-scala-tooling/cellar/releases):
-
-| Platform | Archive |
-|---|---|
-| Linux x86_64 | `cellar-<version>-linux-x86_64.tar.gz` |
-| Linux aarch64 | `cellar-<version>-linux-aarch64.tar.gz` |
-| macOS arm64 | `cellar-<version>-macos-arm64.tar.gz` |
+Download the native binary for your platform from https://github.com/simple-scala-tooling/cellar/releases/latest, then extract and install:
 
 ```sh
-# Example: Linux x86_64
-curl -fSL https://github.com/simple-scala-tooling/cellar/releases/latest/download/cellar-0.1.0-M1-linux-x86_64.tar.gz | tar xz
+tar xz -f cellar-*.tar.gz
 sudo mv cellar /usr/local/bin/
 ```
 
