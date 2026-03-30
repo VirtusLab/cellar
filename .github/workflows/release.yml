@@ -18,6 +18,8 @@ jobs:
             target: linux-aarch64
           - os: macos-latest
             target: macos-arm64
+          - os: macOS-15-intel
+            target: macos-x86_64
 
     runs-on: ${{ matrix.os }}
     permissions:
