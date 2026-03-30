@@ -21,7 +21,7 @@ class MillBuildTool(cwd: Path, binary: String = "./mill") extends BuildTool:
       for
         compileResult <- ProcessRunner.run(List(binary, "show", s"$mod.compile"), Some(cwd))
         _ <- checkCompileResult(compileResult, mod)
-        classesDir = parseClassesDir(compileResult.stdout)
+        classesDir <- IO.blocking(parseClassesDir(compileResult.stdout))
         cpResult <- ProcessRunner.run(List(binary, "show", s"$mod.compileClasspath"), Some(cwd))
         paths <- parseClasspathResult(cpResult, classesDir)
       yield paths
@@ -38,9 +38,10 @@ class MillBuildTool(cwd: Path, binary: String = "./mill") extends BuildTool:
     if result.exitCode != 0 then
       IO.raiseError(CellarError.ClasspathExtractionFailed(BuildToolKind.Mill, result.stderr))
     else
-      ClasspathOutputParser.parseJsonArray(result.stdout) match
+      IO.blocking(ClasspathOutputParser.parseJsonArray(result.stdout)).flatMap {
         case Left(err)    => IO.raiseError(CellarError.ClasspathExtractionFailed(BuildToolKind.Mill, err))
         case Right(paths) => IO.pure(classesDir.toList ++ paths)
+      }
 
   private def parseClassesDir(stdout: String): Option[Path] =
     val marker = "\"classes\""

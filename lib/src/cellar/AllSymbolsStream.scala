@@ -21,4 +21,4 @@ object AllSymbolsStream:
           })
           .flatMap(syms => Stream.emits(syms))
       }
-      .filter(PublicApiFilter.isPublic)
+      .evalFilter(sym => IO.blocking(PublicApiFilter.isPublic(sym)))
