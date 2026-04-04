@@ -13,13 +13,13 @@ object ProjectHandler:
       cwd: Option[Path],
       module: Option[String],
       noCache: Boolean,
-      millBinary: String
+      config: Config
   )(body: (Context, Classpath, Classpath) => IO[ExitCode])(using Console[IO]): IO[ExitCode] =
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
         workingDir   <- cwd.fold(IO.blocking(Path.of(System.getProperty("user.dir"))))(IO.pure)
-        result       <- build.ProjectClasspathProvider.provide(workingDir, module, jreClasspath, noCache, millBinary).use { (ctx, classpath) =>
+        result       <- build.ProjectClasspathProvider.provide(workingDir, module, jreClasspath, noCache, config).use { (ctx, classpath) =>
           body(ctx, classpath, jreClasspath)
         }
       yield result

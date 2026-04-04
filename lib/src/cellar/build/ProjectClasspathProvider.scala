@@ -1,7 +1,8 @@
 package cellar.build
 
 import cats.effect.{IO, Resource}
-import cellar.ContextResource
+import cellar.{Config, ContextResource}
+
 import java.nio.file.Path
 import tastyquery.Classpaths.Classpath
 import tastyquery.Contexts.Context
@@ -12,15 +13,15 @@ object ProjectClasspathProvider:
       module: Option[String],
       jreClasspath: Classpath,
       noCache: Boolean,
-      millBinary: String = "./mill"
+      config: Config
   ): Resource[IO, (Context, Classpath)] =
-    Resource.eval(resolveClasspath(cwd, module, noCache, millBinary)).flatMap { paths =>
+    Resource.eval(resolveClasspath(cwd, module, noCache, config)).flatMap { paths =>
       ContextResource.make(paths, jreClasspath)
     }
 
-  private def resolveClasspath(cwd: Path, module: Option[String], noCache: Boolean, millBinary: String): IO[List[Path]] =
+  private def resolveClasspath(cwd: Path, module: Option[String], noCache: Boolean, config: Config): IO[List[Path]] =
     BuildToolDetector.detectKind(cwd).flatMap { kind =>
-      val buildTool = instantiate(kind, cwd, millBinary)
+      val buildTool = instantiate(kind, cwd, config)
       val useCache = kind != BuildToolKind.ScalaCli && !noCache
 
       if useCache then cachedFlow(buildTool, module, cwd)
@@ -40,7 +41,7 @@ object ProjectClasspathProvider:
         case None        => buildTool.extractClasspath(module).flatTap(paths => cache.put(hash, paths))
     yield paths
 
-  private def instantiate(kind: BuildToolKind, cwd: Path, millBinary: String): BuildTool = kind match
-    case BuildToolKind.Mill     => MillBuildTool(cwd, millBinary)
-    case BuildToolKind.Sbt      => SbtBuildTool(cwd)
+  private def instantiate(kind: BuildToolKind, cwd: Path, config: Config): BuildTool = kind match
+    case BuildToolKind.Mill     => MillBuildTool(cwd, config.mill)
+    case BuildToolKind.Sbt      => SbtBuildTool(cwd, config.sbt)
     case BuildToolKind.ScalaCli => ScalaCliBuildTool(cwd)

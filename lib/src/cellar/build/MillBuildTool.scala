@@ -1,16 +1,17 @@
 package cellar.build
 
 import cats.effect.IO
-import cellar.CellarError
+import cellar.{CellarError, MillConfig}
 import cellar.process.ProcessRunner
+
 import java.nio.file.{Files, Path}
 
-class MillBuildTool(cwd: Path, binary: String = "./mill") extends BuildTool:
+class MillBuildTool(cwd: Path, config: MillConfig) extends BuildTool:
   def kind: BuildToolKind = BuildToolKind.Mill
 
   def compile(module: Option[String]): IO[Unit] =
     requireModule(module).flatMap { mod =>
-      ProcessRunner.run(List(binary, s"$mod.compile"), Some(cwd)).flatMap { result =>
+      ProcessRunner.run(List(config.binary, s"$mod.compile"), Some(cwd)).flatMap { result =>
         if result.exitCode == 0 then IO.unit
         else IO.raiseError(CellarError.CompilationFailed(BuildToolKind.Mill, result.stderr))
       }
@@ -19,10 +20,10 @@ class MillBuildTool(cwd: Path, binary: String = "./mill") extends BuildTool:
   def extractClasspath(module: Option[String]): IO[List[Path]] =
     requireModule(module).flatMap { mod =>
       for
-        compileResult <- ProcessRunner.run(List(binary, "show", s"$mod.compile"), Some(cwd))
+        compileResult <- ProcessRunner.run(List(config.binary, "show", s"$mod.compile"), Some(cwd))
         _ <- checkCompileResult(compileResult, mod)
         classesDir <- IO.blocking(parseClassesDir(compileResult.stdout))
-        cpResult <- ProcessRunner.run(List(binary, "show", s"$mod.compileClasspath"), Some(cwd))
+        cpResult <- ProcessRunner.run(List(config.binary, "show", s"$mod.compileClasspath"), Some(cwd))
         paths <- parseClasspathResult(cpResult, classesDir)
       yield paths
     }

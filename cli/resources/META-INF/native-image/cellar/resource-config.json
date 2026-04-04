@@ -4,7 +4,8 @@
       {"pattern": "\\Qcoursier/coursier.properties\\E"},
       {"pattern": "\\Qcoursier/launcher/coursier.properties\\E"},
       {"pattern": "\\Qlibrary.properties\\E"},
-      {"pattern": "\\Qjre.bin\\E"}
+      {"pattern": "\\Qjre.bin\\E"},
+      {"pattern": "\\Qreference.conf\\E"}
     ]
   }
 }
