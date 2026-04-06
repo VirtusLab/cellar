@@ -11,14 +11,15 @@ object BuildToolDetector:
   private val millMarkers = List("build.mill", "build.sc", "build.mill.yaml", "build.yaml")
 
   /** Detect the build tool kind from marker files only (no binary check). */
-  def detectKind(dir: Path): IO[BuildToolKind] =
-    {
-      val millMarker = millMarkers.findM(m => Files[IO].exists(dir.resolve(m)))
-      val hasSbt = Files[IO].exists(dir.resolve("build.sbt"))
+  def detectKind(dir: Path): IO[BuildToolKind] = {
+    val hasMill = millMarkers.existsM(m => Files[IO].exists(dir.resolve(m)))
+    val hasSbt = Files[IO].exists(dir.resolve("build.sbt"))
+    val hasScalaCli = Files[IO].isDirectory(dir.resolve(".scala-build"))
 
-      millMarker.map(_.isDefined).ifM(
-        IO.pure(BuildToolKind.Mill),
-        hasSbt.ifF(BuildToolKind.Sbt, BuildToolKind.ScalaCli) /* scala-cli is also fallback */
-      )
-    }
+    BuildToolKind.values.toList.findM { // sequentially check each until one is true
+      case BuildToolKind.Mill => hasMill
+      case BuildToolKind.Sbt => hasSbt
+      case BuildToolKind.ScalaCli => hasScalaCli
+    }.map(_.getOrElse(BuildToolKind.ScalaCli)) // default to Scala CLI if none was found
+  }
 
