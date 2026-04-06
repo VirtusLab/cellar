@@ -17,16 +17,16 @@ object Config {
   val defaultPath: Path = Path.of(".cellar").resolve("cellar.conf")
 
   def load(path: Option[Path]): IO[Config] = {
-    def load(path: Option[Path]) =
+    def load0(path: Option[Path]) =
       IO.blocking {
         path.foldLeft(ConfigSource.default)((cs, p) => ConfigSource.file(p).withFallback(cs)).loadOrThrow[Config]
       }
 
     path match
-      case sp: Some[_] => load(sp)
+      case sp: Some[_] => load0(sp)
       case None => IO.blocking(Files.exists(defaultPath)).flatMap {
-        case true  => load(Some(defaultPath))
-        case false => load(None)
+        case true  => load0(Some(defaultPath))
+        case false => load0(None)
       }
   }
 }
