@@ -18,8 +18,7 @@ object ProcessRunner:
         process.stderr.through(fs2.text.utf8.decode).compile.string
       ).parMapN(ProcessResult.apply)
     }.adaptError { case e: java.io.IOException =>
-      val cmd = command.headOption.getOrElse("")
       val detail = Option(e.getMessage).getOrElse("I/O error")
-      new RuntimeException(s"Failed to start '$cmd': $detail", e)
+      new RuntimeException(s"Failed to start '$command': $detail", e)
     }
   }
