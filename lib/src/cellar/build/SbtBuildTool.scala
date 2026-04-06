@@ -7,13 +7,11 @@ import cellar.process.ProcessRunner
 import java.nio.file.{Files, Path}
 
 class SbtBuildTool(cwd: Path, config: SbtConfig) extends BuildTool:
-  private val mode: String = if config.useClientMode then "--client" else "--batch"
-
   def kind: BuildToolKind = BuildToolKind.Sbt
 
   def compile(module: Option[String]): IO[Unit] =
     requireModule(module).flatMap { mod =>
-      ProcessRunner.run(List(config.binary, mode, s"$mod/compile"), Some(cwd)).flatMap { result =>
+      ProcessRunner.run(config.binary :: config.effectiveExtraArgs ::: List(s"$mod/compile"), Some(cwd)).flatMap { result =>
         if result.exitCode == 0 then IO.unit
         else IO.raiseError(CellarError.CompilationFailed(BuildToolKind.Sbt, extractErrors(result.stdout, result.stderr)))
       }
@@ -21,7 +19,7 @@ class SbtBuildTool(cwd: Path, config: SbtConfig) extends BuildTool:
 
   def extractClasspath(module: Option[String]): IO[List[Path]] =
     requireModule(module).flatMap { mod =>
-      ProcessRunner.run(List(config.binary, mode, s"export $mod/Compile/fullClasspath"), Some(cwd)).flatMap { result =>
+      ProcessRunner.run(config.binary :: config.effectiveExtraArgs ::: List(s"export $mod/Compile/fullClasspath"), Some(cwd)).flatMap { result =>
         if result.exitCode != 0 then
           IO.raiseError(CellarError.CompilationFailed(BuildToolKind.Sbt, extractErrors(result.stdout, result.stderr)))
         else

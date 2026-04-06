@@ -8,14 +8,17 @@ import java.nio.file.{Files, Path}
 
 case class MillConfig(binary: String) derives ConfigReader
 
-case class SbtConfig(useClientMode: Boolean, binary: String) derives ConfigReader
+case class SbtConfig(binary: String, extraArgs: String) derives ConfigReader {
+  def effectiveExtraArgs: List[String] = extraArgs.split("\\s+").filter(_.nonEmpty).toList
+}
 
 case class Config(mill: MillConfig, sbt: SbtConfig) derives ConfigReader
 
 object Config {
   val default: IO[Config] = load(None)
 
-  val defaultUserPath: Option[Path] = sys.props.get("user.home").map(Path.of(_).resolve(".cellar").resolve("cellar.conf"))
+  val defaultUserPath: Option[Path] =
+    sys.props.get("user.home").map(Path.of(_).resolve(".cellar").resolve("cellar.conf"))
   val defaultProjectPath: Path = Path.of(".cellar").resolve("cellar.conf")
 
   def load(path: Option[Path]): IO[Config] = {
