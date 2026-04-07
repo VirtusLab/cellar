@@ -32,6 +32,8 @@ Query any published artifact by explicit coordinate (`group:artifact:version`):
     cellar deps <coordinate>                     # dependency tree
 
 - Coordinates must be explicit: `group:artifact_3:version` (no `::` shorthand)
+- For sbt plugins, use the full Scala and sbt suffix: `group:artifact_2.12_1.0:version` (e.g. `org.scala-native:sbt-scala-native_2.12_1.0:latest`)
+- For compiler plugins and other artifacts with full Scala version suffixes, use the full version: `group:artifact_3.3.8:version`
 - Use `latest` as the version to resolve the most recent release
 - `-r`, `--repository <url>`: extra Maven repository (repeatable)
 
@@ -62,6 +64,9 @@ cellar get-source org.typelevel:cats-core_3:2.10.0 cats.Monad
 
 # Dependency tree
 cellar deps org.typelevel:cats-effect_3:3.5.4
+
+# sbt plugin (use full Scala + sbt suffix)
+cellar deps org.scala-native:sbt-scala-native_2.12_1.0:latest
 
 # Project-aware (from a Mill project root)
 cellar get --module lib cats.Monad
