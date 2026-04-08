@@ -1,0 +1,7 @@
+{
+  "name": "cellar",
+  "version": "0.1.0",
+  "description": "Look up the public API of any JVM dependency (Scala 3, Scala 2, Java) from the terminal",
+  "repository": "https://github.com/virtuslab/cellar",
+  "license": "MPL-2.0"
+}
