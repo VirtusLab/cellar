@@ -2,7 +2,10 @@ package cellar
 
 import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
+import cats.syntax.all.*
+import cellar.process.ProcessRunner
 import munit.CatsEffectSuite
+
 import java.nio.file.Files
 import fs2.io.file.{Files => Fs2Files, Path}
 
@@ -18,13 +21,11 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
   private lazy val millBinary: String =
     Option(System.getProperty("cellar.test.millBinary")).getOrElse("mill")
 
-  private def isOnPath(binary: String): Boolean =
-    val result = new ProcessBuilder("which", binary).start()
-    result.getInputStream.readAllBytes()
-    result.waitFor() == 0
+  private def isOnPath(binary: String): IO[Boolean] =
+    ProcessRunner.run("which", List(binary)).map(_.exitCode == 0).handleError(_ => false)
 
-  private def isBinaryAvailable(binary: String): Boolean =
-    Fs2Files[IO].isRegularFile(Path(binary)) || isOnPath(binary)
+  private def isBinaryAvailable(binary: String): IO[Boolean] =
+    (Fs2Files[IO].isRegularFile(Path(binary)), isOnPath(binary)).mapN(_ || _)
 
   private def withTempDir(test: Path => IO[Unit]): IO[Unit] =
     Fs2Files[IO].tempDirectory.use(test)
@@ -287,7 +288,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
   // --- End-to-end scala-cli tests (requires scala-cli on PATH) ---
 
   test("E2E scala-cli: get resolves project symbol"):
-    assume(isOnPath("scala-cli"), "scala-cli not on PATH")
+    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -306,7 +307,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
     }
 
   test("E2E scala-cli: get resolves symbol from dependency"):
-    assume(isOnPath("scala-cli"), "scala-cli not on PATH")
+    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -326,7 +327,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
     }
 
   test("E2E scala-cli: list lists members of project class"):
-    assume(isOnPath("scala-cli"), "scala-cli not on PATH")
+    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -347,7 +348,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
     }
 
   test("E2E scala-cli: search finds symbols across project"):
-    assume(isOnPath("scala-cli"), "scala-cli not on PATH")
+    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -365,7 +366,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
     }
 
   test("E2E scala-cli: --module produces error"):
-    assume(isOnPath("scala-cli"), "scala-cli not on PATH")
+    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -381,7 +382,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
     }
 
   test("E2E scala-cli: compilation failure surfaces build tool error"):
-    assume(isOnPath("scala-cli"), "scala-cli not on PATH")
+    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -401,7 +402,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
   // --- End-to-end Mill tests (requires mill on PATH) ---
 
   test("E2E Mill: get resolves project symbol"):
-    assume(isBinaryAvailable(millBinary), s"$millBinary not found")
+    isBinaryAvailable(millBinary).map(assume(_, s"$millBinary not found")) >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -432,7 +433,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
     }
 
   test("E2E Mill: --module required"):
-    assume(isBinaryAvailable(millBinary), s"$millBinary not found")
+    isBinaryAvailable(millBinary).map(assume(_, s"$millBinary not found")) >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -446,7 +447,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
   // --- End-to-end sbt tests (requires sbt on PATH) ---
 
   test("E2E sbt: get resolves project symbol"):
-    assume(isOnPath("sbt"), "sbt not on PATH")
+    isOnPath("sbt").map(assume(_, "sbt not on PATH")) >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -474,7 +475,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
     }
 
   test("E2E sbt: --module required"):
-    assume(isOnPath("sbt"), "sbt not on PATH")
+    isOnPath("sbt").map(assume(_, "sbt not on PATH")) >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console

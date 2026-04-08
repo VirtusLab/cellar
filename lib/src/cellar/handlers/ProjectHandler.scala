@@ -18,12 +18,12 @@ object ProjectHandler:
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
-        workingDir   <- cwd.fold(IO.blocking(Path(System.getProperty("user.dir"))))(IO.pure)
+        workingDir   = cwd.getOrElse(Path(System.getProperty("user.dir")))
         result       <- build.ProjectClasspathProvider.provide(workingDir, module, jreClasspath, noCache, config).use { (ctx, classpath) =>
           body(ctx, classpath, jreClasspath)
         }
       yield result
 
-    program.handleErrorWith { case e: Throwable =>
+    program.handleErrorWith { (e: Throwable) =>
       Console[IO].errorln(e.getMessage).as(ExitCode.Error)
     }
