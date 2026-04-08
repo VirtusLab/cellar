@@ -145,7 +145,7 @@ jobs:
           MACOS_ARM=$(sri_hash "$(grep "macos-arm64.tar.gz" /tmp/checksums.txt | awk '{print $1}')")
           MACOS_X86=$(sri_hash "$(grep "macos-x86_64.tar.gz" /tmp/checksums.txt | awk '{print $1}')")
 
-          sed -i "s|version = \".*\";|version = \"${VERSION}\";|" flake.nix
+          sed -i "0,/version = \".*\";/s|version = \".*\";|version = \"${VERSION}\";|" flake.nix
           sed -i "/linux-x86_64/{n;s|hash = \".*\";|hash = \"${LINUX_X86}\";|}" flake.nix
           sed -i "/linux-aarch64/{n;s|hash = \".*\";|hash = \"${LINUX_ARM}\";|}" flake.nix
           sed -i "/macos-x86_64/{n;s|hash = \".*\";|hash = \"${MACOS_X86}\";|}" flake.nix
