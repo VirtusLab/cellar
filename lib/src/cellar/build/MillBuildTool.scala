@@ -1,17 +1,18 @@
 package cellar.build
 
 import cats.effect.IO
+import cats.syntax.all._
 import cellar.{CellarError, MillConfig}
 import cellar.process.ProcessRunner
 
-import java.nio.file.{Files, Path}
+import fs2.io.file.{Files, Path}
 
 class MillBuildTool(cwd: Path, config: MillConfig) extends BuildTool:
   def kind: BuildToolKind = BuildToolKind.Mill
 
   def compile(module: Option[String]): IO[Unit] =
     requireModule(module).flatMap { mod =>
-      ProcessRunner.run(List(config.binary, s"$mod.compile"), Some(cwd)).flatMap { result =>
+      ProcessRunner.run(config.binary, List(s"$mod.compile"), Some(cwd)).flatMap { result =>
         if result.exitCode == 0 then IO.unit
         else IO.raiseError(CellarError.CompilationFailed(BuildToolKind.Mill, result.stderr))
       }
@@ -20,10 +21,10 @@ class MillBuildTool(cwd: Path, config: MillConfig) extends BuildTool:
   def extractClasspath(module: Option[String]): IO[List[Path]] =
     requireModule(module).flatMap { mod =>
       for
-        compileResult <- ProcessRunner.run(List(config.binary, "show", s"$mod.compile"), Some(cwd))
+        compileResult <- ProcessRunner.run(config.binary, List("show", s"$mod.compile"), Some(cwd))
         _ <- checkCompileResult(compileResult, mod)
-        classesDir <- IO.blocking(parseClassesDir(compileResult.stdout))
-        cpResult <- ProcessRunner.run(List(config.binary, "show", s"$mod.compileClasspath"), Some(cwd))
+        classesDir <- parseClassesDir(compileResult.stdout)
+        cpResult <- ProcessRunner.run(config.binary, List("show", s"$mod.compileClasspath"), Some(cwd))
         paths <- parseClasspathResult(cpResult, classesDir)
       yield paths
     }
@@ -39,55 +40,51 @@ class MillBuildTool(cwd: Path, config: MillConfig) extends BuildTool:
     if result.exitCode != 0 then
       IO.raiseError(CellarError.ClasspathExtractionFailed(BuildToolKind.Mill, result.stderr))
     else
-      IO.blocking(ClasspathOutputParser.parseJsonArray(result.stdout)).flatMap {
+      ClasspathOutputParser.parseJsonArray(result.stdout).flatMap {
         case Left(err)    => IO.raiseError(CellarError.ClasspathExtractionFailed(BuildToolKind.Mill, err))
         case Right(paths) => IO.pure(classesDir.toList ++ paths)
       }
 
-  private def parseClassesDir(stdout: String): Option[Path] =
+  private def parseClassesDir(stdout: String): IO[Option[Path]] =
     val marker = "\"classes\""
     stdout.indexOf(marker) match
-      case -1 => None
+      case -1 => IO.pure(None)
       case idx =>
         val afterColon = stdout.indexOf(':', idx + marker.length)
-        if afterColon == -1 then None
+        if afterColon == -1 then IO.pure(None)
         else
           val valueStart = stdout.indexOf('"', afterColon + 1)
           val valueEnd = stdout.indexOf('"', valueStart + 1)
-          if valueStart == -1 || valueEnd == -1 then None
+          if valueStart == -1 || valueEnd == -1 then IO.pure(None)
           else
             val raw = stdout.substring(valueStart + 1, valueEnd)
             // Handle ref: or qref: prefixed paths by finding ":/" before the absolute path
             val path = raw.lastIndexOf(":/") match
               case -1  => raw
               case i   => raw.substring(i + 1)
-            Some(Path.of(path)).filter(Files.isDirectory(_))
+            Path(path).some.filterA(Files[IO].isDirectory(_))
 
-  def fingerprintFiles(): IO[List[Path]] =
-    IO.blocking {
-      if Files.isDirectory(cwd.resolve(".git")) then fingerprintFromGit()
-      else fingerprintFromDisk()
+  def fingerprintFiles: IO[List[Path]] =
+    Files[IO].isDirectory(cwd.resolve(".git")).ifM(
+      ifTrue = fingerprintFromGit,
+      ifFalse = fingerprintFromDisk
+    )
+
+  private def fingerprintFromGit: IO[List[Path]] =
+    val patterns = List("build.mill", "build.sc", "build.mill.yaml", "build.yaml", "mill-build/**", ".mill-version")
+    ProcessRunner.run("git", "ls-files" :: patterns, Some(cwd)).flatMap { result =>
+      if result.exitCode == 0 then
+        IO.pure(result.stdout.linesIterator.filter(_.nonEmpty).map(cwd.resolve).toList)
+      else
+        fingerprintFromDisk
     }
 
-  private def fingerprintFromGit(): List[Path] =
-    val patterns = List("build.mill", "build.sc", "build.mill.yaml", "build.yaml", "mill-build/**", ".mill-version")
-    val result = new ProcessBuilder(("git" :: "ls-files" :: patterns)*)
-      .directory(cwd.toFile)
-      .start()
-    val stdout = new String(result.getInputStream.readAllBytes())
-    if result.waitFor() == 0 then
-      stdout.linesIterator.filter(_.nonEmpty).map(cwd.resolve).toList
-    else
-      fingerprintFromDisk()
-
-  private def fingerprintFromDisk(): List[Path] =
+  private def fingerprintFromDisk: IO[List[Path]] =
     val candidates = List("build.mill", "build.sc", "build.mill.yaml", "build.yaml", ".mill-version")
-    val files = candidates.map(cwd.resolve).filter(Files.exists(_))
+    val files = candidates.map(cwd.resolve).filterA(Files[IO].exists(_))
     val millBuildDir = cwd.resolve("mill-build")
-    val millBuildFiles =
-      if Files.isDirectory(millBuildDir) then
-        val stream = Files.list(millBuildDir)
-        try stream.toArray.map(_.asInstanceOf[Path]).toList
-        finally stream.close()
-      else Nil
-    files ++ millBuildFiles
+    val millBuildFiles = Files[IO].isDirectory(millBuildDir).flatMap {
+        case true  => Files[IO].list(millBuildDir).compile.toList
+        case false => IO.pure(Nil)
+    }
+    (files, millBuildFiles).parMapN(_ ++ _)

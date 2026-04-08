@@ -39,8 +39,8 @@ class CellarErrorTest extends munit.FunSuite:
     assert(e.getMessage.nonEmpty)
 
   test("ShadedDuplicate getMessage contains both JAR paths"):
-    val p1 = java.nio.file.Path.of("/tmp/a.jar")
-    val p2 = java.nio.file.Path.of("/tmp/b.jar")
+    val p1 = fs2.io.file.Path("/tmp/a.jar")
+    val p2 = fs2.io.file.Path("/tmp/b.jar")
     val e  = CellarError.ShadedDuplicate("com.Foo", p1, p2)
     assert(e.getMessage.contains("/tmp/a.jar"))
     assert(e.getMessage.contains("/tmp/b.jar"))

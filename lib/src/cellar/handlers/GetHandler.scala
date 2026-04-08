@@ -4,7 +4,7 @@ import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
 import cellar.*
 import coursierapi.Repository
-import java.nio.file.Path
+import fs2.io.file.Path
 import tastyquery.Classpaths.Classpath
 import tastyquery.Contexts.Context
 import tastyquery.Symbols.Symbol
@@ -36,10 +36,10 @@ object GetHandler:
   )(using Context, Console[IO]): IO[ExitCode] =
     SymbolResolver.resolve(fqn).flatMap {
       case LookupResult.Found(symbols) =>
-        val jars = classpath.filter(_.toString.endsWith(".jar")).map(e => Path.of(e.toString)).toSeq
+        val jars = classpath.filter(_.toString.endsWith(".jar")).map(e => Path(e.toString)).toSeq
         for
           _         <- warnShadedDuplicate(fqn, classpath)
-          docstring <- coord.fold(IO.pure(Option.empty[String]))(c => IO.blocking(DocstringExtractor.extract(jars, c, fqn)))
+          docstring <- coord.fold(IO.pure(Option.empty[String]))(c => IO.blocking(DocstringExtractor.extract(jars.map(_.toNioPath), c, fqn)))
           formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols, docstring))
           _         <- Console[IO].println(formatted)
           _         <- warnScala2(symbols)
@@ -90,8 +90,8 @@ object GetHandler:
     }
     if containing.size > 1 then
       try
-        val first = Path.of(containing(0).toString)
-        val dup   = Path.of(containing(1).toString)
+        val first = Path(containing(0).toString)
+        val dup   = Path(containing(1).toString)
         Some(CellarError.ShadedDuplicate(fqn, first, dup))
       catch case _: Exception => None
     else None

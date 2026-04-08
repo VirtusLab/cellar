@@ -19,20 +19,20 @@ object JreClasspath:
     if isNativeImage then loadBundledJre()
     else
       sys.env.get("JAVA_HOME") match
-        case Some(h) => jrtPath(Path.of(h))
+        case Some(h) => jrtPath(fs2.io.file.Path(h))
         case None =>
           IO.raiseError(new RuntimeException(
             "Could not locate JRE classpath. Set JAVA_HOME or pass --java-home pointing to a JDK installation."
           ))
 
-  def jrtPath(javaHome: Path): IO[Classpaths.Classpath] =
+  def jrtPath(javaHome: fs2.io.file.Path): IO[Classpaths.Classpath] =
     // JRT filesystem is not reliably accessible in GraalVM native image:
     // https://github.com/oracle/graal/issues/10013
     if isNativeImage then loadBundledJre()
     else
       IO.blocking {
         val jrtFsJar = javaHome.resolve("lib/jrt-fs.jar")
-        if !Files.exists(jrtFsJar) then
+        if !Files.exists(jrtFsJar.toNioPath) then
           throw new IllegalArgumentException(
             s"Not a valid JDK home (missing lib/jrt-fs.jar): $javaHome"
           )
@@ -47,7 +47,7 @@ object JreClasspath:
             provider.newFileSystem(URI.create("jrt:/"), env)
           catch case _: java.lang.reflect.InaccessibleObjectException =>
             // JVM without --add-opens: fall back to URLClassLoader
-            val cl = new URLClassLoader(Array(jrtFsJar.toUri.toURL))
+            val cl = new URLClassLoader(Array(jrtFsJar.toNioPath.toUri.toURL))
             FileSystems.newFileSystem(URI.create("jrt:/"), env, cl)
         ClasspathLoaders.read(Files.list(fs.getPath("modules")).iterator().asScala.toList)
       }

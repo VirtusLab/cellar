@@ -3,10 +3,10 @@ package cellar
 import cats.effect.{IO, Resource}
 import cats.syntax.monadError.*
 import coursierapi.Repository
+import fs2.io.file.Path
 import tastyquery.Classpaths.Classpath
 import tastyquery.Contexts.Context
 import tastyquery.jdk.ClasspathLoaders
-import java.nio.file.Path
 
 object ContextResource:
   def make(jars: Seq[Path], jreClasspath: Classpath): Resource[IO, (Context, Classpath)] =
@@ -28,11 +28,11 @@ object ContextResource:
     * (e.g. vendor-injected JRT modules such as the Azul CRS client).
     */
   private def readClasspathRobust(paths: List[Path]): Classpath =
-    try ClasspathLoaders.read(paths)
+    try ClasspathLoaders.read(paths.map(_.toNioPath))
     catch
       case e: MatchError =>
         val bad = paths.find { p =>
-          try { ClasspathLoaders.read(List(p)); false }
+          try { ClasspathLoaders.read(List(p.toNioPath)); false }
           catch case _: MatchError => true
         }
         bad match

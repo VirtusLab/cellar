@@ -13,7 +13,7 @@ class CoursierFetchClientTest extends CatsEffectSuite:
     ).map { paths =>
       assert(paths.nonEmpty, "Expected at least one JAR")
       paths.foreach { p =>
-        assert(java.nio.file.Files.exists(p), s"Path does not exist: $p")
+        assert(java.nio.file.Files.exists(p.toNioPath), s"Path does not exist: $p")
         assert(p.toString.endsWith(".jar"), s"Expected .jar, got: $p")
       }
     }
@@ -25,7 +25,7 @@ class CoursierFetchClientTest extends CatsEffectSuite:
       Seq(TestFixtures.localM2Repo)
     ).map { paths =>
       assert(paths.nonEmpty)
-      assert(paths.forall(p => java.nio.file.Files.exists(p)))
+      assert(paths.forall(p => java.nio.file.Files.exists(p.toNioPath)))
     }
 
   test("fetchClasspath with non-existent version raises CoordinateNotFound with suggestions"):

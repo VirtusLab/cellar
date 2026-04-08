@@ -1,8 +1,8 @@
 package cellar
 
 import cats.effect.IO
+import fs2.io.file.{Files, Path}
 import munit.CatsEffectSuite
-import java.nio.file.{Files, Path}
 
 class JreClasspathTest extends CatsEffectSuite:
 
@@ -13,23 +13,24 @@ class JreClasspathTest extends CatsEffectSuite:
     }
 
   test("one-arg jrtPath with current java.home succeeds"):
-    val javaHome = Path.of(System.getProperty("java.home"))
+    val javaHome = Path(System.getProperty("java.home"))
     JreClasspath.jrtPath(javaHome).map { classpath =>
       assert(classpath.nonEmpty)
     }
 
   test("one-arg jrtPath with non-existent path raises error"):
-    val badPath = Path.of("/tmp/nonexistent-jdk-home-12345")
+    val badPath = Path("/tmp/nonexistent-jdk-home-12345")
     JreClasspath.jrtPath(badPath).attempt.map { result =>
       assert(result.isLeft, "Expected an error for non-existent path")
     }
 
   test("one-arg jrtPath with plain directory (no jrt-fs.jar) raises IllegalArgumentException"):
-    val tmpDir = Files.createTempDirectory("cellar-test")
-    JreClasspath.jrtPath(tmpDir).attempt.map { result =>
-      assert(result.isLeft)
-      result.left.foreach {
-        case _: IllegalArgumentException => ()
-        case e                           => fail(s"Expected IllegalArgumentException, got ${e.getClass}")
+    Files[IO].tempDirectory.use { tmpDir =>
+      JreClasspath.jrtPath(tmpDir).attempt.map { result =>
+        assert(result.isLeft)
+        result.left.foreach {
+          case _: IllegalArgumentException => ()
+          case e => fail(s"Expected IllegalArgumentException, got ${e.getClass}")
+        }
       }
-    }.guarantee(IO.blocking(Files.deleteIfExists(tmpDir)).void)
+    }

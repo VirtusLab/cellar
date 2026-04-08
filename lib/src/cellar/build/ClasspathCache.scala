@@ -1,30 +1,28 @@
 package cellar.build
 
 import cats.effect.IO
-import java.nio.file.{Files, Path, StandardCopyOption}
+import cats.syntax.all.*
+import fs2.Stream
+import fs2.io.file.{CopyFlag, CopyFlags, Files, Path}
 
 class ClasspathCache(projectDir: Path):
   private val cacheDir = projectDir.resolve(".cellar").resolve("cache")
 
   def get(hash: String): IO[Option[List[Path]]] =
-    IO.blocking {
-      val file = cacheDir.resolve(s"$hash.txt")
-      if !Files.exists(file) then None
-      else
-        val paths = Files.readString(file).linesIterator
-          .filter(_.nonEmpty)
-          .map(Path.of(_))
-          .toList
-        // Validate all paths still exist
-        if paths.forall(Files.exists(_)) then Some(paths)
-        else None
+    val file = cacheDir.resolve(s"$hash.txt")
+    Files[IO].exists(file).flatMap {
+      case true =>
+        for
+          paths <- Files[IO].readUtf8Lines(file).filter(_.nonEmpty).map(Path(_)).compile.toList
+          allExist <- paths.forallM(Files[IO].exists)
+        yield Option.when(allExist)(paths)
+      case false => IO.pure(None)
     }
 
-  def put(hash: String, paths: List[Path]): IO[Unit] =
-    IO.blocking {
-      Files.createDirectories(cacheDir)
-      val file = cacheDir.resolve(s"$hash.txt")
-      val tmp = cacheDir.resolve(s"$hash.tmp")
-      Files.writeString(tmp, paths.map(_.toString).mkString("\n") + "\n")
-      Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-    }
+  def put(hash: String, paths: List[Path]): IO[Unit] = for {
+    _ <- Files[IO].createDirectories(cacheDir)
+    file = cacheDir.resolve(s"$hash.txt")
+    tmp = cacheDir.resolve(s"$hash.tmp")
+    _ <- Stream(paths.map(_.toString).mkString("\n") + "\n").through(Files[IO].writeUtf8(tmp)).compile.drain
+    _ <- Files[IO].move(tmp, file, CopyFlags(CopyFlag.ReplaceExisting, CopyFlag.AtomicMove))
+  } yield ()

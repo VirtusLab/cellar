@@ -7,7 +7,7 @@ import cellar.handlers.{DepsHandler, GetHandler, GetSourceHandler, ListHandler, 
 import com.monovore.decline.*
 import com.monovore.decline.effect.*
 import coursierapi.{MavenRepository, Repository}
-import java.nio.file.Path
+import fs2.io.file.Path
 
 object CellarApp
     extends CommandIOApp(
@@ -22,6 +22,8 @@ object CellarApp
       listSubcmd orElse listExternalSubcmd orElse
       searchSubcmd orElse searchExternalSubcmd orElse
       depsSubcmd
+
+  private given Argument[Path] = Argument[java.nio.file.Path].map(Path.fromNioPath)
 
   private val coordArg: Opts[String] =
     Opts.argument[String]("coordinate")

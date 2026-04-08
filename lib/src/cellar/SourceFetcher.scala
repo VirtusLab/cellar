@@ -2,7 +2,8 @@ package cellar
 
 import cats.effect.IO
 import coursierapi.Repository
-import java.nio.file.Path
+import fs2.io.file.Path
+
 import java.util.zip.ZipFile
 import scala.jdk.CollectionConverters.*
 
@@ -30,7 +31,7 @@ object SourceFetcher:
       endLine: Int
   ): Either[String, SourceResult] =
     val normalizedSource = sourceFilePath.replace('\\', '/')
-    val zip = ZipFile(jar.toFile)
+    val zip = ZipFile(jar.toNioPath.toFile)
     try
       val entry = zip.entries().asScala.find { e =>
         !e.isDirectory && normalizedSource.endsWith(e.getName)

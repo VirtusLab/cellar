@@ -5,7 +5,7 @@ import cats.effect.std.Console
 import cats.syntax.all.*
 import cellar.*
 import coursierapi.Repository
-import java.nio.file.Path
+import fs2.io.file.Path
 
 object ListHandler:
   def run(

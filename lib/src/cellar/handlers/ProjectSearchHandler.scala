@@ -3,7 +3,7 @@ package cellar.handlers
 import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
 import cellar.*
-import java.nio.file.Path
+import fs2.io.file.Path
 import tastyquery.Contexts.Context
 
 object ProjectSearchHandler:

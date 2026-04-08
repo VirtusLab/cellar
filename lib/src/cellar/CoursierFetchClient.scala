@@ -2,7 +2,8 @@ package cellar
 
 import cats.effect.IO
 import coursierapi.{Cache, Fetch, Repository}
-import java.nio.file.Path
+import fs2.io.file.Path
+
 import scala.jdk.CollectionConverters.*
 
 object CoursierFetchClient:
@@ -18,7 +19,7 @@ object CoursierFetchClient:
         .addClassifiers("sources")
         .withMainArtifacts(false)
       if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*)
-      fetch.fetch().asScala.headOption.map(_.toPath)
+      fetch.fetch().asScala.headOption.map(file => Path.fromNioPath(file.toPath))
     }.handleError(_ => None)
 
   def fetchClasspath(
@@ -29,7 +30,7 @@ object CoursierFetchClient:
       val dep   = coord.toCoursierDependency
       val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())
       if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*)
-      fetch.fetch().asScala.toSeq.map(_.toPath)
+      fetch.fetch().asScala.toSeq.map(file => Path.fromNioPath(file.toPath))
     }.handleErrorWith { case e: coursierapi.error.CoursierError =>
       CoordinateCompleter.suggest(coord, extraRepositories).flatMap { suggestions =>
         IO.raiseError(CellarError.CoordinateNotFound(coord, e, suggestions))

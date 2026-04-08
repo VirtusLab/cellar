@@ -1,17 +1,19 @@
 package cellar.build
 
-import java.nio.file.{Files, Path}
+import cats.effect.IO
+import cats.syntax.all._
+import fs2.io.file.{Files, Path}
 
 object ClasspathOutputParser:
 
   /** Parse Mill's JSON array output: `["ref:hash:/path", "/path2"]` */
-  def parseJsonArray(input: String, checkExists: Boolean = true): Either[String, List[Path]] =
+  def parseJsonArray(input: String, checkExists: Boolean = true): IO[Either[String, List[Path]]] =
     val trimmed = input.trim
     if !trimmed.startsWith("[") || !trimmed.endsWith("]") then
-      return Left(s"Expected JSON array but got: ${trimmed.take(100)}")
+      return IO.pure(Left(s"Expected JSON array but got: ${trimmed.take(100)}"))
 
     val inner = trimmed.substring(1, trimmed.length - 1).trim
-    if inner.isEmpty then return Left("Build tool produced an empty classpath.")
+    if inner.isEmpty then return IO.pure(Left("Build tool produced an empty classpath."))
 
     val entries = inner.split(",").map(_.trim.stripPrefix("\"").stripSuffix("\"")).toList
     val paths = entries.map { entry =>
@@ -20,12 +22,14 @@ object ClasspathOutputParser:
       val path = entry.lastIndexOf(":/") match
         case -1  => entry // plain path
         case idx => entry.substring(idx + 1) // strip prefix up to the path
-      Path.of(path)
+      Path(path)
     }
 
-    val filtered = if checkExists then paths.filter(p => Files.exists(p)) else paths
-    if filtered.isEmpty then Left("Build tool produced an empty classpath (all paths filtered).")
-    else Right(filtered)
+    val filtered = if checkExists then paths.filterA(p => Files[IO].exists(p)) else IO.pure(paths)
+    filtered.map {
+      case Nil => Left("Build tool produced an empty classpath (all paths filtered).")
+      case filtered => Right(filtered)
+    }
 
   /** Parse colon-separated classpath output (sbt, scala-cli) */
   def parseColonSeparated(input: String): Either[String, List[Path]] =
@@ -36,4 +40,4 @@ object ClasspathOutputParser:
       .toList
 
     if entries.isEmpty then Left("Build tool produced an empty classpath.")
-    else Right(entries.map(Path.of(_)))
+    else Right(entries.map(Path(_)))

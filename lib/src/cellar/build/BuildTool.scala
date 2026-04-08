@@ -2,13 +2,13 @@ package cellar.build
 
 import cats.effect.IO
 import cellar.CellarError
-import java.nio.file.Path
+import fs2.io.file.Path
 
 trait BuildTool:
   def kind: BuildToolKind
   def compile(module: Option[String]): IO[Unit]
   def extractClasspath(module: Option[String]): IO[List[Path]]
-  def fingerprintFiles(): IO[List[Path]]
+  def fingerprintFiles: IO[List[Path]]
 
   protected def requireModule(module: Option[String]): IO[String] =
     module match

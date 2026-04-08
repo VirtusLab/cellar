@@ -1,7 +1,8 @@
 package cellar.build
 
 import cats.effect.IO
-import java.nio.file.{Files, Path}
+import cats.syntax.all.*
+import fs2.io.file.{Files, Path}
 
 enum BuildToolKind:
   case Mill, Sbt, ScalaCli
@@ -10,15 +11,15 @@ object BuildToolDetector:
   private val millMarkers = List("build.mill", "build.sc", "build.mill.yaml", "build.yaml")
 
   /** Detect the build tool kind from marker files only (no binary check). */
-  def detectKind(dir: Path): IO[BuildToolKind] =
-    IO.blocking {
-      val millMarker = millMarkers.find(m => Files.exists(dir.resolve(m)))
-      val hasSbt = Files.exists(dir.resolve("build.sbt"))
-      val hasScalaBuild = Files.isDirectory(dir.resolve(".scala-build"))
+  def detectKind(dir: Path): IO[BuildToolKind] = {
+    val hasMill = millMarkers.existsM(m => Files[IO].exists(dir.resolve(m)))
+    val hasSbt = Files[IO].exists(dir.resolve("build.sbt"))
+    val hasScalaCli = Files[IO].isDirectory(dir.resolve(".scala-build"))
 
-      if millMarker.isDefined then BuildToolKind.Mill
-      else if hasSbt then BuildToolKind.Sbt
-      else if hasScalaBuild then BuildToolKind.ScalaCli
-      else BuildToolKind.ScalaCli // fallback
-    }
+    BuildToolKind.values.toList.findM { // sequentially check each until one is true
+      case BuildToolKind.Mill => hasMill
+      case BuildToolKind.Sbt => hasSbt
+      case BuildToolKind.ScalaCli => hasScalaCli
+    }.map(_.getOrElse(BuildToolKind.ScalaCli)) // default to Scala CLI if none was found
+  }
 
