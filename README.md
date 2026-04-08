@@ -178,7 +178,20 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 
 ## Using cellar with Claude Code
 
-Add the following to your project's `CLAUDE.md` to teach Claude Code how to use cellar:
+### As a plugin (recommended)
+
+Install cellar as a Claude Code plugin for auto-updates:
+
+```sh
+/plugin marketplace add virtuslab/cellar
+/plugin install cellar@cellar
+```
+
+Claude will automatically have access to the `/cellar:cellar` skill and know when to use it.
+
+### Manual setup
+
+Alternatively, add the following to your project's `CLAUDE.md`:
 
 ````markdown
 ## Cellar
