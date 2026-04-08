@@ -79,7 +79,7 @@
             };
           in pkgs.stdenv.mkDerivation {
             pname = "cellar";
-            version = "0.1.0-M5";
+            version = "dev";
             dontUnpack = true;
 
             installPhase = ''
