@@ -24,7 +24,25 @@ Cellar gives agents — and humans — a single shell command that returns exact
 
 ## Installation
 
-Download the native binary for your platform from https://github.com/simple-scala-tooling/cellar/releases/latest, then extract and install:
+### Nix
+
+Run without installing:
+
+```sh
+nix run github:VirtusLab/cellar -- get-external org.typelevel:cats-core_3:2.10.0 cats.Monad
+```
+
+Install into your profile:
+
+```sh
+nix profile install github:VirtusLab/cellar
+```
+
+A Nix overlay is also available at `github:VirtusLab/cellar#overlays.default`.
+
+### Manual
+
+Download the native binary for your platform from https://github.com/VirtusLab/cellar/releases/latest, then extract and install:
 
 ```sh
 tar xz -f cellar-*.tar.gz
@@ -121,6 +139,54 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 | `--java-home <path>` | all | Use a specific JDK for JRE classpath |
 | `-r`, `--repository <url>` | external commands | Extra Maven repository URL (repeatable) |
 | `-l`, `--limit <N>` | `list`, `search` | Max results (default: 50) |
+
+## Configuration
+
+Cellar loads configuration from HOCON files and environment variables. Files are loaded in order, with later values overriding earlier ones:
+
+1. Built-in defaults
+2. `~/.cellar/cellar.conf` (user-level, optional)
+3. `.cellar/cellar.conf` (project-level, optional)
+
+Use `--config <path>` / `-c <path>` to load a specific file instead.
+
+### Default config
+
+```hocon
+mill {
+  # Binary to invoke when extracting Mill classpaths
+  binary = "./mill"           # env: CELLAR_MILL_BINARY
+}
+
+sbt {
+  # Binary to invoke when extracting sbt classpaths (e.g. "sbt", "sbtn")
+  binary = "sbt"              # env: CELLAR_SBT_BINARY
+  # Extra arguments passed to sbt, space-separated (e.g. "--client")
+  extra-args = ""             # env: CELLAR_SBT_EXTRA_ARGS
+}
+```
+
+### Examples
+
+Use `sbtn` instead of `sbt`:
+
+```hocon
+sbt { binary = "sbtn" }
+```
+
+Use sbt in `--client` mode:
+
+```hocon
+sbt { extra-args = "--client" }
+```
+
+Use a custom Mill wrapper:
+
+```hocon
+mill { binary = "./millw" }
+```
+
+Or via environment: `CELLAR_SBT_BINARY=sbtn cellar get --module core cats.Monad`
 
 ## Output conventions
 
@@ -255,6 +321,12 @@ java -jar out/cli/assembly.dest/out.jar get-external org.typelevel:cats-core_3:2
 
 # Run tests
 ./mill lib.test
+```
+
+### Installing a local build with Nix
+
+```sh
+./mill cli.nativeImage && nix profile install --impure .#dev
 ```
 
 ## Tech stack

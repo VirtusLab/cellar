@@ -1,13 +1,26 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "virtuslab-cellar",
+  "description": "VirtusLab Cellar marketplace — JVM API lookup tool for Claude Code",
+  "owner": {
+    "name": "VirtusLab",
+    "email": "opensource@virtuslab.com"
+  },
   "plugins": [
     {
       "name": "cellar",
-      "source": "..",
       "description": "Look up the public API of any JVM dependency (Scala 3, Scala 2, Java) from the terminal",
-      "version": "0.1.0",
-      "repository": "https://github.com/virtuslab/cellar",
+      "source": {
+        "source": "github",
+        "repo": "VirtusLab/cellar"
+      },
+      "category": "development",
       "license": "MPL-2.0",
-      "keywords": ["scala", "java", "jvm", "api", "documentation"]
+      "keywords": ["scala", "java", "jvm", "api", "documentation"],
+      "author": {
+        "name": "rochala"
+      },
+      "homepage": "https://github.com/VirtusLab/cellar"
     }
   ]
 }
