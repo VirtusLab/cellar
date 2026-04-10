@@ -1,6 +1,7 @@
 package cellar.cli
 
 import cats.effect.{ExitCode, IO}
+import scala.concurrent.duration.FiniteDuration
 import cats.syntax.all.*
 import cellar.*
 import cellar.handlers.{DepsHandler, GetHandler, GetSourceHandler, ListHandler, ProjectGetHandler, ProjectListHandler, ProjectSearchHandler, SearchHandler}
@@ -15,6 +16,12 @@ object CellarApp
       header = "Inspect Maven-published JVM dependency APIs",
       version = BuildInfo.version
     ):
+
+  override def reportCpuStarvation(exceeded: FiniteDuration): IO[Unit] =
+    Config.default.flatMap { config =>
+      if config.suppressStarvationWarnings then IO.unit
+      else super.reportCpuStarvation(exceeded)
+    }
 
   override def main: Opts[IO[ExitCode]] =
     getSubcmd orElse getExternalSubcmd orElse
