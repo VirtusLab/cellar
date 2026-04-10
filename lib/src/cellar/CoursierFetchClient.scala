@@ -34,9 +34,9 @@ object CoursierFetchClient:
       fetch.fetchResult().getArtifacts.asScala
         .map(_.getValue.toPath)
         .find(_.getFileName.toString.endsWith(".jar"))
-        .map { jarNio =>
-          val pomName = jarNio.getFileName.toString.stripSuffix(".jar") + ".pom"
-          Path.fromNioPath(jarNio.getParent.resolve(pomName))
+        .flatMap { jarNio =>
+          val pomNio = jarNio.getParent.resolve(jarNio.getFileName.toString.stripSuffix(".jar") + ".pom")
+          Option.when(java.nio.file.Files.exists(pomNio))(Path.fromNioPath(pomNio))
         }
     }.handleErrorWith {
       case e: coursierapi.error.CoursierError =>

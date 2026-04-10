@@ -2,6 +2,7 @@ package cellar
 
 import org.w3c.dom.Element
 
+import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
 final case class PomMeta(
@@ -16,7 +17,13 @@ final case class PomMeta(
 
 object PomParser:
   def parse(path: fs2.io.file.Path, coord: MavenCoordinate): PomMeta =
-    val doc  = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(path.toNioPath.toFile)
+    val factory = DocumentBuilderFactory.newInstance()
+    factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+    factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+    factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+    factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "")
+    factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
+    val doc  = factory.newDocumentBuilder().parse(path.toNioPath.toFile)
     val root = doc.getDocumentElement
 
     def text(tag: String): Option[String] =
@@ -40,12 +47,14 @@ object PomParser:
       val nodes = el.getElementsByTagName(tag)
       Option.when(nodes.getLength > 0)(nodes.item(0).getTextContent.trim).filter(_.nonEmpty)
 
-    val licenses = children("licenses", "license").map { el =>
-      (elemText(el, "name").getOrElse(""), elemText(el, "url"))
+    val licenses = children("licenses", "license").flatMap { el =>
+      elemText(el, "name").map(name => (name, elemText(el, "url")))
     }
 
-    val developers = children("developers", "developer").map { el =>
-      (elemText(el, "name").getOrElse(""), elemText(el, "email"))
+    val developers = children("developers", "developer").flatMap { el =>
+      val name  = elemText(el, "name")
+      val email = elemText(el, "email")
+      (name orElse email).map(display => (display, if name.isDefined then email else None))
     }
 
     val scm =
