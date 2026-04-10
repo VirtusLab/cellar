@@ -93,6 +93,11 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 Examples are testing match exhaustivity, typesystem etc.
 
+## Code Conventions
+
+- Use `fs2.io.file.Path` for file references, not `java.io.File` or `java.nio.file.Path`
+- Coursier error handling: match `coursierapi.error.CoursierError`, call `CoordinateCompleter.suggest` to attach suggestions to `CellarError.CoordinateNotFound`
+
 ## Documentation / Development history
 
 All plans, decision and architecture designs are available in ai/ folder
