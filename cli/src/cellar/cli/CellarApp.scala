@@ -3,7 +3,7 @@ package cellar.cli
 import cats.effect.{ExitCode, IO}
 import cats.syntax.all.*
 import cellar.*
-import cellar.handlers.{DepsHandler, GetHandler, GetSourceHandler, ListHandler, ProjectGetHandler, ProjectListHandler, ProjectSearchHandler, SearchHandler}
+import cellar.handlers.{DepsHandler, GetHandler, GetSourceHandler, ListHandler, MetaHandler, ProjectGetHandler, ProjectListHandler, ProjectSearchHandler, SearchHandler}
 import com.monovore.decline.*
 import com.monovore.decline.effect.*
 import coursierapi.{MavenRepository, Repository}
@@ -21,7 +21,7 @@ object CellarApp
       getSourceSubcmd orElse
       listSubcmd orElse listExternalSubcmd orElse
       searchSubcmd orElse searchExternalSubcmd orElse
-      depsSubcmd
+      depsSubcmd orElse metaSubcmd
 
   private given Argument[Path] = Argument[java.nio.file.Path].map(Path.fromNioPath)
 
@@ -127,6 +127,16 @@ object CellarApp
         parseAndResolve(rawCoord, extraRepos).flatMap {
           case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
           case Right(coord) => DepsHandler.run(coord, extraRepositories = extraRepos)
+        }
+      }
+    }
+
+  private val metaSubcmd: Opts[IO[ExitCode]] =
+    Opts.subcommand("meta", "Print POM metadata (name, description, license, SCM, developers)") {
+      (coordArg, extraReposOpt).mapN { (rawCoord, extraRepos) =>
+        parseAndResolve(rawCoord, extraRepos).flatMap {
+          case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
+          case Right(coord) => MetaHandler.run(coord, extraRepositories = extraRepos)
         }
       }
     }

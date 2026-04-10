@@ -22,6 +22,28 @@ object CoursierFetchClient:
       fetch.fetch().asScala.headOption.map(file => Path.fromNioPath(file.toPath))
     }.handleError(_ => None)
 
+  def fetchPom(
+      coord: MavenCoordinate,
+      extraRepositories: Seq[Repository] = Seq.empty
+  ): IO[Option[Path]] =
+    IO.blocking {
+      val dep   = coord.toCoursierDependency.withTransitive(false)
+      val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())
+      if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*)
+      // Coursier always downloads the POM alongside the JAR in the cache; derive its path
+      fetch.fetch().asScala.headOption.map(_.toPath)
+        .flatMap { jarNio =>
+          val pomNio = jarNio.getParent.resolve(jarNio.getFileName.toString.stripSuffix(".jar") + ".pom")
+          Option.when(java.nio.file.Files.exists(pomNio))(Path.fromNioPath(pomNio))
+        }
+    }.handleErrorWith {
+      case e: coursierapi.error.CoursierError =>
+        CoordinateCompleter.suggest(coord, extraRepositories).flatMap { suggestions =>
+          IO.raiseError(CellarError.CoordinateNotFound(coord, e, suggestions))
+        }
+      case e => IO.raiseError(e)
+    }
+
   def fetchClasspath(
       coord: MavenCoordinate,
       extraRepositories: Seq[Repository] = Seq.empty

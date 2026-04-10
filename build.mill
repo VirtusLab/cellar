@@ -152,7 +152,9 @@ def fixturePom(desc: String) = PomSettings(
   url = "https://github.com/example/cellar",
   licenses = Seq(License.`Apache-2.0`),
   versionControl = VersionControl.github("example", "cellar"),
-  developers = Seq.empty
+  developers = Seq(
+    Developer("test-dev", "Test Developer", "https://github.com/test-dev")
+  )
 )
 
 object fixtureJava extends JavaModule with PublishModule {
