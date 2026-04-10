@@ -49,6 +49,7 @@
             nativeBuildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               pkgs.autoPatchelfHook
               pkgs.glibc
+              pkgs.zlib
             ];
 
             unpackPhase = ''

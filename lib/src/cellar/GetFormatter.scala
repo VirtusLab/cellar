@@ -85,7 +85,7 @@ object GetFormatter:
         cls.companionClass.flatMap { companion =>
           val members = companion.declarations
             .filter(m => PublicApiFilter.isPublic(m))
-            .map(_.name.toString)
+            .map(m => TypePrinter.printSymbolSignatureSafe(m).linesIterator.mkString(" ").trim)
           if members.isEmpty then None else Some(members.mkString(", "))
         }
       case _ => None

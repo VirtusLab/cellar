@@ -159,6 +159,18 @@ class GetFormatterTest extends CatsEffectSuite:
       }
     }
 
+  test("formatSymbol companion members include full signatures"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarTC")
+        val output = GetFormatter.formatSymbol(cls)
+        assert(output.contains("**Companion members:**"), s"Expected companion section in: $output")
+        assert(output.contains("def apply"), s"Expected 'def apply' signature in companion: $output")
+        assert(output.contains("CellarTC[A]"), s"Expected return type in companion signature: $output")
+      }
+    }
+
   test("formatSymbol members includes all overloaded methods (Scala 2)"):
     withScala2Ctx { ctx =>
       IO.blocking {

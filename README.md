@@ -57,6 +57,9 @@ To verify checksums and signatures, see [RELEASING.md](RELEASING.md).
 # Look up a trait from cats
 cellar get-external org.typelevel:cats-core_3:2.10.0 cats.Monad
 
+# Look up a symbol from the current project
+cellar get --module core cats.Monad
+
 # List top-level symbols in a package
 cellar list-external org.typelevel:cats-core_3:2.10.0 cats
 
@@ -112,7 +115,7 @@ cellar deps <coordinate>
 | `list-external` | List public symbols from a Maven coordinate |
 | `search` | Case-insensitive substring search in the current project |
 | `search-external` | Case-insensitive substring search from a Maven coordinate |
-| `deps` | Print the transitive dependency tree |
+| `deps` | Print the transitive dependency list |
 
 ### Maven coordinates
 
@@ -136,9 +139,10 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 |---|---|---|
 | `--module <name>`, `-m` | project commands | Build module name (required for Mill/sbt) |
 | `--no-cache` | project commands | Skip classpath cache, re-extract from build tool |
+| `--config <path>`, `-c` | project commands | Path to config file |
 | `--java-home <path>` | all | Use a specific JDK for JRE classpath |
 | `-r`, `--repository <url>` | external commands | Extra Maven repository URL (repeatable) |
-| `-l`, `--limit <N>` | `list`, `search` | Max results (default: 50) |
+| `-l`, `--limit <N>` | `list`, `list-external`, `search`, `search-external` | Max results (default: 50) |
 
 ## Configuration
 
