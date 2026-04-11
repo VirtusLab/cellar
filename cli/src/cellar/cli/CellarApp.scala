@@ -19,8 +19,6 @@ object CellarApp
 
   private val suppressStarvation: Ref[IO, Boolean] = Ref.unsafe[IO, Boolean](true)
 
-  override protected def blockedThreadDetectionEnabled = true
-
   override def onCpuStarvationWarn(metrics: CpuStarvationWarningMetrics): IO[Unit] =
     suppressStarvation.get.flatMap(if _ then IO.unit else super.onCpuStarvationWarn(metrics))
 
