@@ -11,7 +11,7 @@ case class SbtConfig(binary: String, extraArgs: String) derives ConfigReader {
   def effectiveExtraArgs: List[String] = extraArgs.split("\\s+").filter(_.nonEmpty).toList
 }
 
-case class Config(mill: MillConfig, sbt: SbtConfig) derives ConfigReader
+case class Config(mill: MillConfig, sbt: SbtConfig, suppressStarvationWarnings: Boolean = true) derives ConfigReader
 
 object Config {
   lazy val default: IO[Config] = load(None)

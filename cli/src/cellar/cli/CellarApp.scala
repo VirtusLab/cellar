@@ -1,6 +1,7 @@
 package cellar.cli
 
-import cats.effect.{ExitCode, IO}
+import cats.effect.{ExitCode, IO, Ref}
+import cats.effect.metrics.CpuStarvationWarningMetrics
 import cats.syntax.all.*
 import cellar.*
 import cellar.handlers.{DepsHandler, GetHandler, GetSourceHandler, ListHandler, MetaHandler, ProjectGetHandler, ProjectListHandler, ProjectSearchHandler, SearchHandler}
@@ -15,6 +16,11 @@ object CellarApp
       header = "Inspect Maven-published JVM dependency APIs",
       version = BuildInfo.version
     ):
+
+  private val suppressStarvation: Ref[IO, Boolean] = Ref.unsafe[IO, Boolean](true)
+
+  override def onCpuStarvationWarn(metrics: CpuStarvationWarningMetrics): IO[Unit] =
+    suppressStarvation.get.flatMap(if _ then IO.unit else super.onCpuStarvationWarn(metrics))
 
   override def main: Opts[IO[ExitCode]] =
     getSubcmd orElse getExternalSubcmd orElse
@@ -51,7 +57,9 @@ object CellarApp
     Opts.flag("no-cache", "Skip classpath cache (re-extract from build tool)").orFalse
 
   private val configOpt: Opts[IO[Config]] =
-    Opts.option[Path]("config", "Path to config file", "c").orNone.map(Config.load)
+    Opts.option[Path]("config", "Path to config file", "c").orNone.map { path =>
+      Config.load(path).flatTap(c => suppressStarvation.set(c.suppressStarvationWarnings))
+    }
 
   private def parseAndResolve(raw: String, extraRepos: List[Repository]): IO[Either[String, MavenCoordinate]] =
     MavenCoordinate.parse(raw) match
