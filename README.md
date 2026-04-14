@@ -168,6 +168,12 @@ sbt {
   # Extra arguments passed to sbt, space-separated (e.g. "--client")
   extra-args = ""             # env: CELLAR_SBT_EXTRA_ARGS
 }
+
+starvation-checks {
+  # Enable Cats Effect CPU starvation warnings (default: false).
+  # Set to true during development or CI to surface warnings.
+  enabled = false             # env: CELLAR_STARVATION_CHECKS_ENABLED
+}
 ```
 
 ### Examples

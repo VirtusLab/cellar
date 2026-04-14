@@ -17,5 +17,5 @@ langoustine-tracer
 .vscode
 .claude
 ai
-.cellar
+.cellar/cache
 result

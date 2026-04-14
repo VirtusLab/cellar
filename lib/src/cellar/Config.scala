@@ -1,8 +1,6 @@
 package cellar
 
-import cats.effect.IO
-import cats.syntax.all.*
-import fs2.io.file.{Files, Path}
+import fs2.io.file.Path
 import pureconfig.*
 
 case class MillConfig(binary: String) derives ConfigReader
@@ -11,25 +9,29 @@ case class SbtConfig(binary: String, extraArgs: String) derives ConfigReader {
   def effectiveExtraArgs: List[String] = extraArgs.split("\\s+").filter(_.nonEmpty).toList
 }
 
-case class Config(mill: MillConfig, sbt: SbtConfig) derives ConfigReader
+case class StarvationChecksConfig(enabled: Boolean) derives ConfigReader
+
+case class Config(mill: MillConfig, sbt: SbtConfig, starvationChecks: StarvationChecksConfig) derives ConfigReader
 
 object Config {
-  lazy val default: IO[Config] = load(None)
-
   val defaultUserPath: Option[Path] =
     sys.props.get("user.home").map(Path(_).resolve(".cellar").resolve("cellar.conf"))
   val defaultProjectPath: Path = Path(".cellar").resolve("cellar.conf")
 
-  def load(path: Option[Path]): IO[Config] = {
-    def load0(path: List[Path]) =
-      IO.blocking {
-        path.foldLeft(ConfigSource.default)((cs, p) => ConfigSource.file(p.toNioPath).withFallback(cs)).loadOrThrow[Config]
-      }
+  /** Memoized bootstrap config loaded from default locations. Accessed before
+    * the IO runtime starts (from `IOApp.runtimeConfig`), so it must be
+    * synchronous. Throws `ConfigReaderException` on malformed config.
+    */
+  lazy val bootstrap: Config = loadSync(None)
 
-    path match
-      case sp: Some[_] => load0(sp.toList)
+  def loadSync(path: Option[Path]): Config = {
+    val paths = path match
+      case Some(p) => List(p)
       case None =>
-        val relevantPaths = defaultUserPath.toList ++ List(defaultProjectPath)
-        relevantPaths.filterA(p => Files[IO].exists(p)).flatMap(load0)
+        (defaultUserPath.toList ++ List(defaultProjectPath))
+          .filter(p => java.nio.file.Files.exists(p.toNioPath))
+    paths
+      .foldLeft(ConfigSource.default)((cs, p) => ConfigSource.file(p.toNioPath).withFallback(cs))
+      .loadOrThrow[Config]
   }
 }

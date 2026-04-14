@@ -98,6 +98,10 @@ Examples are testing match exhaustivity, typesystem etc.
 - Use `fs2.io.file.Path` for file references, not `java.io.File` or `java.nio.file.Path`
 - Coursier error handling: match `coursierapi.error.CoursierError`, call `CoordinateCompleter.suggest` to attach suggestions to `CellarError.CoordinateNotFound`
 
-## Documentation / Development history
+## Documentation
+
+When adding or modifying CLI commands, flags, or config options, update `README.md` accordingly.
+
+## Development history
 
 All plans, decision and architecture designs are available in ai/ folder
