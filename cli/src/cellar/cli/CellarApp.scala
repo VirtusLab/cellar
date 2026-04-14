@@ -21,7 +21,7 @@ object CellarApp
 
   override def runtimeConfig: IORuntimeConfig =
     val base = super.runtimeConfig
-    if Config.bootstrap.starvationChecks.enabled then base
+    if Config.global.starvationChecks.enabled then base
     else base.copy(cpuStarvationCheckInitialDelay = Duration.Inf)
 
   override def main: Opts[IO[ExitCode]] =
@@ -58,10 +58,6 @@ object CellarApp
   private val noCacheOpt: Opts[Boolean] =
     Opts.flag("no-cache", "Skip classpath cache (re-extract from build tool)").orFalse
 
-  private val configOpt: Opts[Config] =
-    Opts.option[Path]("config", "Path to config file", "c").orNone
-      .map(p => if p.isDefined then Config.loadSync(p) else Config.bootstrap)
-
   private def parseAndResolve(raw: String, extraRepos: List[Repository]): IO[Either[String, MavenCoordinate]] =
     MavenCoordinate.parse(raw) match
       case Left(err)    => IO.pure(Left(err))
@@ -69,23 +65,23 @@ object CellarApp
 
   private val getSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("get", "Fetch symbol info from the current project") {
-      (symbolArg, moduleOpt, configOpt, javaHomeOpt, noCacheOpt).mapN { (fqn, module, config, javaHome, noCache) =>
-        ProjectGetHandler.run(fqn, module, config, javaHome, noCache)
+      (symbolArg, moduleOpt, javaHomeOpt, noCacheOpt).mapN { (fqn, module, javaHome, noCache) =>
+        ProjectGetHandler.run(fqn, module, Config.global, javaHome, noCache)
       }
     }
 
   private val listSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("list", "List symbols in a package or class from the current project") {
-      (symbolArg, moduleOpt, limitOpt, configOpt, javaHomeOpt, noCacheOpt).mapN { (fqn, module, limit, config, javaHome, noCache) =>
-        ProjectListHandler.run(fqn, module, limit, config, javaHome, noCache)
+      (symbolArg, moduleOpt, limitOpt, javaHomeOpt, noCacheOpt).mapN { (fqn, module, limit, javaHome, noCache) =>
+        ProjectListHandler.run(fqn, module, limit, Config.global, javaHome, noCache)
       }
     }
 
   private val searchSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("search", "Substring search for symbol names in the current project") {
-      (Opts.argument[String]("query"), moduleOpt, limitOpt, configOpt, javaHomeOpt, noCacheOpt).mapN {
-        (query, module, limit, config, javaHome, noCache) =>
-          ProjectSearchHandler.run(query, module, limit, config, javaHome, noCache)
+      (Opts.argument[String]("query"), moduleOpt, limitOpt, javaHomeOpt, noCacheOpt).mapN {
+        (query, module, limit, javaHome, noCache) =>
+          ProjectSearchHandler.run(query, module, limit, Config.global, javaHome, noCache)
       }
     }
 

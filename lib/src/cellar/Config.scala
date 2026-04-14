@@ -14,22 +14,16 @@ case class StarvationChecksConfig(enabled: Boolean) derives ConfigReader
 case class Config(mill: MillConfig, sbt: SbtConfig, starvationChecks: StarvationChecksConfig) derives ConfigReader
 
 object Config {
-  val defaultUserPath: Option[Path] =
+  private val defaultUserPath: Option[Path] =
     sys.props.get("user.home").map(Path(_).resolve(".cellar").resolve("cellar.conf"))
-  val defaultProjectPath: Path = Path(".cellar").resolve("cellar.conf")
+  private val defaultProjectPath: Path = Path(".cellar").resolve("cellar.conf")
 
-  /** Memoized bootstrap config loaded from default locations. Accessed before
-    * the IO runtime starts (from `IOApp.runtimeConfig`), so it must be
-    * synchronous. Throws `ConfigReaderException` on malformed config.
+  /** Global config loaded from default locations (user-level + project-level).
+    * Cached on first access. Throws on malformed config.
     */
-  lazy val bootstrap: Config = loadSync(None)
-
-  def loadSync(path: Option[Path]): Config = {
-    val paths = path match
-      case Some(p) => List(p)
-      case None =>
-        (defaultUserPath.toList ++ List(defaultProjectPath))
-          .filter(p => java.nio.file.Files.exists(p.toNioPath))
+  lazy val global: Config = {
+    val paths = (defaultUserPath.toList ++ List(defaultProjectPath))
+      .filter(p => java.nio.file.Files.exists(p.toNioPath))
     paths
       .foldLeft(ConfigSource.default)((cs, p) => ConfigSource.file(p.toNioPath).withFallback(cs))
       .loadOrThrow[Config]

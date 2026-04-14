@@ -139,7 +139,6 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 |---|---|---|
 | `--module <name>`, `-m` | project commands | Build module name (required for Mill/sbt) |
 | `--no-cache` | project commands | Skip classpath cache, re-extract from build tool |
-| `--config <path>`, `-c` | project commands | Path to config file |
 | `--java-home <path>` | all | Use a specific JDK for JRE classpath |
 | `-r`, `--repository <url>` | external commands | Extra Maven repository URL (repeatable) |
 | `-l`, `--limit <N>` | `list`, `list-external`, `search`, `search-external` | Max results (default: 50) |
@@ -151,8 +150,6 @@ Cellar loads configuration from HOCON files and environment variables. Files are
 1. Built-in defaults
 2. `~/.cellar/cellar.conf` (user-level, optional)
 3. `.cellar/cellar.conf` (project-level, optional)
-
-Use `--config <path>` / `-c <path>` to load a specific file instead.
 
 ### Default config
 
