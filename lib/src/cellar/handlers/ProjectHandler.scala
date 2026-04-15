@@ -13,7 +13,7 @@ object ProjectHandler:
       cwd: Option[Path],
       module: Option[String],
       noCache: Boolean,
-      config: Config
+      config: Config = Config.global
   )(body: (Context, Classpath, Classpath) => IO[ExitCode])(using Console[IO]): IO[ExitCode] =
     val program =
       for

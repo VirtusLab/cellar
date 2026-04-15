@@ -1,6 +1,7 @@
 package cellar.cli
 
 import cats.effect.{ExitCode, IO}
+import cats.effect.unsafe.IORuntimeConfig
 import cats.syntax.all.*
 import cellar.*
 import cellar.handlers.{DepsHandler, GetHandler, GetSourceHandler, ListHandler, MetaHandler, ProjectGetHandler, ProjectListHandler, ProjectSearchHandler, SearchHandler}
@@ -9,12 +10,19 @@ import com.monovore.decline.effect.*
 import coursierapi.{MavenRepository, Repository}
 import fs2.io.file.Path
 
+import scala.concurrent.duration.Duration
+
 object CellarApp
     extends CommandIOApp(
       name = "cellar",
       header = "Inspect Maven-published JVM dependency APIs",
       version = BuildInfo.version
     ):
+
+  override def runtimeConfig: IORuntimeConfig =
+    val base = super.runtimeConfig
+    if Config.global.starvationChecks.enabled then base
+    else base.copy(cpuStarvationCheckInitialDelay = Duration.Inf)
 
   override def main: Opts[IO[ExitCode]] =
     getSubcmd orElse getExternalSubcmd orElse
@@ -50,9 +58,6 @@ object CellarApp
   private val noCacheOpt: Opts[Boolean] =
     Opts.flag("no-cache", "Skip classpath cache (re-extract from build tool)").orFalse
 
-  private val configOpt: Opts[IO[Config]] =
-    Opts.option[Path]("config", "Path to config file", "c").orNone.map(Config.load)
-
   private def parseAndResolve(raw: String, extraRepos: List[Repository]): IO[Either[String, MavenCoordinate]] =
     MavenCoordinate.parse(raw) match
       case Left(err)    => IO.pure(Left(err))
@@ -60,23 +65,23 @@ object CellarApp
 
   private val getSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("get", "Fetch symbol info from the current project") {
-      (symbolArg, moduleOpt, configOpt, javaHomeOpt, noCacheOpt).mapN { (fqn, module, configIO, javaHome, noCache) =>
-        configIO.flatMap(ProjectGetHandler.run(fqn, module, _, javaHome, noCache))
+      (symbolArg, moduleOpt, javaHomeOpt, noCacheOpt).mapN { (fqn, module, javaHome, noCache) =>
+        ProjectGetHandler.run(fqn, module, javaHome, noCache)
       }
     }
 
   private val listSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("list", "List symbols in a package or class from the current project") {
-      (symbolArg, moduleOpt, limitOpt, configOpt, javaHomeOpt, noCacheOpt).mapN { (fqn, module, limit, configIO, javaHome, noCache) =>
-        configIO.flatMap(ProjectListHandler.run(fqn, module, limit, _, javaHome, noCache))
+      (symbolArg, moduleOpt, limitOpt, javaHomeOpt, noCacheOpt).mapN { (fqn, module, limit, javaHome, noCache) =>
+        ProjectListHandler.run(fqn, module, limit, javaHome, noCache)
       }
     }
 
   private val searchSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("search", "Substring search for symbol names in the current project") {
-      (Opts.argument[String]("query"), moduleOpt, limitOpt, configOpt, javaHomeOpt, noCacheOpt).mapN {
-        (query, module, limit, configIO, javaHome, noCache) =>
-          configIO.flatMap(ProjectSearchHandler.run(query, module, limit, _, javaHome, noCache))
+      (Opts.argument[String]("query"), moduleOpt, limitOpt, javaHomeOpt, noCacheOpt).mapN {
+        (query, module, limit, javaHome, noCache) =>
+          ProjectSearchHandler.run(query, module, limit, javaHome, noCache)
       }
     }
 

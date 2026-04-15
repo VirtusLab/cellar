@@ -10,10 +10,10 @@ object ProjectGetHandler:
   def run(
       fqn: String,
       module: Option[String],
-      config: Config,
       javaHome: Option[Path] = None,
       noCache: Boolean = false,
-      cwd: Option[Path] = None
+      cwd: Option[Path] = None,
+      config: Config = Config.global
   )(using Console[IO]): IO[ExitCode] =
     ProjectHandler.run(javaHome, cwd, module, noCache, config) { (ctx, classpath, _) =>
       given Context = ctx

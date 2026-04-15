@@ -13,7 +13,7 @@ object ProjectClasspathProvider:
       module: Option[String],
       jreClasspath: Classpath,
       noCache: Boolean,
-      config: Config
+      config: Config = Config.global
   ): Resource[IO, (Context, Classpath)] =
     Resource.eval(resolveClasspath(cwd, module, noCache, config)).flatMap { paths =>
       ContextResource.make(paths, jreClasspath)

@@ -11,10 +11,10 @@ object ProjectListHandler:
       fqn: String,
       module: Option[String],
       limit: Int,
-      config: Config,
       javaHome: Option[Path] = None,
       noCache: Boolean = false,
-      cwd: Option[Path] = None
+      cwd: Option[Path] = None,
+      config: Config = Config.global
   )(using Console[IO]): IO[ExitCode] =
     ProjectHandler.run(javaHome, cwd, module, noCache, config) { (ctx, _, _) =>
       given Context = ctx
