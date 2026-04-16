@@ -22,11 +22,17 @@ object SymbolResolver:
 
   /** Try to resolve as a top-level class, module, term, type, or package. */
   private def tryTopLevel(fqn: String)(using ctx: Context): Option[LookupResult] =
-    tryOrNone(ctx.findStaticClass(fqn)).map(s => LookupResult.Found(List(s)))
-      .orElse(tryOrNone(ctx.findStaticModuleClass(fqn)).map(s => LookupResult.Found(List(s))))
-      .orElse(tryOrNone(ctx.findStaticTerm(fqn)).map(s => LookupResult.Found(List(s))))
-      .orElse(tryOrNone(ctx.findStaticType(fqn)).map(s => LookupResult.Found(List(s))))
-      .orElse(tryOrNone(ctx.findPackage(fqn)).map(_ => LookupResult.IsPackage))
+    // A trailing `$` is the JVM-level name of a companion object — treat it as
+    // an explicit request for the module class, not the class of the same name.
+    if fqn.endsWith("$") then
+      val stripped = fqn.stripSuffix("$")
+      tryOrNone(ctx.findStaticModuleClass(stripped)).map(s => LookupResult.Found(List(s)))
+    else
+      tryOrNone(ctx.findStaticClass(fqn)).map(s => LookupResult.Found(List(s)))
+        .orElse(tryOrNone(ctx.findStaticModuleClass(fqn)).map(s => LookupResult.Found(List(s))))
+        .orElse(tryOrNone(ctx.findStaticTerm(fqn)).map(s => LookupResult.Found(List(s))))
+        .orElse(tryOrNone(ctx.findStaticType(fqn)).map(s => LookupResult.Found(List(s))))
+        .orElse(tryOrNone(ctx.findPackage(fqn)).map(_ => LookupResult.IsPackage))
 
   /**
    * Multi-segment nested member walk.

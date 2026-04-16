@@ -117,3 +117,19 @@ class SymbolResolverTest extends CatsEffectSuite:
         case other => fail(s"Expected Found for inherited nested type, got $other")
       }
     }
+
+  test("resolve trailing-$ FQN returns the companion module class"):
+    withCtx { ctx =>
+      given Context = ctx
+      // `cellar.fixture.scala3.CellarTC$` should resolve to `object CellarTC`,
+      // not the trait of the same name.
+      SymbolResolver.resolve("cellar.fixture.scala3.CellarTC$").map {
+        case LookupResult.Found(syms) =>
+          assert(syms.nonEmpty)
+          syms.head match
+            case cls: tastyquery.Symbols.ClassSymbol =>
+              assert(cls.isModuleClass, s"Expected module class, got $cls")
+            case other => fail(s"Expected ClassSymbol, got $other")
+        case other => fail(s"Expected Found for trailing-\\$$ FQN, got $other")
+      }
+    }

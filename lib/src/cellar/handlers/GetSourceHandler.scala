@@ -7,7 +7,7 @@ import coursierapi.Repository
 import fs2.io.file.Path
 import tastyquery.Contexts.Context
 import tastyquery.SourceLanguage
-import tastyquery.Symbols.TermOrTypeSymbol
+import tastyquery.Symbols.{ClassSymbol, Symbol, TermOrTypeSymbol}
 import tastyquery.Trees.Tree
 
 object GetSourceHandler:
@@ -30,7 +30,7 @@ object GetSourceHandler:
                 IO.raiseError(CellarError.SymbolNotFound(fqn, coord, nearMatches))
               }
             case LookupResult.Found(symbols) =>
-              IO.blocking(sourceRef(symbols.head)).flatMap {
+              IO.blocking(combinedSourceRef(symbols.head)(using ctx)).flatMap {
                 case None =>
                   Console[IO].errorln(
                     s"No source position for '$fqn'. Only Scala 3 (TASTy) and Java symbols are supported."
@@ -55,7 +55,23 @@ object GetSourceHandler:
       case e: Throwable   => Console[IO].errorln(e.getMessage).as(ExitCode.Error)
     }
 
-  private def sourceRef(sym: tastyquery.Symbols.Symbol): Option[(String, Int, Int, String)] =
+  /**
+   * Resolve the source range for `sym`. When `sym` is a ClassSymbol whose
+   * companion lives in the same source file, widen the range to cover both —
+   * so `get-source cats.Monad` returns the trait *and* `object Monad` in one
+   * slice, which is where `apply`, type-class summoners, etc. actually live.
+   */
+  private def combinedSourceRef(sym: Symbol)(using Context): Option[(String, Int, Int, String)] =
+    val primary = sourceRef(sym)
+    val companion = sym match
+      case cls: ClassSymbol => cls.companionClass.flatMap(sourceRef)
+      case _                => None
+    (primary, companion) match
+      case (Some(p), Some(c)) if p._1 == c._1 && p._4 == c._4 =>
+        Some((p._1, math.min(p._2, c._2), math.max(p._3, c._3), p._4))
+      case _ => primary
+
+  private def sourceRef(sym: Symbol): Option[(String, Int, Int, String)] =
     sym.tree.flatMap { t =>
       val pos = t.asInstanceOf[Tree].pos
       if pos.isUnknown || pos.isSynthetic || pos.sourceFile == tastyquery.SourceFile.NoSource then None

@@ -233,6 +233,39 @@ class IntegrationTest extends CatsEffectSuite:
         assert(console.outBuf.toString.contains("```java"), s"Output: ${console.outBuf}")
       }
 
+  test("get-source: trait with same-file companion returns both"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetSourceHandler
+      .run(
+        TestFixtures.scala3Coord,
+        "cellar.fixture.scala3.CellarTC",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        val out = console.outBuf.toString
+        assert(out.contains("trait CellarTC"), s"Expected 'trait CellarTC' in: $out")
+        assert(out.contains("object CellarTC"), s"Expected 'object CellarTC' in: $out")
+      }
+
+  test("get-source: trailing-$ FQN returns companion source"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetSourceHandler
+      .run(
+        TestFixtures.scala3Coord,
+        "cellar.fixture.scala3.CellarTC$",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        val out = console.outBuf.toString
+        assert(out.contains("object CellarTC"), s"Expected 'object CellarTC' in: $out")
+      }
+
   // ─── list subcommand ─────────────────────────────────────────────────────
 
   test("list: package scala3 fixture lists top-level types"):
