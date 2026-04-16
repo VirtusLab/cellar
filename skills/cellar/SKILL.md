@@ -19,7 +19,9 @@ Query the current project's code and all its dependencies. Cellar auto-detects t
 - scala-cli projects: omit `--module`
 - `--no-cache`: skip classpath cache, re-extract from build tool
 - `--java-home <path>`: override JRE classpath
-- `-l`, `--limit <N>`: max results for `list`/`search` (default: 50)
+- `-l`, `--limit <N>`: max results for `list`/`search` (default: 50), max members for `get`
+- `--hide-inherited`: show only members declared on the type itself (`get` commands)
+- `--group-inherited`: group members by declaring type with section headers (`get` commands)
 
 ## External commands (query arbitrary Maven coordinates)
 
