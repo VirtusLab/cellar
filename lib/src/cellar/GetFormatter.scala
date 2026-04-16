@@ -91,17 +91,66 @@ object GetFormatter:
   )(using ctx: Context): Option[String] =
     sym match
       case cls: ClassSymbol =>
-        val raw =
-          if hideInherited then cls.declarations.filter(PublicApiFilter.isPublic).toList
-          else SymbolResolver.collectClassMembers(cls).filter(PublicApiFilter.isPublic)
-        val members = raw.map(m => TypePrinter.printSymbolSignatureSafe(m).linesIterator.mkString(" ").trim)
-        if members.isEmpty then None
-        else limit match
-          case Some(n) if members.length > n =>
-            Some(members.take(n).mkString("\n") + s"\n// … ${members.length - n} more members")
-          case _ =>
-            Some(members.mkString("\n"))
+        // --hide-inherited silently wins over --group-inherited
+        if hideInherited then renderFlatMembers(cls.declarations.filter(PublicApiFilter.isPublic).toList, limit)
+        else if groupInherited then renderGroupedMembers(cls, limit)
+        else renderFlatMembers(SymbolResolver.collectClassMembers(cls).filter(PublicApiFilter.isPublic), limit)
       case _ => None
+
+  private def formatMember(m: TermOrTypeSymbol)(using Context): String =
+    TypePrinter.printSymbolSignatureSafe(m).linesIterator.mkString(" ").trim
+
+  private def renderFlatMembers(raw: List[TermOrTypeSymbol], limit: Option[Int])(using Context): Option[String] =
+    val members = raw.map(formatMember)
+    if members.isEmpty then None
+    else limit match
+      case Some(n) if members.length > n =>
+        Some(members.take(n).mkString("\n") + s"\n// … ${members.length - n} more members")
+      case _ =>
+        Some(members.mkString("\n"))
+
+  private val universalBaseClasses = Set("scala.Any", "scala.AnyRef", "java.lang.Object")
+
+  private def renderGroupedMembers(cls: ClassSymbol, limit: Option[Int])(using ctx: Context): Option[String] =
+    val linearization =
+      try cls.linearization
+      catch case _: Exception => List(cls)
+    val seen     = scala.collection.mutable.Set.empty[TermOrTypeSymbol]
+    val sections = List.newBuilder[(String, List[String])]
+    linearization.filterNot(k => universalBaseClasses.contains(k.displayFullName)).foreach { klass =>
+      val decls =
+        try klass.declarations
+        catch case _: Exception => Nil
+      val members = decls.flatMap {
+        case decl: TermOrTypeSymbol if PublicApiFilter.isPublic(decl) && !seen.contains(decl) =>
+          val dominated = decl.overridingSymbol(cls).exists(_ != decl)
+          if !dominated then
+            seen += decl
+            Some(formatMember(decl))
+          else None
+        case _ => None
+      }.toList
+      if members.nonEmpty then
+        val label =
+          if klass == cls then s"Declared on ${klass.name}"
+          else s"Inherited from ${klass.name}"
+        sections += ((label, members))
+    }
+    val all = sections.result()
+    if all.isEmpty then None
+    else
+      val totalMembers = all.map(_._2.length).sum
+      val needsTruncation = limit.exists(totalMembers > _)
+      val sb = new StringBuilder
+      var remaining = limit.getOrElse(Int.MaxValue)
+      for (header, members) <- all if remaining > 0 do
+        val take = members.take(remaining)
+        sb.append(s"// $header\n")
+        sb.append(take.mkString("\n")).append('\n')
+        remaining -= take.length
+      if needsTruncation then
+        sb.append(s"// … ${totalMembers - limit.get} more members\n")
+      Some(sb.toString.trim)
 
   private def renderCompanion(sym: Symbol)(using ctx: Context): Option[String] =
     sym match

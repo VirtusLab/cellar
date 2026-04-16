@@ -196,6 +196,33 @@ class GetFormatterTest extends CatsEffectSuite:
       }
     }
 
+  test("formatSymbol --group-inherited adds section headers by declaring class"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        // CellarLeaf → CellarMid → CellarOuter
+        val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarLeaf")
+        val output = GetFormatter.formatSymbol(cls, groupInherited = true)
+        assert(output.contains("// Declared on CellarLeaf"), s"Expected declared section in:\n$output")
+        assert(output.contains("// Inherited from CellarMid"), s"Expected CellarMid section in:\n$output")
+        assert(output.contains("// Inherited from CellarOuter"), s"Expected CellarOuter section in:\n$output")
+        assert(output.contains("leafMethod"), s"Expected leafMethod in:\n$output")
+        assert(output.contains("midMethod"), s"Expected midMethod in:\n$output")
+      }
+    }
+
+  test("formatSymbol --hide-inherited wins over --group-inherited"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarLeaf")
+        val output = GetFormatter.formatSymbol(cls, hideInherited = true, groupInherited = true)
+        assert(output.contains("leafMethod"), s"Expected leafMethod in:\n$output")
+        assert(!output.contains("midMethod"), s"Unexpected midMethod in:\n$output")
+        assert(!output.contains("Inherited from"), s"Unexpected section header in:\n$output")
+      }
+    }
+
   test("formatSymbol --limit caps member count and shows note"):
     withCtx { ctx =>
       IO.blocking {
