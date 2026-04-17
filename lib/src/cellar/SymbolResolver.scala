@@ -77,14 +77,29 @@ object SymbolResolver:
         case None =>
           return Some(LookupResult.PartialMatch(currentResolved, seg))
 
-    // Final segment: walk linearization for term overloads + type members
+    // Final segment: walk linearization for term overloads + type members.
+    // If the instance side has nothing, fall through to the companion module
+    // so `Foo.apply` resolves to `object Foo`'s `apply`.
     val finalSeg = segments(segments.length - 1)
-    val tName = termName(finalSeg)
-    val tyName = typeName(finalSeg)
+    val tName    = termName(finalSeg)
+    val tyName   = typeName(finalSeg)
+    val direct   = collectFinalMembers(current, tName, tyName)
+    val all =
+      if direct.nonEmpty then direct
+      else current.companionClass.toList.flatMap(collectFinalMembers(_, tName, tyName))
+
+    if all.isEmpty then Some(LookupResult.PartialMatch(currentResolved, finalSeg))
+    else Some(LookupResult.Found(all))
+
+  private def collectFinalMembers(
+      cls: ClassSymbol,
+      tName: tastyquery.Names.UnsignedTermName,
+      tyName: tastyquery.Names.TypeName
+  )(using ctx: Context): List[Symbol] =
     val linearization =
-      try current.linearization
-      catch case _: Exception => List(current)
-    val seen = scala.collection.mutable.Set.empty[Symbol]
+      try cls.linearization
+      catch case _: Exception => List(cls)
+    val seen    = scala.collection.mutable.Set.empty[Symbol]
     val results = List.newBuilder[Symbol]
     for klass <- linearization do
       for sym <- klass.getAllOverloadedDecls(tName) if !seen.contains(sym) do
@@ -93,16 +108,20 @@ object SymbolResolver:
       for sym <- klass.getDecl(tyName) if !seen.contains(sym) do
         seen += sym
         results += sym
-    val all = results.result().filter(PublicApiFilter.isPublic)
-
-    if all.isEmpty then Some(LookupResult.PartialMatch(currentResolved, finalSeg))
-    else Some(LookupResult.Found(all))
+    results.result().filter(PublicApiFilter.isPublic)
 
   /**
    * Find a nested class member by name, walking the linearization.
    * Tries type members first (traits, classes), then term members (objects).
+   * Falls through to the companion class so `Foo.Bar` resolves when `Bar` is
+   * declared inside `object Foo` rather than on the `Foo` trait/class itself.
    */
   private[cellar] def findClassMember(owner: ClassSymbol, name: String)(using ctx: Context): Option[ClassSymbol] =
+    directClassMember(owner, name).orElse {
+      owner.companionClass.flatMap(directClassMember(_, name))
+    }
+
+  private def directClassMember(owner: ClassSymbol, name: String)(using ctx: Context): Option[ClassSymbol] =
     val byType = owner.getMember(typeName(name)).collect { case cs: ClassSymbol => cs }
     byType.orElse {
       owner.getMember(termName(name)).flatMap(_.moduleClass)
