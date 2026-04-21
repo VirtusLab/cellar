@@ -65,19 +65,8 @@ class MillBuildTool(cwd: Path, config: MillConfig) extends BuildTool:
             Path(path).some.filterA(Files[IO].isDirectory(_))
 
   def fingerprintFiles: IO[List[Path]] =
-    Files[IO].isDirectory(cwd.resolve(".git")).ifM(
-      ifTrue = fingerprintFromGit,
-      ifFalse = fingerprintFromDisk
-    )
-
-  private def fingerprintFromGit: IO[List[Path]] =
-    val patterns = List("build.mill", "build.sc", "build.mill.yaml", "build.yaml", "mill-build/**", ".mill-version")
-    ProcessRunner.run("git", "ls-files" :: patterns, Some(cwd)).flatMap { result =>
-      if result.exitCode == 0 then
-        IO.pure(result.stdout.linesIterator.filter(_.nonEmpty).map(cwd.resolve).toList)
-      else
-        fingerprintFromDisk
-    }
+    val gitPatterns = List("build.mill", "build.sc", "build.mill.yaml", "build.yaml", "mill-build/**", ".mill-version")
+    gitOrDiskFingerprint(cwd, gitPatterns, fingerprintFromDisk)
 
   private def fingerprintFromDisk: IO[List[Path]] =
     val candidates = List("build.mill", "build.sc", "build.mill.yaml", "build.yaml", ".mill-version")

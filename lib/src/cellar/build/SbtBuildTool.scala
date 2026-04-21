@@ -44,18 +44,8 @@ class SbtBuildTool(cwd: Path, config: SbtConfig) extends BuildTool:
     }
 
   def fingerprintFiles: IO[List[Path]] =
-    Files[IO].isDirectory(cwd.resolve(".git")).ifM(
-      ifTrue = fingerprintFromGit,
-      ifFalse = fingerprintFromDisk
-    )
-
-  private def fingerprintFromGit: IO[List[Path]] =
-    val patterns = List("build.sbt", "project/*.sbt", "project/*.scala", "project/build.properties")
-    ProcessRunner.run("git", "ls-files" :: patterns, Some(cwd)).flatMap {
-      case result if result.exitCode == 0 =>
-        IO.pure(result.stdout.linesIterator.filter(_.nonEmpty).map(cwd.resolve).toList)
-      case _ => fingerprintFromDisk
-    }
+    val gitPatterns = List("build.sbt", "project/*.sbt", "project/*.scala", "project/build.properties")
+    gitOrDiskFingerprint(cwd, gitPatterns, fingerprintFromDisk)
 
   private def fingerprintFromDisk: IO[List[Path]] =
     val candidates = List("build.sbt", "project/build.properties", "project/plugins.sbt")

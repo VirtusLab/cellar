@@ -170,7 +170,7 @@ object SymbolResolver:
       i += 1
     best
 
-  private val universalBaseClasses = Set("scala.Any", "scala.AnyRef", "java.lang.Object")
+  private[cellar] val universalBaseClasses = Set("scala.Any", "scala.AnyRef", "java.lang.Object")
 
   /**
    * Walk the linearization (MRO) of a class, collecting all declarations.
