@@ -109,15 +109,13 @@ object GetFormatter:
       case _ =>
         Some(members.mkString("\n"))
 
-  private val universalBaseClasses = Set("scala.Any", "scala.AnyRef", "java.lang.Object")
-
   private def renderGroupedMembers(cls: ClassSymbol, limit: Option[Int])(using ctx: Context): Option[String] =
     val linearization =
       try cls.linearization
       catch case _: Exception => List(cls)
     val seen     = scala.collection.mutable.Set.empty[TermOrTypeSymbol]
     val sections = List.newBuilder[(String, List[String])]
-    linearization.filterNot(k => universalBaseClasses.contains(k.displayFullName)).foreach { klass =>
+    linearization.filterNot(k => SymbolResolver.universalBaseClasses.contains(k.displayFullName)).foreach { klass =>
       val decls =
         try klass.declarations
         catch case _: Exception => Nil
@@ -158,7 +156,7 @@ object GetFormatter:
         cls.companionClass.flatMap { companion =>
           val members = companion.declarations
             .filter(m => PublicApiFilter.isPublic(m))
-            .map(m => TypePrinter.printSymbolSignatureSafe(m).linesIterator.mkString(" ").trim)
+            .map(formatMember)
           if members.isEmpty then None else Some(members.mkString(", "))
         }
       case _ => None
