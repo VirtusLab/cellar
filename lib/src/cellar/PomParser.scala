@@ -5,14 +5,17 @@ import org.w3c.dom.Element
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
+final case class License(name: String, url: Option[String])
+final case class Developer(name: String, email: Option[String])
+
 final case class PomMeta(
     coordinate: MavenCoordinate,
     name: Option[String],
     description: Option[String],
     url: Option[String],
-    licenses: Seq[(String, Option[String])],
+    licenses: Seq[License],
     scm: Option[String],
-    developers: Seq[(String, Option[String])],
+    developers: Seq[Developer],
 )
 
 object PomParser:
@@ -46,13 +49,13 @@ object PomParser:
       Option.when(nodes.getLength > 0)(nodes.item(0).getTextContent.trim).filter(_.nonEmpty)
 
     val licenses = children("licenses", "license").flatMap { el =>
-      elemText(el, "name").map(name => (name, elemText(el, "url")))
+      elemText(el, "name").map(name => License(name, elemText(el, "url")))
     }
 
     val developers = children("developers", "developer").flatMap { el =>
       val name  = elemText(el, "name")
       val email = elemText(el, "email")
-      (name orElse email).map(display => (display, if name.isDefined then email else None))
+      (name orElse email).map(display => Developer(display, if name.isDefined then email else None))
     }
 
     val scm =

@@ -12,7 +12,7 @@ object StreamOps:
        else IO.unit).as(results)
     }
 
-  def boundedWithFlag[A](stream: Stream[IO, A], limit: Int): IO[(List[A], Boolean)] =
+  def boundedWithFlag[A](stream: Stream[IO, A], limit: Int): IO[(results: List[A], truncated: Boolean)] =
     stream.take(limit.toLong + 1L).compile.toList.map { all =>
       val truncated = all.length > limit
       (all.take(limit), truncated)

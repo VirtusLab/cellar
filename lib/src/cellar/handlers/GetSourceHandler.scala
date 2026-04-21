@@ -11,6 +11,7 @@ import tastyquery.Symbols.{ClassSymbol, Symbol, TermOrTypeSymbol}
 import tastyquery.Trees.Tree
 
 object GetSourceHandler:
+  private type SourceRef = (filePath: String, startLine: Int, endLine: Int, language: String)
   def run(
       coord: MavenCoordinate,
       fqn: String,
@@ -35,14 +36,14 @@ object GetSourceHandler:
                   Console[IO].errorln(
                     s"No source position for '$fqn'. Only Scala 3 (TASTy) and Java symbols are supported."
                   ).as(ExitCode.Error)
-                case Some((filePath, startLine, endLine, language)) =>
-                  SourceFetcher.fetch(coord, filePath, startLine, endLine, extraRepositories).flatMap {
+                case Some(ref) =>
+                  SourceFetcher.fetch(coord, ref.filePath, ref.startLine, ref.endLine, extraRepositories).flatMap {
                     case Left(err) =>
                       Console[IO].errorln(err).as(ExitCode.Error)
                     case Right(result) =>
-                      val lineInfo = if endLine == Int.MaxValue then "" else s" lines ${startLine + 1}–${endLine + 1}"
+                      val lineInfo = if ref.endLine == Int.MaxValue then "" else s" lines ${ref.startLine + 1}–${ref.endLine + 1}"
                       val header = s"// ${result.entryPath}$lineInfo"
-                      Console[IO].println(s"```$language\n$header\n${result.lines.mkString("\n")}\n```")
+                      Console[IO].println(s"```${ref.language}\n$header\n${result.lines.mkString("\n")}\n```")
                         .as(ExitCode.Success)
                   }
               }
@@ -60,25 +61,25 @@ object GetSourceHandler:
    * so `get-source cats.Monad` returns the trait *and* `object Monad` in one
    * slice, which is where `apply`, type-class summoners, etc. actually live.
    */
-  private def combinedSourceRef(sym: Symbol)(using Context): Option[(String, Int, Int, String)] =
+  private def combinedSourceRef(sym: Symbol)(using Context): Option[SourceRef] =
     val primary = sourceRef(sym)
     val companion = sym match
       case cls: ClassSymbol => cls.companionClass.flatMap(sourceRef)
       case _                => None
     (primary, companion) match
-      case (Some(p), Some(c)) if p._1 == c._1 && p._4 == c._4 =>
-        Some((p._1, math.min(p._2, c._2), math.max(p._3, c._3), p._4))
+      case (Some(p), Some(c)) if p.filePath == c.filePath && p.language == c.language =>
+        Some((filePath = p.filePath, startLine = math.min(p.startLine, c.startLine), endLine = math.max(p.endLine, c.endLine), language = p.language))
       case _ => primary
 
-  private def sourceRef(sym: Symbol): Option[(String, Int, Int, String)] =
+  private def sourceRef(sym: Symbol): Option[SourceRef] =
     sym.tree.flatMap { t =>
       val pos = t.asInstanceOf[Tree].pos
       if pos.isUnknown || pos.isSynthetic || pos.sourceFile == tastyquery.SourceFile.NoSource then None
-      else Some((pos.sourceFile.path, pos.startLine, pos.endLine, "scala"))
+      else Some((filePath = pos.sourceFile.path, startLine = pos.startLine, endLine = pos.endLine, language = "scala"))
     }.orElse {
       sym match
         case s: TermOrTypeSymbol if s.sourceLanguage == SourceLanguage.Java =>
-          Some((javaSourcePath(s), 0, Int.MaxValue, "java"))
+          Some((filePath = javaSourcePath(s), startLine = 0, endLine = Int.MaxValue, language = "java"))
         case _ => None
     }
 

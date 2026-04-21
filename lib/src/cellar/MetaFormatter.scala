@@ -8,8 +8,8 @@ object MetaFormatter:
     meta.description.foreach(v => lines += s"Description: $v")
     meta.url.foreach(v => lines += s"URL:         $v")
 
-    meta.licenses.foreach { (name, url) =>
-      val rendered = url.fold(name)(u => s"$name ($u)")
+    meta.licenses.foreach { lic =>
+      val rendered = lic.url.fold(lic.name)(u => s"${lic.name} ($u)")
       lines += s"License:     $rendered"
     }
 
@@ -17,8 +17,8 @@ object MetaFormatter:
 
     if meta.developers.nonEmpty then
       lines += "Developers:"
-      meta.developers.foreach { (name, email) =>
-        val rendered = email.fold(name)(e => s"$name <$e>")
+      meta.developers.foreach { dev =>
+        val rendered = dev.email.fold(dev.name)(e => s"${dev.name} <$e>")
         lines += s"  - $rendered"
       }
 
