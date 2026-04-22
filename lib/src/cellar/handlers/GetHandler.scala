@@ -69,6 +69,8 @@ object GetHandler:
                 else s"$base Did you mean one of: ${nearMatches.mkString(", ")}?"
               Console[IO].errorln(msg).as(ExitCode.Error)
             }
+      case LookupResult.LookupFailed(cause) =>
+        IO.raiseError(CellarError.SymbolLookupFailed(fqn, cause))
     }
 
   /** Warns to stderr if the target FQN exists in more than one JAR on the classpath. */

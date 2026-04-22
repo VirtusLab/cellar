@@ -12,6 +12,7 @@ object LookupResult:
   case object IsPackage                                                      extends LookupResult
   case object NotFound                                                       extends LookupResult
   final case class PartialMatch(resolvedFqn: String, missingMember: String)  extends LookupResult
+  final case class LookupFailed(cause: Throwable)                            extends LookupResult
 
 object SymbolResolver:
   def resolve(fqn: String)(using ctx: Context): IO[LookupResult] =
@@ -22,17 +23,28 @@ object SymbolResolver:
 
   /** Try to resolve as a top-level class, module, term, type, or package. */
   private def tryTopLevel(fqn: String)(using ctx: Context): Option[LookupResult] =
+    var caught: Option[Throwable] = None
+    def t[A](thunk: => A): Option[A] =
+      try Some(thunk)
+      catch
+        case _: MemberNotFoundException => None
+        case e: Exception =>
+          if caught.isEmpty then caught = Some(e)
+          None
+
     // A trailing `$` is the JVM-level name of a companion object — treat it as
     // an explicit request for the module class, not the class of the same name.
     if fqn.endsWith("$") then
       val stripped = fqn.stripSuffix("$")
-      tryOrNone(ctx.findStaticModuleClass(stripped)).map(s => LookupResult.Found(List(s)))
+      t(ctx.findStaticModuleClass(stripped)).map(s => LookupResult.Found(List(s)))
+        .orElse(caught.map(LookupResult.LookupFailed(_)))
     else
-      tryOrNone(ctx.findStaticClass(fqn)).map(s => LookupResult.Found(List(s)))
-        .orElse(tryOrNone(ctx.findStaticModuleClass(fqn)).map(s => LookupResult.Found(List(s))))
-        .orElse(tryOrNone(ctx.findStaticTerm(fqn)).map(s => LookupResult.Found(List(s))))
-        .orElse(tryOrNone(ctx.findStaticType(fqn)).map(s => LookupResult.Found(List(s))))
-        .orElse(tryOrNone(ctx.findPackage(fqn)).map(_ => LookupResult.IsPackage))
+      t(ctx.findStaticClass(fqn)).map(s => LookupResult.Found(List(s)))
+        .orElse(t(ctx.findStaticModuleClass(fqn)).map(s => LookupResult.Found(List(s))))
+        .orElse(t(ctx.findStaticTerm(fqn)).map(s => LookupResult.Found(List(s))))
+        .orElse(t(ctx.findStaticType(fqn)).map(s => LookupResult.Found(List(s))))
+        .orElse(t(ctx.findPackage(fqn)).map(_ => LookupResult.IsPackage))
+        .orElse(caught.map(LookupResult.LookupFailed(_)))
 
   /**
    * Multi-segment nested member walk.

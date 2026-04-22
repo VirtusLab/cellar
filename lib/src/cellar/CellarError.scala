@@ -22,6 +22,12 @@ object CellarError:
         s"$base\n\nDid you mean?\n$hint"
     override def getCause: Throwable = cause
 
+  final case class SymbolLookupFailed(fqn: String, cause: Throwable) extends CellarError:
+    override def getMessage: String =
+      val detail = Option(cause.getMessage).getOrElse("(no message)")
+      s"Symbol lookup for '$fqn' failed unexpectedly: ${cause.getClass.getSimpleName}: $detail"
+    override def getCause: Throwable = cause
+
   final case class SymbolNotFound(fqn: String, coord: MavenCoordinate, nearMatches: List[String])
       extends CellarError:
     override def getMessage: String =
