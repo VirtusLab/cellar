@@ -49,13 +49,15 @@ object CoursierFetchClient:
       coord: MavenCoordinate,
       extraRepositories: Seq[Repository] = Seq.empty
   )(using Tracer[IO]): IO[Seq[Path]] =
-    IO.blocking {
-      val dep   = coord.toCoursierDependency
-      val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())
-      if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*)
-      fetch.fetch().asScala.toSeq.map(file => Path.fromNioPath(file.toPath))
-    }.handleErrorWith { case e: coursierapi.error.CoursierError =>
-      CoordinateCompleter.suggest(coord, extraRepositories).flatMap { suggestions =>
-        IO.raiseError(CellarError.CoordinateNotFound(coord, e, suggestions))
+    Tracer[IO].span("coursier.fetch").surround {
+      IO.blocking {
+        val dep   = coord.toCoursierDependency
+        val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())
+        if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*)
+        fetch.fetch().asScala.toSeq.map(file => Path.fromNioPath(file.toPath))
+      }.handleErrorWith { case e: coursierapi.error.CoursierError =>
+        CoordinateCompleter.suggest(coord, extraRepositories).flatMap { suggestions =>
+          IO.raiseError(CellarError.CoordinateNotFound(coord, e, suggestions))
+        }
       }
     }

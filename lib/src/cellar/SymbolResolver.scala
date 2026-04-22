@@ -1,6 +1,7 @@
 package cellar
 
 import cats.effect.IO
+import org.typelevel.otel4s.trace.Tracer
 import tastyquery.Contexts.Context
 import tastyquery.Exceptions.MemberNotFoundException
 import tastyquery.Names.{termName, typeName}
@@ -15,10 +16,12 @@ object LookupResult:
   final case class LookupFailed(cause: Throwable)                            extends LookupResult
 
 object SymbolResolver:
-  def resolve(fqn: String)(using ctx: Context): IO[LookupResult] =
-    IO.blocking(tryTopLevel(fqn)).flatMap {
-      case Some(result) => IO.pure(result)
-      case None         => IO.blocking(tryNestedLookup(fqn)).map(_.getOrElse(LookupResult.NotFound))
+  def resolve(fqn: String)(using ctx: Context, tracer: Tracer[IO]): IO[LookupResult] =
+    tracer.span("symbol.resolve").surround {
+      IO.blocking(tryTopLevel(fqn)).flatMap {
+        case Some(result) => IO.pure(result)
+        case None         => IO.blocking(tryNestedLookup(fqn)).map(_.getOrElse(LookupResult.NotFound))
+      }
     }
 
   /** Try to resolve as a top-level class, module, term, type, or package. */
