@@ -4,12 +4,13 @@ import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
 import cellar.*
 import coursierapi.Repository
+import org.typelevel.otel4s.trace.Tracer
 
 object DepsHandler:
   def run(
       coord: MavenCoordinate,
       extraRepositories: Seq[Repository] = Seq.empty
-  )(using Console[IO]): IO[ExitCode] =
+  )(using Console[IO], Tracer[IO]): IO[ExitCode] =
     val program =
       for
         resolved  <- CoursierResolveClient.resolveDeps(coord, extraRepositories)

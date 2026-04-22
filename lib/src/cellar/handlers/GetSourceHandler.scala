@@ -5,6 +5,7 @@ import cats.effect.std.Console
 import cellar.*
 import coursierapi.Repository
 import fs2.io.file.Path
+import org.typelevel.otel4s.trace.Tracer
 import tastyquery.Contexts.Context
 import tastyquery.SourceLanguage
 import tastyquery.Symbols.{ClassSymbol, Symbol, TermOrTypeSymbol}
@@ -17,7 +18,7 @@ object GetSourceHandler:
       fqn: String,
       javaHome: Option[Path] = None,
       extraRepositories: Seq[Repository] = Seq.empty
-  )(using Console[IO]): IO[ExitCode] =
+  )(using Console[IO], Tracer[IO]): IO[ExitCode] =
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)

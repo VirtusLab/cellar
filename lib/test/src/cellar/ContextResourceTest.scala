@@ -2,6 +2,7 @@ package cellar
 
 import cats.effect.IO
 import munit.CatsEffectSuite
+import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 
 class ContextResourceTest extends CatsEffectSuite:
 

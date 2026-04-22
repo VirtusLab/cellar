@@ -9,6 +9,7 @@ import com.monovore.decline.*
 import com.monovore.decline.effect.*
 import coursierapi.{MavenRepository, Repository}
 import fs2.io.file.Path
+import org.typelevel.otel4s.trace.Tracer
 
 import scala.concurrent.duration.Duration
 
@@ -39,6 +40,8 @@ object CellarApp
     val base = super.runtimeConfig
     if Config.global.starvationChecks.enabled then base
     else base.copy(cpuStarvationCheckInitialDelay = Duration.Inf)
+
+  private given Tracer[IO] = Tracer.noop[IO]
 
   override def main: Opts[IO[ExitCode]] =
     getSubcmd orElse getExternalSubcmd orElse

@@ -3,6 +3,7 @@ package cellar
 import cats.effect.IO
 import coursierapi.{Cache, Fetch, Repository}
 import fs2.io.file.Path
+import org.typelevel.otel4s.trace.Tracer
 
 import scala.jdk.CollectionConverters.*
 
@@ -10,7 +11,7 @@ object CoursierFetchClient:
   def fetchSourcesJar(
       coord: MavenCoordinate,
       extraRepositories: Seq[Repository] = Seq.empty
-  ): IO[Option[Path]] =
+  )(using Tracer[IO]): IO[Option[Path]] =
     IO.blocking {
       val dep   = coord.toCoursierDependency.withTransitive(false)
       val fetch = Fetch.create()
@@ -25,7 +26,7 @@ object CoursierFetchClient:
   def fetchPom(
       coord: MavenCoordinate,
       extraRepositories: Seq[Repository] = Seq.empty
-  ): IO[Option[Path]] =
+  )(using Tracer[IO]): IO[Option[Path]] =
     IO.blocking {
       val dep   = coord.toCoursierDependency.withTransitive(false)
       val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())
@@ -47,7 +48,7 @@ object CoursierFetchClient:
   def fetchClasspath(
       coord: MavenCoordinate,
       extraRepositories: Seq[Repository] = Seq.empty
-  ): IO[Seq[Path]] =
+  )(using Tracer[IO]): IO[Seq[Path]] =
     IO.blocking {
       val dep   = coord.toCoursierDependency
       val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())

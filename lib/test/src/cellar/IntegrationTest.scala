@@ -3,6 +3,7 @@ package cellar
 import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
 import munit.CatsEffectSuite
+import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 
 /** End-to-end integration tests against locally published fixture artifacts.
   *

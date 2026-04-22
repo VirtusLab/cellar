@@ -39,7 +39,8 @@ object lib extends CommonScalaModule with SonatypeCentralPublishModule {
     mvn"io.get-coursier:interface:1.0.28",
     mvn"ch.epfl.scala::tasty-query:1.7.0",
     mvn"org.scala-lang:scala3-tasty-inspector_3:3.8.1",
-    mvn"com.github.pureconfig::pureconfig-core:0.17.10"
+    mvn"com.github.pureconfig::pureconfig-core:0.17.10",
+    mvn"org.typelevel::otel4s-core-trace:0.13.1"
   )
 
 

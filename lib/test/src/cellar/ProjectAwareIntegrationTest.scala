@@ -5,6 +5,7 @@ import cats.effect.std.Console
 import cats.syntax.all.*
 import cellar.process.ProcessRunner
 import munit.CatsEffectSuite
+import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 
 import java.nio.file.Files
 import fs2.io.file.{Files => Fs2Files, Path}

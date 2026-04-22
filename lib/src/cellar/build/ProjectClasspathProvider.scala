@@ -4,6 +4,7 @@ import cats.effect.{IO, Resource}
 import cellar.{Config, ContextResource}
 
 import fs2.io.file.Path
+import org.typelevel.otel4s.trace.Tracer
 import tastyquery.Classpaths.Classpath
 import tastyquery.Contexts.Context
 
@@ -14,7 +15,7 @@ object ProjectClasspathProvider:
       jreClasspath: Classpath,
       noCache: Boolean,
       config: Config = Config.global
-  ): Resource[IO, (Context, Classpath)] =
+  )(using Tracer[IO]): Resource[IO, (Context, Classpath)] =
     Resource.eval(resolveClasspath(cwd, module, noCache, config)).flatMap { paths =>
       ContextResource.make(paths, jreClasspath)
     }

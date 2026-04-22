@@ -4,6 +4,7 @@ import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
 import cellar.handlers.MetaHandler
 import munit.CatsEffectSuite
+import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 
 class MetaHandlerTest extends CatsEffectSuite:
 

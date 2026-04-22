@@ -6,6 +6,7 @@ import cats.syntax.all.*
 import cellar.*
 import coursierapi.Repository
 import fs2.io.file.Path
+import org.typelevel.otel4s.trace.Tracer
 
 object ListHandler:
   def run(
@@ -14,7 +15,7 @@ object ListHandler:
       limit: Int,
       javaHome: Option[Path] = None,
       extraRepositories: Seq[Repository] = Seq.empty
-  )(using Console[IO]): IO[ExitCode] =
+  )(using Console[IO], Tracer[IO]): IO[ExitCode] =
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
@@ -32,7 +33,7 @@ object ListHandler:
       fqn: String,
       limit: Int,
       coord: Option[MavenCoordinate]
-  )(using tastyquery.Contexts.Context, Console[IO]): IO[ExitCode] =
+  )(using tastyquery.Contexts.Context, Console[IO], Tracer[IO]): IO[ExitCode] =
     SymbolLister.resolve(fqn).flatMap {
       case ListResolveResult.NotFound =>
         val ctx = coord.fold(s"'$fqn' not found.")(c => s"'$fqn' not found in '${c.render}'.")

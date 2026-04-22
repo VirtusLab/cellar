@@ -6,6 +6,7 @@ import cats.syntax.all.*
 import cellar.*
 import coursierapi.Repository
 import fs2.io.file.Path
+import org.typelevel.otel4s.trace.Tracer
 
 object SearchHandler:
   def run(
@@ -14,7 +15,7 @@ object SearchHandler:
       limit: Int,
       javaHome: Option[Path] = None,
       extraRepositories: Seq[Repository] = Seq.empty
-  )(using Console[IO]): IO[ExitCode] =
+  )(using Console[IO], Tracer[IO]): IO[ExitCode] =
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
@@ -33,7 +34,7 @@ object SearchHandler:
       limit: Int,
       classpath: tastyquery.Classpaths.Classpath,
       jreClasspath: tastyquery.Classpaths.Classpath
-  )(using tastyquery.Contexts.Context, Console[IO]): IO[ExitCode] =
+  )(using tastyquery.Contexts.Context, Console[IO], Tracer[IO]): IO[ExitCode] =
     val lowerQuery = query.toLowerCase
     val matchingStream = AllSymbolsStream
       .stream(classpath, jreClasspath)

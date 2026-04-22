@@ -11,7 +11,18 @@ case class SbtConfig(binary: String, extraArgs: String) derives ConfigReader {
 
 case class StarvationChecksConfig(enabled: Boolean) derives ConfigReader
 
-case class Config(mill: MillConfig, sbt: SbtConfig, starvationChecks: StarvationChecksConfig) derives ConfigReader
+case class ProfilingConfig(enabled: Boolean) derives ConfigReader
+
+case class TelemetryConfig(enabled: Boolean, endpoint: String) derives ConfigReader
+
+case class Config(
+    mill: MillConfig,
+    sbt: SbtConfig,
+    starvationChecks: StarvationChecksConfig,
+    profiling: ProfilingConfig,
+    telemetry: TelemetryConfig
+) derives ConfigReader:
+  def needsTracing: Boolean = profiling.enabled || telemetry.enabled
 
 object Config {
   private val defaultUserPath: Option[Path] =

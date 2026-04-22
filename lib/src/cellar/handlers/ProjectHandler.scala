@@ -4,6 +4,7 @@ import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
 import cellar.*
 import fs2.io.file.Path
+import org.typelevel.otel4s.trace.Tracer
 import tastyquery.Classpaths.Classpath
 import tastyquery.Contexts.Context
 
@@ -14,7 +15,7 @@ object ProjectHandler:
       module: Option[String],
       noCache: Boolean,
       config: Config = Config.global
-  )(body: (Context, Classpath, Classpath) => IO[ExitCode])(using Console[IO]): IO[ExitCode] =
+  )(body: (Context, Classpath, Classpath) => IO[ExitCode])(using Console[IO], Tracer[IO]): IO[ExitCode] =
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
