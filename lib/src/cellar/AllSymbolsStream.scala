@@ -7,6 +7,7 @@ import tastyquery.Contexts.Context
 import tastyquery.Symbols.TermOrTypeSymbol
 
 object AllSymbolsStream:
+  private val log = java.util.logging.Logger.getLogger("cellar.AllSymbolsStream")
   /** Streams all public symbols from the classpath, excluding the given JRE entries. */
   def stream(classpath: Classpath, jreClasspath: Classpath)(using ctx: Context): Stream[IO, TermOrTypeSymbol] =
     val jreEntries = jreClasspath.toSet
@@ -17,7 +18,11 @@ object AllSymbolsStream:
         Stream
           .eval(IO.blocking {
             try ctx.findSymbolsByClasspathEntry(entry).toList
-            catch case _: Throwable => Nil
+            catch
+              case e: Throwable =>
+                if log.isLoggable(java.util.logging.Level.FINE) then
+                  log.log(java.util.logging.Level.FINE, s"Unexpected exception scanning classpath entry: $entry", e)
+                Nil
           })
           .flatMap(syms => Stream.emits(syms))
       }

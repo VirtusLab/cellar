@@ -67,6 +67,24 @@ class CellarErrorTest extends munit.FunSuite:
     assert(e.getMessage.contains("Check that the group ID"))
     assert(!e.getMessage.contains("Did you mean?"))
 
+  test("SymbolLookupFailed getMessage contains fqn and exception type"):
+    val cause = new RuntimeException("bad TASTy")
+    val e     = CellarError.SymbolLookupFailed("org.foo.Bar$", cause)
+    assert(e.getMessage.contains("org.foo.Bar$"))
+    assert(e.getMessage.contains("RuntimeException"))
+    assert(e.getMessage.contains("bad TASTy"))
+
+  test("SymbolLookupFailed getMessage handles null cause message"):
+    val cause = new NullPointerException()
+    val e     = CellarError.SymbolLookupFailed("org.foo.Bar$", cause)
+    assert(e.getMessage.contains("NullPointerException"))
+    assert(e.getMessage.contains("(no message)"))
+
+  test("SymbolLookupFailed getCause returns the provided cause"):
+    val cause = new RuntimeException("oops")
+    val e     = CellarError.SymbolLookupFailed("org.foo.Bar$", cause)
+    assertEquals(e.getCause, cause)
+
   test("CellarError subtypes can be caught as CellarError"):
     val e: CellarError = CellarError.PackageGivenToGet("cats")
     intercept[CellarError](throw e)

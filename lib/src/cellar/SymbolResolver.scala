@@ -12,6 +12,7 @@ object LookupResult:
   case object IsPackage                                                      extends LookupResult
   case object NotFound                                                       extends LookupResult
   final case class PartialMatch(resolvedFqn: String, missingMember: String)  extends LookupResult
+  final case class LookupFailed(cause: Throwable)                            extends LookupResult
 
 object SymbolResolver:
   def resolve(fqn: String)(using ctx: Context): IO[LookupResult] =
@@ -22,17 +23,31 @@ object SymbolResolver:
 
   /** Try to resolve as a top-level class, module, term, type, or package. */
   private def tryTopLevel(fqn: String)(using ctx: Context): Option[LookupResult] =
+    var caught: Option[Throwable] = None
+    // ClassCastException is a known tastyquery quirk: thrown (instead of MemberNotFoundException)
+    // when a lookup crosses a package boundary for a non-existent symbol.
+    def t[A](thunk: => A): Option[A] =
+      try Some(thunk)
+      catch
+        case _: MemberNotFoundException => None
+        case _: ClassCastException      => None
+        case scala.util.control.NonFatal(e) =>
+          if caught.isEmpty then caught = Some(e)
+          None
+
     // A trailing `$` is the JVM-level name of a companion object — treat it as
     // an explicit request for the module class, not the class of the same name.
     if fqn.endsWith("$") then
       val stripped = fqn.stripSuffix("$")
-      tryOrNone(ctx.findStaticModuleClass(stripped)).map(s => LookupResult.Found(List(s)))
+      t(ctx.findStaticModuleClass(stripped)).map(s => LookupResult.Found(List(s)))
+        .orElse(caught.map(LookupResult.LookupFailed(_)))
     else
-      tryOrNone(ctx.findStaticClass(fqn)).map(s => LookupResult.Found(List(s)))
-        .orElse(tryOrNone(ctx.findStaticModuleClass(fqn)).map(s => LookupResult.Found(List(s))))
+      t(ctx.findStaticClass(fqn)).map(s => LookupResult.Found(List(s)))
+        .orElse(t(ctx.findStaticModuleClass(fqn)).map(s => LookupResult.Found(List(s))))
         .orElse(tryOrNone(ctx.findStaticTerm(fqn)).map(s => LookupResult.Found(List(s))))
         .orElse(tryOrNone(ctx.findStaticType(fqn)).map(s => LookupResult.Found(List(s))))
         .orElse(tryOrNone(ctx.findPackage(fqn)).map(_ => LookupResult.IsPackage))
+        .orElse(caught.map(LookupResult.LookupFailed(_)))
 
   /**
    * Multi-segment nested member walk.
@@ -43,11 +58,13 @@ object SymbolResolver:
     val segments = fqn.split('.')
     if segments.length < 2 then return None
 
-    findTopLevelRoot(segments) match
-      case None => None
-      case Some((root, rootIdx)) =>
+    val (root, firstError) = findTopLevelRoot(segments)
+    root match
+      case None =>
+        firstError.map(LookupResult.LookupFailed(_))
+      case Some((cls, rootIdx)) =>
         val resolvedSoFar = segments.take(rootIdx).mkString(".")
-        walkMembers(root, segments, rootIdx, resolvedSoFar)
+        walkMembers(cls, segments, rootIdx, resolvedSoFar)
 
   /**
    * Walk remaining segments as nested member lookups on the given ClassSymbol.
@@ -138,7 +155,7 @@ object SymbolResolver:
         val segments = fqn.split('.')
         if segments.length < 2 then return Left(None)
 
-        findTopLevelRoot(segments) match
+        findTopLevelRoot(segments)._1 match
           case None => Left(None)
           case Some((root, rootIdx)) =>
             var current: ClassSymbol = root
@@ -157,18 +174,27 @@ object SymbolResolver:
 
   /**
    * Try progressively longer prefixes of segments as a top-level class/module.
-   * Returns the longest matching ClassSymbol and the index past the root segments.
+   * Returns the longest matching ClassSymbol, the index past the root segments,
+   * and the first unexpected exception encountered (if any).
    */
-  private def findTopLevelRoot(segments: Array[String])(using ctx: Context): Option[(ClassSymbol, Int)] =
+  private def findTopLevelRoot(segments: Array[String])(using ctx: Context): (Option[(ClassSymbol, Int)], Option[Throwable]) =
     var best: Option[(ClassSymbol, Int)] = None
+    var firstError: Option[Throwable] = None
     var i = 1
     while i < segments.length do
       val prefix = segments.take(i + 1).mkString(".")
-      val found = tryOrNone(ctx.findStaticClass(prefix))
-        .orElse(tryOrNone(ctx.findStaticModuleClass(prefix)))
+      def t[A](thunk: => A): Option[A] =
+        try Some(thunk)
+        catch
+          case _: MemberNotFoundException => None
+          case _: ClassCastException      => None
+          case scala.util.control.NonFatal(e) =>
+            if firstError.isEmpty then firstError = Some(e)
+            None
+      val found = t(ctx.findStaticClass(prefix)).orElse(t(ctx.findStaticModuleClass(prefix)))
       if found.isDefined then best = Some((found.get, i + 1))
       i += 1
-    best
+    (best, firstError)
 
   private[cellar] val universalBaseClasses = Set("scala.Any", "scala.AnyRef", "java.lang.Object")
 

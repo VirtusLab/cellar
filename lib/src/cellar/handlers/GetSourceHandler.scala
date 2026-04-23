@@ -30,6 +30,10 @@ object GetSourceHandler:
               NearMatchFinder.findNearMatches(fqn, classpath).flatMap { nearMatches =>
                 IO.raiseError(CellarError.SymbolNotFound(fqn, coord, nearMatches))
               }
+            case LookupResult.PartialMatch(resolvedFqn, missingMember) =>
+              IO.raiseError(CellarError.PartialResolution(fqn, Some(coord), resolvedFqn, missingMember))
+            case LookupResult.LookupFailed(cause) =>
+              IO.raiseError(CellarError.SymbolLookupFailed(fqn, cause))
             case LookupResult.Found(symbols) =>
               IO.blocking(combinedSourceRef(symbols.head)(using ctx)).flatMap {
                 case None =>
