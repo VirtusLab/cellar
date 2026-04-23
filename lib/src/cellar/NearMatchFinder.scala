@@ -16,6 +16,7 @@ object NearMatchFinder:
         .flatMap(entry => try ctx.findSymbolsByClasspathEntry(entry).toList catch case _: Throwable => Nil)
         .filter(sym => PublicApiFilter.isPublic(sym) && sym.name.toString.toLowerCase == lowerName)
         .map(_.displayFullName)
+        .filter(_ != fqn)
         .take(10)
         .toList
     }

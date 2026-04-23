@@ -62,3 +62,16 @@ class NearMatchFinderTest extends CatsEffectSuite:
         assert(matches.exists(_.endsWith("CellarA")), s"Expected CellarA: $matches")
       }
     }
+
+  List(
+    "cellar.fixture.scala3.CellarADT",
+    "cellar.fixture.scala3.CellarB$",
+  ).foreach { fqn =>
+    test(s"findNearMatches does not suggest $fqn back to the user"):
+      withCtxAndCp { (ctx, cp) =>
+        given Context = ctx
+        NearMatchFinder.findNearMatches(fqn, cp).map { matches =>
+          assert(!matches.contains(fqn), s"Expected $fqn to be excluded from near matches, got: $matches")
+        }
+      }
+  }
