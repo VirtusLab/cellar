@@ -24,10 +24,13 @@ object SymbolResolver:
   /** Try to resolve as a top-level class, module, term, type, or package. */
   private def tryTopLevel(fqn: String)(using ctx: Context): Option[LookupResult] =
     var caught: Option[Throwable] = None
+    // ClassCastException is a known tastyquery quirk: thrown (instead of MemberNotFoundException)
+    // when a lookup crosses a package boundary for a non-existent symbol.
     def t[A](thunk: => A): Option[A] =
       try Some(thunk)
       catch
         case _: MemberNotFoundException => None
+        case _: ClassCastException      => None
         case scala.util.control.NonFatal(e) =>
           if caught.isEmpty then caught = Some(e)
           None
@@ -41,9 +44,9 @@ object SymbolResolver:
     else
       t(ctx.findStaticClass(fqn)).map(s => LookupResult.Found(List(s)))
         .orElse(t(ctx.findStaticModuleClass(fqn)).map(s => LookupResult.Found(List(s))))
-        .orElse(t(ctx.findStaticTerm(fqn)).map(s => LookupResult.Found(List(s))))
-        .orElse(t(ctx.findStaticType(fqn)).map(s => LookupResult.Found(List(s))))
-        .orElse(t(ctx.findPackage(fqn)).map(_ => LookupResult.IsPackage))
+        .orElse(tryOrNone(ctx.findStaticTerm(fqn)).map(s => LookupResult.Found(List(s))))
+        .orElse(tryOrNone(ctx.findStaticType(fqn)).map(s => LookupResult.Found(List(s))))
+        .orElse(tryOrNone(ctx.findPackage(fqn)).map(_ => LookupResult.IsPackage))
         .orElse(caught.map(LookupResult.LookupFailed(_)))
 
   /**
@@ -184,6 +187,7 @@ object SymbolResolver:
         try Some(thunk)
         catch
           case _: MemberNotFoundException => None
+          case _: ClassCastException      => None
           case scala.util.control.NonFatal(e) =>
             if firstError.isEmpty then firstError = Some(e)
             None
