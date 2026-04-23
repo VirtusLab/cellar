@@ -26,8 +26,10 @@ object CellarError:
       extends CellarError:
     override def getMessage: String =
       val base = s"Symbol '$fqn' not found in '${coord.render}'."
-      if nearMatches.isEmpty then base
-      else s"$base Did you mean one of: ${nearMatches.mkString(", ")}?"
+      if nearMatches.nonEmpty then s"$base Did you mean one of: ${nearMatches.mkString(", ")}?"
+      else if coord.version != "latest" then
+        s"$base\nTry '${coord.copy(version = "latest").render}' if the symbol was introduced in a newer version."
+      else base
 
   final case class PartialResolution(fqn: String, coord: Option[MavenCoordinate], resolvedFqn: String, missingMember: String)
       extends CellarError:
