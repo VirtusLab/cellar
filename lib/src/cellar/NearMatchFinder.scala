@@ -17,7 +17,7 @@ object NearMatchFinder:
         .flatMap(entry => try ctx.findSymbolsByClasspathEntry(entry).toList catch
           case e: Throwable =>
             if log.isLoggable(java.util.logging.Level.FINE) then
-              log.fine(s"Unexpected exception scanning classpath entry: ${e.getClass.getName}: ${e.getMessage}")
+              log.log(java.util.logging.Level.FINE, s"Unexpected exception scanning classpath entry: $entry", e)
             Nil
         )
         .filter(sym => PublicApiFilter.isPublic(sym) && sym.name.toString.toLowerCase == lowerName)

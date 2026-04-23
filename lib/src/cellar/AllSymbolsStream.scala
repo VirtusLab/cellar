@@ -21,7 +21,7 @@ object AllSymbolsStream:
             catch
               case e: Throwable =>
                 if log.isLoggable(java.util.logging.Level.FINE) then
-                  log.fine(s"Unexpected exception scanning classpath entry: ${e.getClass.getName}: ${e.getMessage}")
+                  log.log(java.util.logging.Level.FINE, s"Unexpected exception scanning classpath entry: $entry", e)
                 Nil
           })
           .flatMap(syms => Stream.emits(syms))
