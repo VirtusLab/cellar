@@ -98,6 +98,7 @@ object TracingRuntime:
       ioLocal: IOLocal[Context],
       cellarVersion: String,
       commandName: String,
+      installationId: Option[String] = None,
       classifyUserError: Throwable => Boolean = _ => false
   )(body: Tracer[IO] ?=> IO[ExitCode]): IO[ExitCode] =
     resource(config, ioLocal).use { tracer =>
@@ -106,7 +107,9 @@ object TracingRuntime:
         Attribute("command.name", commandName),
         Attribute("cellar.version", cellarVersion),
         Attribute("os.type", System.getProperty("os.name", "unknown"))
-      )
+      ) ++
+        sys.env.get("CELLAR_SESSION_ID").map(Attribute("session.id", _)) ++
+        installationId.map(Attribute("installation.id", _))
       Tracer[IO]
         .spanBuilder("cellar.command")
         .addAttributes(rootAttrs*)

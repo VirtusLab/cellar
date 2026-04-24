@@ -10,7 +10,7 @@ import cellar.profiling.{ProfilingExecutionContext, PyroscopeSetup, TracingRunti
 import com.monovore.decline.*
 import com.monovore.decline.effect.*
 import coursierapi.{MavenRepository, Repository}
-import fs2.io.file.Path
+import fs2.io.file.{Files, Path}
 import org.typelevel.otel4s.sdk.context.Context
 import org.typelevel.otel4s.trace.Tracer
 
@@ -70,22 +70,45 @@ object CellarApp
     else Resource.unit[IO]
 
   private def traced(commandName: String)(body: Tracer[IO] ?=> IO[ExitCode]): IO[ExitCode] =
+    val maybeInstallationId =
+      if tracingConfig.remote.isDefined then InstallationId.read else IO.pure(None)
     pyroscopeResource.use { _ =>
-      TracingRuntime.tracedCommand(
-        tracingConfig,
-        sharedIOLocal,
-        BuildInfo.version,
-        commandName,
-        classifyUserError = _.isInstanceOf[CellarError]
-      )(body)
+      maybeInstallationId.flatMap { installationId =>
+        TracingRuntime.tracedCommand(
+          tracingConfig,
+          sharedIOLocal,
+          BuildInfo.version,
+          commandName,
+          installationId = installationId,
+          classifyUserError = _.isInstanceOf[CellarError]
+        )(body)
+      }
+    }
+
+  private val firstRunNotice: IO[Unit] =
+    val userConf = Path(sys.props("user.home")) / ".cellar" / "cellar.conf"
+    Files[IO].exists(userConf).flatMap { exists =>
+      if exists then IO.unit
+      else
+        val notice =
+          "Help improve cellar: run 'cellar telemetry enable' (anonymous, no PII). See https://github.com/VirtusLab/cellar#telemetry"
+        IO(System.err.println(notice)) *>
+          Files[IO].createDirectories(userConf.parent.get) *>
+          fs2.Stream
+            .emit("telemetry {\n  enabled = false\n}\n")
+            .through(Files[IO].writeUtf8(userConf))
+            .compile
+            .drain
     }
 
   override def main: Opts[IO[ExitCode]] =
-    getSubcmd orElse getExternalSubcmd orElse
-      getSourceSubcmd orElse
-      listSubcmd orElse listExternalSubcmd orElse
-      searchSubcmd orElse searchExternalSubcmd orElse
-      depsSubcmd orElse metaSubcmd
+    val regularCmds =
+      getSubcmd orElse getExternalSubcmd orElse
+        getSourceSubcmd orElse
+        listSubcmd orElse listExternalSubcmd orElse
+        searchSubcmd orElse searchExternalSubcmd orElse
+        depsSubcmd orElse metaSubcmd
+    regularCmds.map(firstRunNotice *> _) orElse TelemetrySubcommand.opts
 
   private given Argument[Path] = Argument[java.nio.file.Path].map(Path.fromNioPath)
 
