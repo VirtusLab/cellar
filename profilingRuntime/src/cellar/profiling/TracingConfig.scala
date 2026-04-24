@@ -5,12 +5,13 @@ case class LocalTracingSpec(otlpEndpoint: String, pyroscopeEndpoint: String)
 case class RemoteTelemetrySpec(otlpEndpoint: String, allowlistedAttributes: Set[String])
 
 case class TracingConfig(
+    appName: String,
     local: Option[LocalTracingSpec],
     remote: Option[RemoteTelemetrySpec]
 )
 
 object TracingConfig:
-  val disabled: TracingConfig = TracingConfig(None, None)
+  val disabled: TracingConfig = TracingConfig("app", None, None)
 
 object AllowedAttributes:
   val default: Set[String] = Set(

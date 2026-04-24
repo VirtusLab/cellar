@@ -1,0 +1,48 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib
+    command: ["--config=/etc/otel-collector-config.yml"]
+    volumes:
+      - ./otel-collector-config.yml:/etc/otel-collector-config.yml
+    ports:
+      - "4318:4318"   # OTLP HTTP (cellar → collector)
+    networks:
+      - cellar-network
+
+  tempo:
+    image: grafana/tempo
+    command: ["-config.file=/etc/tempo-config.yml"]
+    volumes:
+      - ./tempo-config.yml:/etc/tempo-config.yml
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"   # HTTP query API (Grafana → Tempo)
+    networks:
+      - cellar-network
+
+  pyroscope:
+    image: grafana/pyroscope
+    ports:
+      - "4040:4040"
+    networks:
+      - cellar-network
+
+  grafana:
+    image: grafana/grafana
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    depends_on: [tempo, pyroscope]
+    networks:
+      - cellar-network
+
+networks:
+  cellar-network:
+
+volumes:
+  tempo-data:

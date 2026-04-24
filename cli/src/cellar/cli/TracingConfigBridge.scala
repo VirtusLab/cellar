@@ -15,6 +15,7 @@ object TracingConfigBridge:
 
   def fromCellarConfig(c: Config): TracingConfig =
     TracingConfig(
+      appName = "cellar",
       local = Option.when(c.profiling.enabled)(
         LocalTracingSpec(LocalOtlpEndpoint, LocalPyroscopeEndpoint)
       ),

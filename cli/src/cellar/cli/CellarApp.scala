@@ -1,15 +1,17 @@
 package cellar.cli
 
-import cats.effect.{ExitCode, IO, Resource}
-import cats.effect.unsafe.IORuntimeConfig
+import cats.effect.{ExitCode, IO, IOLocal, Resource, SyncIO}
+import cats.effect.unsafe.{IORuntimeBuilder, IORuntimeConfig}
+import cats.effect.unsafe.IORuntime
 import cats.syntax.all.*
 import cellar.*
 import cellar.handlers.{DepsHandler, GetHandler, GetSourceHandler, ListHandler, MetaHandler, ProjectGetHandler, ProjectListHandler, ProjectSearchHandler, SearchHandler}
-import cellar.profiling.{PyroscopeSetup, TracingRuntime}
+import cellar.profiling.{ProfilingExecutionContext, PyroscopeSetup, TracingRuntime}
 import com.monovore.decline.*
 import com.monovore.decline.effect.*
 import coursierapi.{MavenRepository, Repository}
 import fs2.io.file.Path
+import org.typelevel.otel4s.sdk.context.Context
 import org.typelevel.otel4s.trace.Tracer
 
 import scala.concurrent.duration.Duration
@@ -37,22 +39,41 @@ object CellarApp
       version = s"${BuildInfo.version} ($runtimeLabel, $platformLabel)"
     ):
 
+  private val profilingEnabled = Config.global.profiling.enabled && !TracingRuntime.NativeImage
+
+  // Must be set before IOLocal$ class is loaded so isPropagating val captures it
+  if profilingEnabled then System.setProperty("cats.effect.trackFiberContext", "true")
+
+  private given sharedIOLocal: IOLocal[Context] = IOLocal[Context](Context.root)
+    .syncStep(100)
+    .flatMap(_.leftMap(_ => new Error("Failed to initialize IOLocal")).liftTo[SyncIO])
+    .unsafeRunSync()
+
   override def runtimeConfig: IORuntimeConfig =
     val base = super.runtimeConfig
     if Config.global.starvationChecks.enabled then base
     else base.copy(cpuStarvationCheckInitialDelay = Duration.Inf)
 
+  override protected def runtime: IORuntime =
+    if profilingEnabled then
+      val threadLocal = sharedIOLocal.unsafeThreadLocal()
+      IORuntimeBuilder()
+        .transformCompute(ProfilingExecutionContext.wrap(_, threadLocal))
+        .transformBlocking(ProfilingExecutionContext.wrap(_, threadLocal))
+        .build()
+    else super.runtime
+
   private lazy val tracingConfig = TracingConfigBridge.fromCellarConfig(Config.global)
 
   private val pyroscopeResource: Resource[IO, Unit] =
-    if Config.global.profiling.enabled && !TracingRuntime.NativeImage then
-      PyroscopeSetup.resource("http://localhost:4040", "cellar")
+    if profilingEnabled then PyroscopeSetup.resource("http://localhost:4040", "cellar")
     else Resource.unit[IO]
 
   private def traced(commandName: String)(body: Tracer[IO] ?=> IO[ExitCode]): IO[ExitCode] =
     pyroscopeResource.use { _ =>
       TracingRuntime.tracedCommand(
         tracingConfig,
+        sharedIOLocal,
         BuildInfo.version,
         commandName,
         classifyUserError = _.isInstanceOf[CellarError]

@@ -1,29 +1,46 @@
 package cellar.profiling
 
 import cats.effect.{IO, Resource}
-import io.pyroscope.javaagent.PyroscopeAgent
+import io.pyroscope.http.Format
+import io.pyroscope.javaagent.{EventType, PyroscopeAgent}
 import io.pyroscope.javaagent.config.Config
-import scala.concurrent.ExecutionContext
+import org.http4s.Uri
+
+import java.net.{InetSocketAddress, Socket}
 
 object PyroscopeSetup:
 
-  /** Starts the Pyroscope JVM agent and stops it on resource release. The
-    * agent runs in a daemon thread; multiple `start` calls are no-ops.
+  /** Starts the Pyroscope JVM agent using ITIMER sampling with JFR output format
+    * (same as SLS; works on macOS without elevated privileges). Stops on release.
+    * Skips silently if the server is unreachable.
     */
   def resource(serverAddress: String, applicationName: String): Resource[IO, Unit] =
-    Resource.make {
-      IO.blocking {
-        val cfg = new Config.Builder()
-          .setApplicationName(applicationName)
-          .setServerAddress(serverAddress)
-          .build()
-        PyroscopeAgent.start(cfg)
-      }
-    }(_ => IO.blocking(PyroscopeAgent.stop()).attempt.void)
+    Resource.eval(reachable(serverAddress)).flatMap {
+      case false => Resource.unit
+      case true  =>
+        Resource.make {
+          IO.blocking {
+            val cfg = new Config.Builder()
+              .setApplicationName(applicationName)
+              .setServerAddress(serverAddress)
+              .setProfilingEvent(EventType.ITIMER)
+              .setFormat(Format.JFR)
+              .build()
+            PyroscopeAgent.start(cfg)
+          }
+        }(_ => IO.blocking(PyroscopeAgent.stop()).attempt.void)
+    }
 
-  /** Compute-pool transform for Pyroscope profile↔span correlation. Callers
-    * pass this to [[cats.effect.unsafe.IORuntimeBuilder.transformCompute]]
-    * when wiring a custom [[cats.effect.unsafe.IORuntime]].
-    */
-  val computeTransform: ExecutionContext => ExecutionContext =
-    ProfilingExecutionContext.wrap
+  private def reachable(serverAddress: String): IO[Boolean] =
+    IO.fromEither(Uri.fromString(serverAddress)).flatMap { uri =>
+      val host = uri.host.fold("")(_.value)
+      val port = uri.port.getOrElse(4040)
+      IO.blocking {
+        val socket = new Socket()
+        try
+          socket.connect(new InetSocketAddress(host, port), 500)
+          true
+        catch case _: Exception => false
+        finally socket.close()
+      }
+    }.handleError(_ => false)

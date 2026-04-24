@@ -4,15 +4,16 @@ import cats.effect.{ExitCode, IO, IOLocal, Resource}
 import cats.mtl.Local
 import cats.syntax.all.*
 import org.http4s.Uri
-import org.typelevel.otel4s.Attribute
+import org.typelevel.otel4s.{Attribute, Attributes}
 import org.typelevel.otel4s.context.LocalProvider
+import org.typelevel.otel4s.sdk.TelemetryResource
 import org.typelevel.otel4s.sdk.context.Context
 import org.typelevel.otel4s.sdk.exporter.RetryPolicy
 import org.typelevel.otel4s.sdk.exporter.otlp.OtlpProtocol
 import org.typelevel.otel4s.sdk.exporter.otlp.trace.OtlpSpanExporter
 import org.typelevel.otel4s.sdk.trace.SdkTracerProvider
 import org.typelevel.otel4s.sdk.trace.exporter.SpanExporter
-import org.typelevel.otel4s.sdk.trace.processor.{BatchSpanProcessor, SpanProcessor}
+import org.typelevel.otel4s.sdk.trace.processor.{BatchSpanProcessor, SimpleSpanProcessor, SpanProcessor}
 import org.typelevel.otel4s.trace.{StatusCode, Tracer}
 
 import scala.concurrent.duration.*
@@ -26,13 +27,12 @@ object TracingRuntime:
     * nothing is configured, or if running under native image and only the
     * JVM-only local path is configured.
     */
-  def resource(config: TracingConfig): Resource[IO, Tracer[IO]] =
+  def resource(config: TracingConfig, ioLocal: IOLocal[Context]): Resource[IO, Tracer[IO]] =
     val wantLocal  = config.local.isDefined && !NativeImage
     val wantRemote = config.remote.isDefined
     if !wantLocal && !wantRemote then Resource.pure[IO, Tracer[IO]](Tracer.noop[IO])
     else
       for
-        ioLocal        <- Resource.eval(IOLocal(Context.root))
         localCtx       <- Resource.eval {
                             given IOLocal[Context] = ioLocal
                             LocalProvider[IO, Context].local
@@ -40,10 +40,11 @@ object TracingRuntime:
         processors     <- buildProcessors(config, wantLocal, wantRemote)
         tracerProvider <- Resource.eval {
                             given Local[IO, Context] = localCtx
-                            val base                 = SdkTracerProvider.builder[IO]
+                            val serviceResource      = TelemetryResource(Attributes(Attribute("service.name", config.appName)), None)
+                            val base                 = SdkTracerProvider.builder[IO].addResource(serviceResource)
                             processors.foldLeft(base)(_.addSpanProcessor(_)).build
                           }
-        tracer         <- Resource.eval(tracerProvider.get("cellar"))
+        tracer         <- Resource.eval(tracerProvider.get(config.appName))
       yield tracer
 
   private def buildProcessors(
@@ -51,16 +52,18 @@ object TracingRuntime:
       wantLocal: Boolean,
       wantRemote: Boolean
   ): Resource[IO, List[SpanProcessor[IO]]] =
+    val profileProc: Option[SpanProcessor[IO]] =
+      if wantLocal then Some(new ProfilingSpanProcessor) else None
     val localProc  =
       if wantLocal then config.local.traverse(spec => localProcessor(spec.otlpEndpoint))
       else Resource.pure[IO, Option[SpanProcessor[IO]]](None)
     val remoteProc =
       if wantRemote then config.remote.traverse(spec => remoteProcessor(spec))
       else Resource.pure[IO, Option[SpanProcessor[IO]]](None)
-    (localProc, remoteProc).mapN((l, r) => List(l, r).flatten)
+    (localProc, remoteProc).mapN((l, r) => List(profileProc, l, r).flatten)
 
   private def localProcessor(endpoint: String): Resource[IO, SpanProcessor[IO]] =
-    otlpExporter(endpoint).flatMap(batched)
+    otlpExporter(endpoint).map(SimpleSpanProcessor(_))
 
   private def remoteProcessor(spec: RemoteTelemetrySpec): Resource[IO, SpanProcessor[IO]] =
     otlpExporter(spec.otlpEndpoint)
@@ -73,18 +76,16 @@ object TracingRuntime:
         .builder[IO]
         .withEndpoint(uri)
         .withProtocol(OtlpProtocol.httpJson)
-        .withTimeout(100.millis)
-        .withRetryPolicy(RetryPolicy.builder.withMaxAttempts(1).build)
+        .withTimeout(2.seconds)
+        .withRetryPolicy(RetryPolicy.builder.withMaxAttempts(2).withInitialBackoff(10.millis).build)
         .build
     }
 
   private def batched(exporter: SpanExporter[IO]): Resource[IO, SpanProcessor[IO]] =
     BatchSpanProcessor
       .builder(exporter)
-      .withMaxQueueSize(128)
-      .withMaxExportBatchSize(128)
-      .withScheduleDelay(1.minute)
-      .withExporterTimeout(100.millis)
+      .withScheduleDelay(5.seconds)
+      .withExporterTimeout(10.seconds)
       .build
 
   /** Runs `body` inside a root `cellar.command` span. Records the outcome as
@@ -94,11 +95,12 @@ object TracingRuntime:
     */
   def tracedCommand(
       config: TracingConfig,
+      ioLocal: IOLocal[Context],
       cellarVersion: String,
       commandName: String,
       classifyUserError: Throwable => Boolean = _ => false
   )(body: Tracer[IO] ?=> IO[ExitCode]): IO[ExitCode] =
-    resource(config).use { tracer =>
+    resource(config, ioLocal).use { tracer =>
       given Tracer[IO] = tracer
       val rootAttrs    = List(
         Attribute("command.name", commandName),
