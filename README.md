@@ -319,8 +319,6 @@ java -jar out/cli/assembly.dest/out.jar get-external org.typelevel:cats-core_3:2
 # Native image (GraalVM)
 ./mill cli.nativeImage
 
-# Wrapper script (for development)
-./scripts/cellar get-external org.typelevel:cats-core_3:2.10.0 cats.Monad
 ```
 
 ### Running tests

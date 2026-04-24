@@ -101,7 +101,3 @@ Examples are testing match exhaustivity, typesystem etc.
 ## Documentation
 
 When adding or modifying CLI commands, flags, or config options, update `README.md` accordingly.
-
-## Development history
-
-All plans, decision and architecture designs are available in ai/ folder

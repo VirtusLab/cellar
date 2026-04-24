@@ -1,2 +1,0 @@
-#!/bin/sh
-exec java $JAVA_OPTS -jar "/home/rochala/Projects/cellar/out/cli/assembly.dest/out.jar" "$@"
