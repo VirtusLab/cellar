@@ -83,6 +83,14 @@ class AllowlistExporterSuite extends CatsEffectSuite:
       assertEquals(names, List("installation.id"))
     }
 
+  test("strips exception events containing user data such as coordinates"):
+    val err   = new RuntimeException("Could not resolve 'com.example:secret-lib:1.0'")
+    val event = EventData.fromException(0.seconds, err, emptyAttrs)
+    val span  = mkSpan(events = Vector(event))
+    runExport(Set("command.name"))(span).map { out =>
+      assertEquals(out.events.elements.toVector, Vector.empty)
+    }
+
   test("preserves string, long, and boolean attribute value types"):
     val span = mkSpan(spanAttrs = Attributes(Attribute("s", "text"), Attribute("n", 42L), Attribute("b", true)))
     runExport(Set("s", "n", "b"))(span).map { out =>

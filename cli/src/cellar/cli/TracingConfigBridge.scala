@@ -10,14 +10,13 @@ import cellar.profiling.{AllowedAttributes, LocalTracingSpec, RemoteTelemetrySpe
   */
 object TracingConfigBridge:
 
-  private val LocalOtlpEndpoint      = "http://localhost:4318/v1/traces"
-  private val LocalPyroscopeEndpoint = "http://localhost:4040"
+  private val LocalOtlpEndpoint = "http://localhost:4318/v1/traces"
 
   def fromCellarConfig(c: Config): TracingConfig =
     TracingConfig(
       appName = "cellar",
       local = Option.when(c.profiling.enabled)(
-        LocalTracingSpec(LocalOtlpEndpoint, LocalPyroscopeEndpoint)
+        LocalTracingSpec(LocalOtlpEndpoint, c.profiling.pyroscopeEndpoint)
       ),
       remote = Option.when(c.telemetry.enabled)(
         RemoteTelemetrySpec(c.telemetry.endpoint, AllowedAttributes.default)

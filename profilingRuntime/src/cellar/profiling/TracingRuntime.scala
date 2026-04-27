@@ -66,9 +66,14 @@ object TracingRuntime:
     otlpExporter(endpoint).map(SimpleSpanProcessor(_))
 
   private def remoteProcessor(spec: RemoteTelemetrySpec): Resource[IO, SpanProcessor[IO]] =
-    otlpExporter(spec.otlpEndpoint)
+    remoteExporter(spec.otlpEndpoint)
       .map(new AllowlistExporter(_, spec.allowlistedAttributes))
       .flatMap(batched)
+
+  // On native image, Ember has no reachability metadata — use java.net.http.HttpClient instead.
+  private def remoteExporter(endpoint: String): Resource[IO, SpanExporter[IO]] =
+    if NativeImage then Resource.pure(JavaNetHttpOtlpExporter(endpoint))
+    else otlpExporter(endpoint)
 
   private def otlpExporter(endpoint: String): Resource[IO, SpanExporter[IO]] =
     Resource.eval(IO.fromEither(Uri.fromString(endpoint))).flatMap { uri =>

@@ -11,7 +11,7 @@ case class SbtConfig(binary: String, extraArgs: String) derives ConfigReader {
 
 case class StarvationChecksConfig(enabled: Boolean) derives ConfigReader
 
-case class ProfilingConfig(enabled: Boolean) derives ConfigReader
+case class ProfilingConfig(enabled: Boolean, pyroscopeEndpoint: String) derives ConfigReader
 
 case class TelemetryConfig(enabled: Boolean, endpoint: String) derives ConfigReader
 

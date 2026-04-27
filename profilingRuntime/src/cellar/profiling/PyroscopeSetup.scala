@@ -15,7 +15,8 @@ object PyroscopeSetup:
     * Skips silently if the server is unreachable.
     */
   def resource(serverAddress: String, applicationName: String): Resource[IO, Unit] =
-    Resource.eval(reachable(serverAddress)).flatMap {
+    if TracingRuntime.NativeImage then Resource.unit
+    else Resource.eval(reachable(serverAddress)).flatMap {
       case false => Resource.unit
       case true  =>
         Resource.make {
