@@ -89,8 +89,7 @@ object TracingRuntime:
   private def batched(exporter: SpanExporter[IO]): Resource[IO, SpanProcessor[IO]] =
     BatchSpanProcessor
       .builder(exporter)
-      .withScheduleDelay(1.hour)      // never auto-fires; forceFlush on Resource teardown handles export
-      .withExporterTimeout(3.seconds) // matches HTTP client timeout + 1s margin
+      .withExporterTimeout(3.seconds)
       .build
 
   /** Runs `body` inside a root `cellar.command` span. Records the outcome as
