@@ -82,15 +82,15 @@ object TracingRuntime:
         .withEndpoint(uri)
         .withProtocol(OtlpProtocol.httpJson)
         .withTimeout(2.seconds)
-        .withRetryPolicy(RetryPolicy.builder.withMaxAttempts(2).withInitialBackoff(10.millis).build)
+        .withRetryPolicy(RetryPolicy.builder.withMaxAttempts(1).build)
         .build
     }
 
   private def batched(exporter: SpanExporter[IO]): Resource[IO, SpanProcessor[IO]] =
     BatchSpanProcessor
       .builder(exporter)
-      .withScheduleDelay(5.seconds)
-      .withExporterTimeout(10.seconds)
+      .withScheduleDelay(1.hour)      // never auto-fires; forceFlush on Resource teardown handles export
+      .withExporterTimeout(3.seconds) // matches HTTP client timeout + 1s margin
       .build
 
   /** Runs `body` inside a root `cellar.command` span. Records the outcome as
