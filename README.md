@@ -184,6 +184,11 @@ starvation-checks {
   # Set to true during development or CI to surface warnings.
   enabled = false             # env: CELLAR_STARVATION_CHECKS_ENABLED
 }
+
+telemetry {
+  enabled = false             # env: CELLAR_TELEMETRY_ENABLED
+  endpoint = "https://telemetry.cellar.dev"  # env: CELLAR_TELEMETRY_ENDPOINT
+}
 ```
 
 ### Examples
@@ -207,6 +212,54 @@ mill { binary = "./millw" }
 ```
 
 Or via environment: `CELLAR_SBT_BINARY=sbtn cellar get --module core cats.Monad`
+
+## Telemetry
+
+Cellar collects **anonymous usage telemetry** to help improve the tool. It is opt-in: the first time you run cellar you'll see a notice on stderr, and telemetry stays disabled until you explicitly enable it.
+
+### What is collected
+
+Each command sends a single OpenTelemetry trace span with these attributes — nothing else:
+
+| Attribute | Example |
+|---|---|
+| `command.name` | `get-external` |
+| `cellar.version` | `0.4.0` |
+| `os.type` | `Mac OS X` |
+| `command.success` | `true` |
+| `error.category` | `user` or `system` (only on failure) |
+| `error.type` | `CoordinateNotFound` (only on failure) |
+| `installation.id` | anonymous UUID (see below) |
+| `session.id` | `$CELLAR_SESSION_ID` env var (optional) |
+| `build.tool` | `mill`, `sbt`, etc. (project commands) |
+| `is.external` | `true`/`false` (external vs project command) |
+| `target.lang` | `scala3`, `java`, etc. |
+
+**What is never sent**: Maven coordinates, fully-qualified symbol names, search queries, error messages, stack traces, or any other user data.
+
+### Installation ID
+
+The installation ID is a randomly-generated UUID stored in `~/.cellar/installation_id`. It identifies your installation, not you: there is no account, no email, and no way to link it to a person. You can reset it at any time with `cellar telemetry reset-id`.
+
+### Managing telemetry
+
+```sh
+cellar telemetry enable    # opt in
+cellar telemetry disable   # opt out
+cellar telemetry status    # show current status and installation ID
+cellar telemetry reset-id  # generate a new anonymous installation ID
+```
+
+### Configuration
+
+Telemetry can also be controlled via `~/.cellar/cellar.conf` or environment variables:
+
+```hocon
+telemetry {
+  enabled = true                        # env: CELLAR_TELEMETRY_ENABLED
+  endpoint = "https://telemetry.cellar.dev"  # env: CELLAR_TELEMETRY_ENDPOINT
+}
+```
 
 ## Output conventions
 
