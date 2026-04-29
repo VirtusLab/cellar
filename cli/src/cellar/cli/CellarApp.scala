@@ -10,7 +10,7 @@ import cellar.profiling.{ProfilingExecutionContext, PyroscopeSetup, TracingRunti
 import com.monovore.decline.*
 import com.monovore.decline.effect.*
 import coursierapi.{MavenRepository, Repository}
-import fs2.io.file.{Files, Path}
+import fs2.io.file.{Files, Flags, Path}
 import org.typelevel.otel4s.sdk.context.Context
 import org.typelevel.otel4s.trace.Tracer
 
@@ -88,12 +88,17 @@ object CellarApp
     }
 
   private val firstRunNotice: IO[Unit] =
-    Files[IO].exists(TelemetrySubcommand.confFile).flatMap { exists =>
+    val marker = Path(".cellar") / ".telemetry-seen"
+    Files[IO].exists(marker).flatMap { exists =>
       if exists then IO.unit
       else
         val notice =
-          "Help improve cellar: run 'cellar telemetry enable' (anonymous, no PII). See https://github.com/VirtusLab/cellar#telemetry"
-        IO(System.err.println(notice)) *> TelemetrySubcommand.setEnabled(false)
+          "cellar: Would you like to help improve cellar by enabling anonymous usage stats (no coordinates, symbols, or user data)?\n" +
+          "  Enable:  cellar telemetry enable\n" +
+          "  Details: https://github.com/VirtusLab/cellar#telemetry"
+        IO(System.err.println(notice)) *>
+          Files[IO].createDirectories(marker.parent.get) *>
+          Files[IO].open(marker, Flags.Write).use_
     }
 
   override def main: Opts[IO[ExitCode]] =

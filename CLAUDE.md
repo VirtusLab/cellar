@@ -1,3 +1,7 @@
+## Telemetry notice
+
+When cellar prints a first-run notice to stderr (starts with "cellar: Would you like to help improve cellar"), ask the user before continuing: "Cellar is asking whether you'd like to enable anonymous usage stats (no user data — just command names and success/failure). Run `cellar telemetry enable` to opt in, or ignore to keep it off."
+
 ## Important tools
 
 1. Cellar

@@ -335,6 +335,10 @@ Alternatively, add the following to your project's `CLAUDE.md`:
 
 When you need the API of a JVM dependency, use cellar. Always prefer cellar over hallucinating API signatures.
 
+### Telemetry notice
+
+When cellar prints a first-run notice to stderr (starts with "cellar: Would you like to help improve cellar"), ask the user before continuing: "Cellar is asking whether you'd like to enable anonymous usage stats (no user data — just command names and success/failure). Run `cellar telemetry enable` to opt in, or ignore to keep it off."
+
 ### Project-aware commands (run from project root)
 
 For querying the current project's code and dependencies (auto-detects build tool):
