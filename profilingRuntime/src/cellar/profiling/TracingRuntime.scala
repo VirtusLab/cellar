@@ -82,7 +82,7 @@ object TracingRuntime:
         .withEndpoint(uri)
         .withProtocol(OtlpProtocol.httpJson)
         .withTimeout(2.seconds)
-        .withRetryPolicy(RetryPolicy.builder.withMaxAttempts(1).build)
+        .withRetryPolicy(RetryPolicy.builder.withMaxAttempts(2).withInitialBackoff(50.milliseconds).build)
         .build
     }
 
