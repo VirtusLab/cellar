@@ -1,17 +1,14 @@
 package cellar.cli
 
-import cats.effect.{ExitCode, IO, IOLocal, Resource, SyncIO}
-import cats.effect.unsafe.{IORuntimeBuilder, IORuntimeConfig}
-import cats.effect.unsafe.IORuntime
+import cats.effect.{ExitCode, IO, Resource}
+import cats.effect.unsafe.IORuntimeConfig
 import cats.syntax.all.*
 import cellar.*
 import cellar.handlers.{DepsHandler, GetHandler, GetSourceHandler, ListHandler, MetaHandler, ProjectGetHandler, ProjectListHandler, ProjectSearchHandler, SearchHandler}
-import cellar.profiling.{ProfilingExecutionContext, PyroscopeSetup, TracingRuntime}
+import cellar.profiling.{ProfilingIOApp, PyroscopeSetup, TracingRuntime}
 import com.monovore.decline.*
-import com.monovore.decline.effect.*
 import coursierapi.{MavenRepository, Repository}
 import fs2.io.file.{Files, Flags, Path}
-import org.typelevel.otel4s.sdk.context.Context
 import org.typelevel.otel4s.trace.Tracer
 
 import scala.concurrent.duration.Duration
@@ -32,37 +29,14 @@ private def platformLabel: String =
     case other              => other
   s"$os-$arch"
 
-object CellarApp
-    extends CommandIOApp(
-      name = "cellar",
-      header = "Inspect Maven-published JVM dependency APIs",
-      version = s"${BuildInfo.version} ($runtimeLabel, $platformLabel)"
-    ):
+object CellarApp extends ProfilingIOApp:
 
-  private val profilingEnabled = Config.global.profiling.enabled
-  private val profilingOnJvm   = profilingEnabled && !TracingRuntime.NativeImage
-
-  // Must be set before the IORuntime is built so the CE fiber-context property is captured
-  if profilingOnJvm then System.setProperty("cats.effect.trackFiberContext", "true")
-
-  private given sharedIOLocal: IOLocal[Context] = IOLocal[Context](Context.root)
-    .syncStep(100)
-    .flatMap(_.leftMap(_ => new Error("Failed to initialize IOLocal")).liftTo[SyncIO])
-    .unsafeRunSync()
+  override def profilingEnabled: Boolean = Config.global.profiling.enabled
 
   override def runtimeConfig: IORuntimeConfig =
     val base = super.runtimeConfig
     if Config.global.starvationChecks.enabled then base
     else base.copy(cpuStarvationCheckInitialDelay = Duration.Inf)
-
-  override protected def runtime: IORuntime =
-    if profilingOnJvm then
-      val threadLocal = sharedIOLocal.unsafeThreadLocal()
-      IORuntimeBuilder()
-        .transformCompute(ProfilingExecutionContext.wrap(_, threadLocal))
-        .transformBlocking(ProfilingExecutionContext.wrap(_, threadLocal))
-        .build()
-    else super.runtime
 
   private lazy val tracingConfig = TracingConfigBridge.fromCellarConfig(Config.global)
 
@@ -87,28 +61,56 @@ object CellarApp
       }
     }
 
-  private val firstRunNotice: IO[Unit] =
-    val marker = Path(".cellar") / ".telemetry-seen"
-    Files[IO].exists(marker).flatMap { exists =>
-      if exists then IO.unit
-      else
-        val notice =
-          "cellar: Would you like to help improve cellar by enabling anonymous usage stats (no coordinates, symbols, or user data)?\n" +
-          "  Enable:  cellar telemetry enable\n" +
-          "  Details: https://github.com/VirtusLab/cellar#telemetry"
-        IO(System.err.println(notice)) *>
-          Files[IO].createDirectories(marker.parent.get) *>
-          Files[IO].open(marker, Flags.Write).use_
+  private val firstRunNotice: IO[Boolean] =
+    val projectMarker = Path(".cellar") / ".telemetry-seen"
+    val globalMarker  = TelemetrySubcommand.globalSeenMarker
+    Files[IO].exists(projectMarker).flatMap {
+      case true => IO.pure(false)
+      case false =>
+        Files[IO].exists(globalMarker).flatMap {
+          case true => IO.pure(false)
+          case false =>
+            val json =
+              """|{
+                 |  "status": "needs_input",
+                 |  "ui": "AskUserQuestion",
+                 |  "question": "Would you like to enable anonymous cellar usage stats? (No coordinates, symbols, or user data — just command names and success/failure.)",
+                 |  "options": [
+                 |    { "label": "Enable",          "description": "Opt in — helps improve cellar.",          "command": "cellar telemetry enable" },
+                 |    { "label": "Disable",          "description": "Opt out for this project.",               "command": "cellar telemetry disable" },
+                 |    { "label": "Disable globally", "description": "Never ask again across any project.",     "command": "cellar telemetry disable --global" }
+                 |  ],
+                 |  "details": "https://github.com/VirtusLab/cellar#telemetry"
+                 |}""".stripMargin
+            IO(System.err.println(json)) *>
+              Files[IO].createDirectories(projectMarker.parent.get) *>
+              Files[IO].open(projectMarker, Flags.Write).use_ *>
+              IO.pure(true)
+        }
     }
 
-  override def main: Opts[IO[ExitCode]] =
+  def main: Opts[IO[ExitCode]] =
     val regularCmds =
       getSubcmd orElse getExternalSubcmd orElse
         getSourceSubcmd orElse
         listSubcmd orElse listExternalSubcmd orElse
         searchSubcmd orElse searchExternalSubcmd orElse
         depsSubcmd orElse metaSubcmd
-    regularCmds.map(firstRunNotice *> _) orElse TelemetrySubcommand.opts
+    regularCmds.map(cmd => firstRunNotice.flatMap(if _ then IO.pure(ExitCode.Success) else cmd)) orElse TelemetrySubcommand.opts
+
+  override def run(args: List[String]): IO[ExitCode] =
+    val versionOpt = Opts
+      .flag("version", "Print the version number and exit", short = "V")
+      .map(_ => IO.println(BuildInfo.version).as(ExitCode.Success))
+    val command = Command("cellar", "Inspect Maven-published JVM dependency APIs")(main <+> versionOpt)
+    command.parse(args, sys.env) match
+      case Left(help) if help.errors.nonEmpty =>
+        traced("parse-error")(IO.pure(ExitCode.Error)).void *>
+          IO.blocking(System.err.println(help)).as(ExitCode.Error)
+      case Left(help) =>
+        IO.blocking(System.out.println(help)).as(ExitCode.Success)
+      case Right(action) =>
+        action
 
   private given Argument[Path] = Argument[java.nio.file.Path].map(Path.fromNioPath)
 

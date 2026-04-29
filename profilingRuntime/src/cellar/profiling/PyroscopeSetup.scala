@@ -3,6 +3,7 @@ package cellar.profiling
 import cats.effect.{IO, Resource}
 import io.pyroscope.http.Format
 import io.pyroscope.javaagent.{EventType, PyroscopeAgent}
+import io.pyroscope.javaagent.api.Logger
 import io.pyroscope.javaagent.config.Config
 import org.http4s.Uri
 
@@ -26,6 +27,7 @@ object PyroscopeSetup:
               .setServerAddress(serverAddress)
               .setProfilingEvent(EventType.ITIMER)
               .setFormat(Format.JFR)
+              .setLogLevel(Logger.Level.ERROR)
               .build()
             PyroscopeAgent.start(cfg)
           }

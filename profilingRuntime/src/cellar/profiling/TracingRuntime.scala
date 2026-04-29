@@ -1,6 +1,7 @@
 package cellar.profiling
 
 import cats.effect.{ExitCode, IO, IOLocal, Resource}
+import cats.effect.std.Console
 import cats.mtl.Local
 import cats.syntax.all.*
 import org.http4s.Uri
@@ -66,6 +67,14 @@ object TracingRuntime:
   private def remoteExporter(endpoint: String): Resource[IO, SpanExporter[IO]] =
     if NativeImage then Resource.pure(JavaNetHttpOtlpExporter(endpoint))
     else otlpExporter(endpoint)
+
+  private given Console[IO] = new Console[IO]:
+    def readLineWithCharset(charset: java.nio.charset.Charset): IO[String] =
+      IO.raiseError(new UnsupportedOperationException)
+    def print[A](a: A)(using cats.Show[A]): IO[Unit]    = IO.unit
+    def println[A](a: A)(using cats.Show[A]): IO[Unit]  = IO.unit
+    def error[A](a: A)(using cats.Show[A]): IO[Unit]    = IO.unit
+    def errorln[A](a: A)(using cats.Show[A]): IO[Unit]  = IO.unit
 
   private def otlpExporter(endpoint: String): Resource[IO, SpanExporter[IO]] =
     Resource.eval(IO.fromEither(Uri.fromString(endpoint))).flatMap { uri =>

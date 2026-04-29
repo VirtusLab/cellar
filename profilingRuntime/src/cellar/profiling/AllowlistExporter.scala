@@ -18,9 +18,9 @@ final class AllowlistExporter(delegate: SpanExporter[IO], allowlist: Set[String]
   def name: String = s"AllowlistExporter(${delegate.name})"
 
   def exportSpans[G[_]: Foldable](spans: G[SpanData]): IO[Unit] =
-    delegate.exportSpans(spans.toList.map(filterSpan))
+    delegate.exportSpans(spans.toList.map(filterSpan)).handleError(_ => ())
 
-  def flush: IO[Unit] = delegate.flush
+  def flush: IO[Unit] = delegate.flush.handleError(_ => ())
 
   private def filterAttributes(attrs: Attributes): Attributes =
     val kept: Iterable[Attribute[?]] = attrs.filter(a => allowlist.contains(a.key.name))

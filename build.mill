@@ -156,7 +156,8 @@ object cli extends CommonScalaModule with NativeImageModule with SonatypeCentral
 
   def mvnDeps = Seq(
     mvn"com.monovore::decline:2.4.1",
-    mvn"com.monovore::decline-effect:2.4.1"
+    mvn"com.monovore::decline-effect:2.4.1",
+    mvn"org.slf4j:slf4j-nop:1.7.36"
   )
   def assemblyRules = Seq(
     Assembly.Rule.Append("META-INF/services/.*"),

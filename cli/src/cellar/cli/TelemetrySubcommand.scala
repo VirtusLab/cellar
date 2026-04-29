@@ -3,11 +3,12 @@ package cellar.cli
 import cats.effect.{ExitCode, IO}
 import cellar.Config
 import com.monovore.decline.Opts
-import fs2.io.file.{Files, Path}
+import fs2.io.file.{Files, Flags, Path}
 
 object TelemetrySubcommand:
 
-  private[cli] val confFile = Path(sys.props("user.home")) / ".cellar" / "cellar.conf"
+  private[cli] val confFile         = Path(sys.props("user.home")) / ".cellar" / "cellar.conf"
+  private[cli] val globalSeenMarker = Path(sys.props("user.home")) / ".cellar" / ".telemetry-seen"
 
   def opts: Opts[IO[ExitCode]] =
     Opts.subcommand("telemetry", "Manage anonymous usage telemetry") {
@@ -17,7 +18,7 @@ object TelemetrySubcommand:
   private def enableCmd: Opts[IO[ExitCode]] =
     Opts.subcommand("enable", "Enable anonymous usage telemetry") {
       Opts.unit.map { _ =>
-        setEnabled(true) *>
+        setEnabled(true) *> markAnswered *>
           InstallationId.ensure.flatMap(id =>
             IO.println(s"Telemetry enabled. Installation ID: $id")
           ).as(ExitCode.Success)
@@ -26,8 +27,10 @@ object TelemetrySubcommand:
 
   private def disableCmd: Opts[IO[ExitCode]] =
     Opts.subcommand("disable", "Disable anonymous usage telemetry") {
-      Opts.unit.map { _ =>
+      val globalFlag = Opts.flag("global", "Disable for all projects and never prompt again").orFalse
+      globalFlag.map { global =>
         setEnabled(false) *>
+          IO.whenA(global)(markAnswered) *>
           IO.blocking(Config.loadFresh()).flatMap { fresh =>
             IO.whenA(fresh.telemetry.enabled)(
               IO(System.err.println(
@@ -39,6 +42,10 @@ object TelemetrySubcommand:
           IO.println("Telemetry disabled.").as(ExitCode.Success)
       }
     }
+
+  private def markAnswered: IO[Unit] =
+    Files[IO].createDirectories(globalSeenMarker.parent.get) *>
+      Files[IO].open(globalSeenMarker, Flags.Write).use_
 
   private def statusCmd: Opts[IO[ExitCode]] =
     Opts.subcommand("status", "Show telemetry status") {
