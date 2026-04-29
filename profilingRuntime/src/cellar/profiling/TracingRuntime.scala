@@ -24,12 +24,9 @@ object TracingRuntime:
   val NativeImage: Boolean =
     sys.props.get("org.graalvm.nativeimage.imagecode").contains("runtime")
 
-  /** Builds a [[Tracer]] for one CLI invocation. Returns a noop tracer if
-    * nothing is configured, or if running under native image and only the
-    * JVM-only local path is configured.
-    */
+  /** Builds a [[Tracer]] for one CLI invocation. Returns a noop tracer if nothing is configured. */
   def resource(config: TracingConfig, ioLocal: IOLocal[Context]): Resource[IO, Tracer[IO]] =
-    val wantLocal  = config.local.isDefined && !NativeImage
+    val wantLocal  = config.local.isDefined
     val wantRemote = config.remote.isDefined
     if !wantLocal && !wantRemote then Resource.pure[IO, Tracer[IO]](Tracer.noop[IO])
     else
@@ -49,14 +46,14 @@ object TracingRuntime:
       yield tracer
 
   private def buildProcessors(config: TracingConfig): Resource[IO, List[SpanProcessor[IO]]] =
-    val effectiveLocal = config.local.filter(_ => !NativeImage)
-    val profileProc    = effectiveLocal.map(_ => new ProfilingSpanProcessor)
-    val localProc      = effectiveLocal.traverse(spec => localProcessor(spec.otlpEndpoint))
-    val remoteProc     = config.remote.traverse(spec => remoteProcessor(spec))
+    val profileProc = if !NativeImage then config.local.map(_ => new ProfilingSpanProcessor) else None
+    val localProc   = config.local.traverse(spec => localProcessor(spec.otlpEndpoint))
+    val remoteProc  = config.remote.traverse(spec => remoteProcessor(spec))
     (localProc, remoteProc).mapN((l, r) => List(profileProc, l, r).flatten)
 
   private def localProcessor(endpoint: String): Resource[IO, SpanProcessor[IO]] =
-    otlpExporter(endpoint).map(SimpleSpanProcessor(_))
+    (if NativeImage then Resource.pure(JavaNetHttpOtlpExporter(endpoint))
+     else otlpExporter(endpoint)).map(SimpleSpanProcessor(_))
 
   private def remoteProcessor(spec: RemoteTelemetrySpec): Resource[IO, SpanProcessor[IO]] =
     remoteExporter(spec.otlpEndpoint)

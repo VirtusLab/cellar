@@ -16,12 +16,18 @@ trait ProfilingIOApp extends cats.effect.IOApp:
       .flatMap(_.leftMap(_ => new Error("Failed to initialize IOLocal")).liftTo[SyncIO])
       .unsafeRunSync()
 
-  override protected def runtime: IORuntime =
+  // Built once so that every call to `runtime` returns the same instance.
+  // IOApp.main calls `this.runtime` multiple times (null check, installGlobal, metrics, unsafeRunFiber…).
+  private lazy val customRuntime: Option[IORuntime] =
     if profilingOnJvm then
       System.setProperty("cats.effect.trackFiberContext", "true")
       val threadLocal = sharedIOLocal.unsafeThreadLocal()
-      IORuntimeBuilder()
-        .transformCompute(ProfilingExecutionContext.wrap(_, threadLocal))
-        .transformBlocking(ProfilingExecutionContext.wrap(_, threadLocal))
-        .build()
-    else super.runtime
+      Some(
+        IORuntimeBuilder()
+          .transformCompute(ProfilingExecutionContext.wrap(_, threadLocal))
+          .transformBlocking(ProfilingExecutionContext.wrap(_, threadLocal))
+          .build()
+      )
+    else None
+
+  override protected def runtime: IORuntime = customRuntime.getOrElse(super.runtime)
