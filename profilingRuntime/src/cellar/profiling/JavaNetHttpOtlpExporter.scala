@@ -40,8 +40,6 @@ object JavaNetHttpOtlpExporter:
 
     def flush: IO[Unit] = IO.unit
 
-  // ---------- JSON serialisation ----------
-
   private def buildJson(spans: List[SpanData]): String =
     val grouped = spans.groupBy(s => (s.resource, s.instrumentationScope))
     val scopeSpans = grouped.map { case ((resource, scope), ss) =>

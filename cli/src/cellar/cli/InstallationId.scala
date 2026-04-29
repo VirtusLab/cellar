@@ -7,20 +7,21 @@ import java.util.UUID
 
 object InstallationId:
 
-  private val idFile = Path(sys.props("user.home")) / ".cellar" / "installation_id"
+  private[cli] val idFile = Path(sys.props("user.home")) / ".cellar" / "installation_id"
 
   def read: IO[Option[String]] =
-    Files[IO].exists(idFile).flatMap {
-      case false => IO.pure(None)
-      case true  => Files[IO].readUtf8(idFile).compile.string.map(s => Some(s.trim))
-    }
+    Files[IO].readUtf8(idFile).compile.string
+      .map(s => Some(s.trim))
+      .recover { case _: java.nio.file.NoSuchFileException => None }
 
   def ensure: IO[String] =
     read.flatMap {
       case Some(id) => IO.pure(id)
-      case None     =>
-        val id = UUID.randomUUID().toString
-        val dir = idFile.parent.get
-        Files[IO].createDirectories(dir) *>
-          fs2.Stream.emit(id).through(Files[IO].writeUtf8(idFile)).compile.drain.as(id)
+      case None     => write(UUID.randomUUID().toString)
     }
+
+  def reset: IO[String] = write(UUID.randomUUID().toString)
+
+  private def write(id: String): IO[String] =
+    Files[IO].createDirectories(idFile.parent.get) *>
+      fs2.Stream.emit(id).through(Files[IO].writeUtf8(idFile)).compile.drain.as(id)

@@ -37,7 +37,7 @@ object TracingRuntime:
                             given IOLocal[Context] = ioLocal
                             LocalProvider[IO, Context].local
                           }
-        processors     <- buildProcessors(config, wantLocal, wantRemote)
+        processors     <- buildProcessors(config)
         tracerProvider <- Resource.eval {
                             given Local[IO, Context] = localCtx
                             val serviceResource      = TelemetryResource(Attributes(Attribute("service.name", config.appName)), None)
@@ -47,19 +47,11 @@ object TracingRuntime:
         tracer         <- Resource.eval(tracerProvider.get(config.appName))
       yield tracer
 
-  private def buildProcessors(
-      config: TracingConfig,
-      wantLocal: Boolean,
-      wantRemote: Boolean
-  ): Resource[IO, List[SpanProcessor[IO]]] =
-    val profileProc: Option[SpanProcessor[IO]] =
-      if wantLocal then Some(new ProfilingSpanProcessor) else None
-    val localProc  =
-      if wantLocal then config.local.traverse(spec => localProcessor(spec.otlpEndpoint))
-      else Resource.pure[IO, Option[SpanProcessor[IO]]](None)
-    val remoteProc =
-      if wantRemote then config.remote.traverse(spec => remoteProcessor(spec))
-      else Resource.pure[IO, Option[SpanProcessor[IO]]](None)
+  private def buildProcessors(config: TracingConfig): Resource[IO, List[SpanProcessor[IO]]] =
+    val effectiveLocal = config.local.filter(_ => !NativeImage)
+    val profileProc    = effectiveLocal.map(_ => new ProfilingSpanProcessor)
+    val localProc      = effectiveLocal.traverse(spec => localProcessor(spec.otlpEndpoint))
+    val remoteProc     = config.remote.traverse(spec => remoteProcessor(spec))
     (localProc, remoteProc).mapN((l, r) => List(profileProc, l, r).flatten)
 
   private def localProcessor(endpoint: String): Resource[IO, SpanProcessor[IO]] =

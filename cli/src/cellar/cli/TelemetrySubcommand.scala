@@ -7,7 +7,7 @@ import fs2.io.file.{Files, Path}
 
 object TelemetrySubcommand:
 
-  private val confFile = Path(sys.props("user.home")) / ".cellar" / "cellar.conf"
+  private[cli] val confFile = Path(sys.props("user.home")) / ".cellar" / "cellar.conf"
 
   def opts: Opts[IO[ExitCode]] =
     Opts.subcommand("telemetry", "Manage anonymous usage telemetry") {
@@ -49,24 +49,21 @@ object TelemetrySubcommand:
   private def resetIdCmd: Opts[IO[ExitCode]] =
     Opts.subcommand("reset-id", "Generate a new anonymous installation ID") {
       Opts.unit.map { _ =>
-        val idPath = Path(sys.props("user.home")) / ".cellar" / "installation_id"
-        Files[IO].deleteIfExists(idPath) *>
-          InstallationId.ensure.flatMap(id =>
-            IO.println(s"New installation ID: $id")
-          ).as(ExitCode.Success)
+        InstallationId.reset.flatMap(id =>
+          IO.println(s"New installation ID: $id")
+        ).as(ExitCode.Success)
       }
     }
 
-  private def setEnabled(enabled: Boolean): IO[Unit] =
+  private[cli] def setEnabled(enabled: Boolean): IO[Unit] =
     val dir = confFile.parent.get
     Files[IO].createDirectories(dir) *>
-      Files[IO].exists(confFile).flatMap { exists =>
-        val readContent = if exists then Files[IO].readUtf8(confFile).compile.string else IO.pure("")
-        readContent.flatMap { content =>
+      Files[IO].readUtf8(confFile).compile.string
+        .recover { case _: java.nio.file.NoSuchFileException => "" }
+        .flatMap { content =>
           val updated = replaceTelemetryBlock(content, enabled)
           fs2.Stream.emit(updated).through(Files[IO].writeUtf8(confFile)).compile.drain
         }
-      }
 
   private def replaceTelemetryBlock(content: String, enabled: Boolean): String =
     val stripped = content.replaceAll("""(?s)telemetry\s*\{[^}]*\}\n?""", "").strip

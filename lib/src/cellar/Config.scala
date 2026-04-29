@@ -21,8 +21,7 @@ case class Config(
     starvationChecks: StarvationChecksConfig,
     profiling: ProfilingConfig,
     telemetry: TelemetryConfig
-) derives ConfigReader:
-  def needsTracing: Boolean = profiling.enabled || telemetry.enabled
+) derives ConfigReader
 
 object Config {
   private val defaultUserPath: Option[Path] =

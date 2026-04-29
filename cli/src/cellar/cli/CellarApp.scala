@@ -40,10 +40,10 @@ object CellarApp
     ):
 
   private val profilingEnabled = Config.global.profiling.enabled
+  private val profilingOnJvm   = profilingEnabled && !TracingRuntime.NativeImage
 
-  // Must be set before IOLocal$ class is loaded so isPropagating val captures it
-  if profilingEnabled && !TracingRuntime.NativeImage then
-    System.setProperty("cats.effect.trackFiberContext", "true")
+  // Must be set before the IORuntime is built so the CE fiber-context property is captured
+  if profilingOnJvm then System.setProperty("cats.effect.trackFiberContext", "true")
 
   private given sharedIOLocal: IOLocal[Context] = IOLocal[Context](Context.root)
     .syncStep(100)
@@ -56,7 +56,7 @@ object CellarApp
     else base.copy(cpuStarvationCheckInitialDelay = Duration.Inf)
 
   override protected def runtime: IORuntime =
-    if profilingEnabled && !TracingRuntime.NativeImage then
+    if profilingOnJvm then
       val threadLocal = sharedIOLocal.unsafeThreadLocal()
       IORuntimeBuilder()
         .transformCompute(ProfilingExecutionContext.wrap(_, threadLocal))
@@ -67,7 +67,7 @@ object CellarApp
   private lazy val tracingConfig = TracingConfigBridge.fromCellarConfig(Config.global)
 
   private val pyroscopeResource: Resource[IO, Unit] =
-    if profilingEnabled && !TracingRuntime.NativeImage then
+    if profilingOnJvm then
       PyroscopeSetup.resource(Config.global.profiling.pyroscopeEndpoint, "cellar")
     else Resource.unit[IO]
 
@@ -88,19 +88,12 @@ object CellarApp
     }
 
   private val firstRunNotice: IO[Unit] =
-    val userConf = Path(sys.props("user.home")) / ".cellar" / "cellar.conf"
-    Files[IO].exists(userConf).flatMap { exists =>
+    Files[IO].exists(TelemetrySubcommand.confFile).flatMap { exists =>
       if exists then IO.unit
       else
         val notice =
           "Help improve cellar: run 'cellar telemetry enable' (anonymous, no PII). See https://github.com/VirtusLab/cellar#telemetry"
-        IO(System.err.println(notice)) *>
-          Files[IO].createDirectories(userConf.parent.get) *>
-          fs2.Stream
-            .emit("telemetry {\n  enabled = false\n}\n")
-            .through(Files[IO].writeUtf8(userConf))
-            .compile
-            .drain
+        IO(System.err.println(notice)) *> TelemetrySubcommand.setEnabled(false)
     }
 
   override def main: Opts[IO[ExitCode]] =
