@@ -17,6 +17,9 @@ import fs2.io.file.{Files => Fs2Files, Path}
   */
 class ProjectAwareIntegrationTest extends CatsEffectSuite:
 
+  private def safeRun(f: IO[ExitCode])(using Console[IO]): IO[ExitCode] =
+    f.handleErrorWith(e => Console[IO].errorln(e.getMessage).as(ExitCode.Error))
+
   override def munitIOTimeout = scala.concurrent.duration.Duration(300, "s")
 
   private lazy val millBinary: String =
@@ -376,10 +379,12 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
           |class Foo
           |""".stripMargin
       )) >>
-        handlers.ProjectGetHandler.run("example.Foo", module = Some("bar"), cwd = Some(dir)).map { code =>
-          assertEquals(code, ExitCode.Error)
-          assert(console.errBuf.toString.contains("--module is not supported"), s"Stderr: ${console.errBuf}")
-        }
+        handlers.ProjectGetHandler.run("example.Foo", module = Some("bar"), cwd = Some(dir))
+          .handleErrorWith { e => Console[IO].errorln(e.getMessage).as(ExitCode.Error) }
+          .map { code =>
+            assertEquals(code, ExitCode.Error)
+            assert(console.errBuf.toString.contains("--module is not supported"), s"Stderr: ${console.errBuf}")
+          }
     }
 
   test("E2E scala-cli: compilation failure surfaces build tool error"):
@@ -394,7 +399,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
           |}
           |""".stripMargin
       )) >>
-        handlers.ProjectGetHandler.run("example.Bad", module = None, cwd = Some(dir)).map { code =>
+        safeRun(handlers.ProjectGetHandler.run("example.Bad", module = None, cwd = Some(dir))).map { code =>
           assertEquals(code, ExitCode.Error)
           assert(console.errBuf.toString.contains("Compilation failed"), s"Stderr: ${console.errBuf}")
         }
@@ -439,10 +444,12 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
       val console = CapturingConsole()
       given Console[IO] = console
       IO.blocking(Files.writeString(dir.resolve("build.mill").toNioPath, "")) >>
-        handlers.ProjectGetHandler.run("example.Foo", module = None, cwd = Some(dir), config = Config.global.copy(mill = MillConfig(millBinary))).map { code =>
-          assertEquals(code, ExitCode.Error)
-          assert(console.errBuf.toString.contains("--module is required for Mill"), s"Stderr: ${console.errBuf}")
-        }
+        handlers.ProjectGetHandler.run("example.Foo", module = None, cwd = Some(dir), config = Config.global.copy(mill = MillConfig(millBinary)))
+          .handleErrorWith { e => Console[IO].errorln(e.getMessage).as(ExitCode.Error) }
+          .map { code =>
+            assertEquals(code, ExitCode.Error)
+            assert(console.errBuf.toString.contains("--module is required for Mill"), s"Stderr: ${console.errBuf}")
+          }
     }
 
   // --- End-to-end sbt tests (requires sbt on PATH) ---
@@ -481,8 +488,10 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
       val console = CapturingConsole()
       given Console[IO] = console
       IO.blocking(Files.writeString(dir.resolve("build.sbt").toNioPath, "")) >>
-        handlers.ProjectGetHandler.run("example.Foo", module = None, cwd = Some(dir)).map { code =>
-          assertEquals(code, ExitCode.Error)
-          assert(console.errBuf.toString.contains("--module is required for sbt"), s"Stderr: ${console.errBuf}")
-        }
+        handlers.ProjectGetHandler.run("example.Foo", module = None, cwd = Some(dir))
+          .handleErrorWith { e => Console[IO].errorln(e.getMessage).as(ExitCode.Error) }
+          .map { code =>
+            assertEquals(code, ExitCode.Error)
+            assert(console.errBuf.toString.contains("--module is required for sbt"), s"Stderr: ${console.errBuf}")
+          }
     }

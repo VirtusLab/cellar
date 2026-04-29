@@ -34,14 +34,16 @@ object PyroscopeSetup:
 
   private def reachable(serverAddress: String): IO[Boolean] =
     IO.fromEither(Uri.fromString(serverAddress)).flatMap { uri =>
-      val host = uri.host.fold("")(_.value)
-      val port = uri.port.getOrElse(4040)
-      IO.blocking {
-        val socket = new Socket()
-        try
-          socket.connect(new InetSocketAddress(host, port), 500)
-          true
-        catch case _: Exception => false
-        finally socket.close()
-      }
+      uri.host match
+        case None    => IO.pure(false)
+        case Some(h) =>
+          val port = uri.port.getOrElse(4040)
+          IO.blocking {
+            val socket = new Socket()
+            try
+              socket.connect(new InetSocketAddress(h.value, port), 500)
+              true
+            catch case _: Exception => false
+            finally socket.close()
+          }
     }.handleError(_ => false)

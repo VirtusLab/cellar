@@ -129,7 +129,9 @@ object TracingRuntime:
                 Attribute("command.success", false),
                 Attribute("error.category", category),
                 Attribute("error.type", err.getClass.getSimpleName)
-              ) *> setStatus *> IO.raiseError(err)
+              ) *> setStatus *>
+                IO(System.err.println(Option(err.getMessage).getOrElse(err.getClass.getName)))
+                  .as(ExitCode.Error)
           }
         }
     }

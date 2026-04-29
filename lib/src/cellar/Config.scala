@@ -28,11 +28,15 @@ object Config {
     sys.props.get("user.home").map(Path(_).resolve(".cellar").resolve("cellar.conf"))
   private val defaultProjectPath: Path = Path(".cellar").resolve("cellar.conf")
 
-  lazy val global: Config = {
+  private def load(): Config = {
     val paths = (defaultUserPath.toList ++ List(defaultProjectPath))
       .filter(p => java.nio.file.Files.exists(p.toNioPath))
     paths
       .foldLeft(ConfigSource.default)((cs, p) => ConfigSource.file(p.toNioPath).withFallback(cs))
       .loadOrThrow[Config]
   }
+
+  lazy val global: Config = load()
+
+  def loadFresh(): Config = load()
 }

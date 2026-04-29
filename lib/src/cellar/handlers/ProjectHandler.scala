@@ -25,6 +25,4 @@ object ProjectHandler:
         }
       yield result
 
-    program.handleErrorWith { (e: Throwable) =>
-      Console[IO].errorln(e.getMessage).as(ExitCode.Error)
-    }
+    program

@@ -18,6 +18,4 @@ object DepsHandler:
         _         <- Console[IO].println(formatted)
       yield ExitCode.Success
 
-    program.handleErrorWith { case e: Throwable =>
-      Console[IO].errorln(e.getMessage).as(ExitCode.Error)
-    }
+    program

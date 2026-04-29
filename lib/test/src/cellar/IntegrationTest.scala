@@ -11,6 +11,9 @@ import org.typelevel.otel4s.trace.Tracer.Implicits.noop
   */
 class IntegrationTest extends CatsEffectSuite:
 
+  private def safeRun(f: IO[ExitCode])(using Console[IO]): IO[ExitCode] =
+    f.handleErrorWith(e => Console[IO].errorln(e.getMessage).as(ExitCode.Error))
+
   // ─── get subcommand ──────────────────────────────────────────────────────
 
   test("get: Scala3 sealed ADT stdout contains **Known subtypes:**"):
@@ -54,12 +57,12 @@ class IntegrationTest extends CatsEffectSuite:
     TestFixtures.assumeFixturesAvailable()
     val console = CapturingConsole()
     given Console[IO] = console
-    handlers.GetHandler
+    safeRun(handlers.GetHandler
       .run(
         TestFixtures.scala3Coord,
         "cellar.fixture.scala3.Celsius",
         extraRepositories = Seq(TestFixtures.localM2Repo)
-      )
+      ))
       .map { code =>
         assert(
           code == ExitCode.Success || code == ExitCode.Error,
@@ -187,12 +190,12 @@ class IntegrationTest extends CatsEffectSuite:
     TestFixtures.assumeFixturesAvailable()
     val console = CapturingConsole()
     given Console[IO] = console
-    handlers.GetHandler
+    safeRun(handlers.GetHandler
       .run(
         TestFixtures.scala3Coord,
         "cellar.fixture.scala3.DoesNotExist99999",
         extraRepositories = Seq(TestFixtures.localM2Repo)
-      )
+      ))
       .map { code =>
         assertEquals(code, ExitCode.Error)
         assert(
@@ -409,7 +412,7 @@ class IntegrationTest extends CatsEffectSuite:
     val console = CapturingConsole()
     given Console[IO] = console
     val bad = MavenCoordinate("com.nonexistent.x12345", "artifact", "1.0.0")
-    handlers.DepsHandler.run(bad).map { code =>
+    safeRun(handlers.DepsHandler.run(bad)).map { code =>
       assertEquals(code, ExitCode.Error)
     }
 
@@ -419,7 +422,7 @@ class IntegrationTest extends CatsEffectSuite:
     val console = CapturingConsole()
     given Console[IO] = console
     val bad = MavenCoordinate("org.typelevel", "cats-core_3", "9.9.9")
-    handlers.GetHandler.run(bad, "cats.Monad").map { code =>
+    safeRun(handlers.GetHandler.run(bad, "cats.Monad")).map { code =>
       assertEquals(code, ExitCode.Error)
       val err = console.errBuf.toString
       assert(err.contains("Artifact exists."), s"Stderr: $err")
@@ -430,7 +433,7 @@ class IntegrationTest extends CatsEffectSuite:
     val console = CapturingConsole()
     given Console[IO] = console
     val bad = MavenCoordinate("com.lihaoyi", "mill-scalalib_3", "1.1.1")
-    handlers.GetHandler.run(bad, "mill.javalib.NativeImageModule").map { code =>
+    safeRun(handlers.GetHandler.run(bad, "mill.javalib.NativeImageModule")).map { code =>
       assertEquals(code, ExitCode.Error)
       val err = console.errBuf.toString
       assert(err.contains("Could not resolve"), s"Stderr: $err")
@@ -440,7 +443,7 @@ class IntegrationTest extends CatsEffectSuite:
     val console = CapturingConsole()
     given Console[IO] = console
     val bad = MavenCoordinate("com.nonexistent.x12345", "foo", "1.0.0")
-    handlers.GetHandler.run(bad, "bar.Baz").map { code =>
+    safeRun(handlers.GetHandler.run(bad, "bar.Baz")).map { code =>
       assertEquals(code, ExitCode.Error)
       val err = console.errBuf.toString
       assert(err.contains("Check that the group ID"), s"Stderr: $err")

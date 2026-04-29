@@ -56,9 +56,7 @@ object GetSourceHandler:
         }
       yield result
 
-    program.handleErrorWith { case e: Throwable =>
-      Console[IO].errorln(e.getMessage).as(ExitCode.Error)
-    }
+    program
 
   /**
    * Resolve the source range for `sym`. When `sym` is a ClassSymbol whose

@@ -20,6 +20,4 @@ object MetaHandler:
         _        <- Console[IO].println(formatted)
       yield ExitCode.Success
 
-    program.handleErrorWith { e =>
-      Console[IO].errorln(e.getMessage).as(ExitCode.Error)
-    }
+    program

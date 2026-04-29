@@ -19,11 +19,10 @@ object AllowedAttributes:
     "command.success",
     "error.category",
     "error.type",
-    "target.lang",
     "build.tool",
-    "is.external",
     "cellar.version",
     "os.type",
+    "service.name",
     "installation.id",
     "session.id"
   )

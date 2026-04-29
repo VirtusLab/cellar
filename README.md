@@ -187,7 +187,7 @@ starvation-checks {
 
 telemetry {
   enabled = false             # env: CELLAR_TELEMETRY_ENABLED
-  endpoint = "https://telemetry.cellar.dev"  # env: CELLAR_TELEMETRY_ENDPOINT
+  endpoint = "https://telemetry.cellar.dev/v1/traces"  # env: CELLAR_TELEMETRY_ENDPOINT
 }
 ```
 
@@ -219,21 +219,19 @@ Cellar collects **anonymous usage telemetry** to help improve the tool. It is op
 
 ### What is collected
 
-Each command sends a single OpenTelemetry trace span with these attributes — nothing else:
+Each command sends an OpenTelemetry trace with a root `cellar.command` span (plus child spans for hot-path operations). These are the only attributes emitted — nothing else:
 
-| Attribute | Example |
-|---|---|
-| `command.name` | `get-external` |
-| `cellar.version` | `0.4.0` |
-| `os.type` | `Mac OS X` |
-| `command.success` | `true` |
-| `error.category` | `user` or `system` (only on failure) |
-| `error.type` | `CoordinateNotFound` (only on failure) |
-| `installation.id` | anonymous UUID (see below) |
-| `session.id` | `$CELLAR_SESSION_ID` env var (optional) |
-| `build.tool` | `mill`, `sbt`, etc. (project commands) |
-| `is.external` | `true`/`false` (external vs project command) |
-| `target.lang` | `scala3`, `java`, etc. |
+| Attribute | Example | Span |
+|---|---|---|
+| `command.name` | `get-external` | root |
+| `cellar.version` | `0.4.0` | root |
+| `os.type` | `Mac OS X` | root |
+| `command.success` | `true` | root |
+| `error.category` | `user` or `system` (only on failure) | root |
+| `error.type` | `CoordinateNotFound` (only on failure) | root |
+| `installation.id` | anonymous UUID (see below) | root |
+| `session.id` | `$CELLAR_SESSION_ID` env var (optional) | root |
+| `build.tool` | `mill`, `sbt`, etc. | `build.classpath` |
 
 **What is never sent**: Maven coordinates, fully-qualified symbol names, search queries, error messages, stack traces, or any other user data.
 
@@ -257,7 +255,7 @@ Telemetry can also be controlled via `~/.cellar/cellar.conf` or environment vari
 ```hocon
 telemetry {
   enabled = true                        # env: CELLAR_TELEMETRY_ENABLED
-  endpoint = "https://telemetry.cellar.dev"  # env: CELLAR_TELEMETRY_ENDPOINT
+  endpoint = "https://telemetry.cellar.dev/v1/traces"  # env: CELLAR_TELEMETRY_ENDPOINT
 }
 ```
 

@@ -28,6 +28,14 @@ object TelemetrySubcommand:
     Opts.subcommand("disable", "Disable anonymous usage telemetry") {
       Opts.unit.map { _ =>
         setEnabled(false) *>
+          IO.blocking(Config.loadFresh()).flatMap { fresh =>
+            IO.whenA(fresh.telemetry.enabled)(
+              IO(System.err.println(
+                "Note: a project-level .cellar/cellar.conf enables telemetry and overrides this setting. " +
+                "Edit it directly to disable telemetry for that project."
+              ))
+            )
+          } *>
           IO.println("Telemetry disabled.").as(ExitCode.Success)
       }
     }

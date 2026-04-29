@@ -45,11 +45,11 @@ class TracingRuntimeSuite extends CatsEffectSuite:
         .map(exit => assertEquals(exit, ExitCode.Error))
     }
 
-  test("tracedCommand re-raises errors from the body"):
+  test("tracedCommand handles errors from the body and returns ExitCode.Error"):
     withLocal { local =>
-      interceptIO[RuntimeException] {
-        TracingRuntime.tracedCommand(TracingConfig.disabled, local, "test-version", "test-cmd") {
+      TracingRuntime
+        .tracedCommand(TracingConfig.disabled, local, "test-version", "test-cmd") {
           IO.raiseError(new RuntimeException("boom"))
         }
-      }
+        .map(exit => assertEquals(exit, ExitCode.Error))
     }
