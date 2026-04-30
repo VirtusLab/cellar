@@ -19,6 +19,6 @@ object TracingConfigBridge:
         LocalTracingSpec(LocalOtlpEndpoint, c.profiling.pyroscopeEndpoint)
       ),
       remote = Option.when(c.telemetry.enabled)(
-        RemoteTelemetrySpec(c.telemetry.endpoint, AllowedAttributes.default)
+        RemoteTelemetrySpec(c.telemetry.endpoint, c.telemetry.pyroscopeEndpoint, AllowedAttributes.default)
       )
     )

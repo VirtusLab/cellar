@@ -1,7 +1,7 @@
 package cellar.cli
 
 import cats.effect.IO
-import fs2.io.file.{Files, Path}
+import fs2.io.file.Files
 
 import java.util.UUID
 

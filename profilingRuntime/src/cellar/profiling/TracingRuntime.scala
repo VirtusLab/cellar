@@ -46,7 +46,8 @@ object TracingRuntime:
       yield tracer
 
   private def buildProcessors(config: TracingConfig): Resource[IO, List[SpanProcessor[IO]]] =
-    val profileProc = if !NativeImage then config.local.map(_ => new ProfilingSpanProcessor) else None
+    val hasAnyEndpoint = config.local.isDefined || config.remote.isDefined
+    val profileProc    = Option.when(!NativeImage && hasAnyEndpoint)(new ProfilingSpanProcessor)
     val localProc   = config.local.traverse(spec => localProcessor(spec.otlpEndpoint))
     val remoteProc  = config.remote.traverse(spec => remoteProcessor(spec))
     (localProc, remoteProc).mapN((l, r) => List(profileProc, l, r).flatten)

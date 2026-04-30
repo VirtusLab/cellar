@@ -2,7 +2,7 @@ package cellar.profiling
 
 case class LocalTracingSpec(otlpEndpoint: String, pyroscopeEndpoint: String)
 
-case class RemoteTelemetrySpec(otlpEndpoint: String, allowlistedAttributes: Set[String])
+case class RemoteTelemetrySpec(otlpEndpoint: String, pyroscopeEndpoint: String, allowlistedAttributes: Set[String])
 
 case class TracingConfig(
     appName: String,
@@ -24,5 +24,6 @@ object AllowedAttributes:
     "os.type",
     "service.name",
     "installation.id",
-    "session.id"
+    "session.id",
+    "pyroscope.profile.id"
   )
