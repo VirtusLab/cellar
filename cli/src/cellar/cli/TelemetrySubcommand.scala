@@ -7,8 +7,9 @@ import fs2.io.file.{Files, Flags, Path}
 
 object TelemetrySubcommand:
 
-  private[cli] val confFile         = Path(sys.props("user.home")) / ".cellar" / "cellar.conf"
-  private[cli] val globalSeenMarker = Path(sys.props("user.home")) / ".cellar" / ".telemetry-seen"
+  private[cli] val userCellarDir    = Path(sys.props("user.home")) / ".cellar"
+  private[cli] val confFile         = userCellarDir / "cellar.conf"
+  private[cli] val globalSeenMarker = userCellarDir / ".telemetry-seen"
 
   def opts: Opts[IO[ExitCode]] =
     Opts.subcommand("telemetry", "Manage anonymous usage telemetry") {

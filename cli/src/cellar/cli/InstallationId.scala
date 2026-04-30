@@ -7,7 +7,7 @@ import java.util.UUID
 
 object InstallationId:
 
-  private[cli] val idFile = Path(sys.props("user.home")) / ".cellar" / "installation_id"
+  private[cli] val idFile = TelemetrySubcommand.userCellarDir / "installation_id"
 
   def read: IO[Option[String]] =
     Files[IO].readUtf8(idFile).compile.string

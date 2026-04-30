@@ -13,7 +13,7 @@ trait ProfilingIOApp extends cats.effect.IOApp:
   protected final val sharedIOLocal: IOLocal[Context] =
     IOLocal[Context](Context.root)
       .syncStep(100)
-      .flatMap(_.leftMap(_ => new Error("Failed to initialize IOLocal")).liftTo[SyncIO])
+      .flatMap(_.leftMap(_ => new RuntimeException("Failed to initialize IOLocal")).liftTo[SyncIO])
       .unsafeRunSync()
 
   // Built once so that every call to `runtime` returns the same instance.
