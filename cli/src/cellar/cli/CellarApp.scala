@@ -42,10 +42,7 @@ object CellarApp extends ProfilingIOApp:
 
   private val pyroscopeResource: Resource[IO, Unit] =
     if TracingRuntime.NativeImage then Resource.unit[IO]
-    else
-      val endpoint = tracingConfig.remote.map(_.pyroscopeEndpoint)
-        .orElse(tracingConfig.local.map(_.pyroscopeEndpoint))
-      endpoint.fold(Resource.unit[IO])(PyroscopeSetup.resource(_, "cellar"))
+    else tracingConfig.local.fold(Resource.unit[IO])(spec => PyroscopeSetup.resource(spec.pyroscopeEndpoint, "cellar"))
 
   private def traced(commandName: String)(body: Tracer[IO] ?=> IO[ExitCode]): IO[ExitCode] =
     val maybeInstallationId =
