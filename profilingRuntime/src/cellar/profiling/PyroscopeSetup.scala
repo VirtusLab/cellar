@@ -25,6 +25,7 @@ object PyroscopeSetup:
             val cfg = new Config.Builder()
               .setApplicationName(applicationName)
               .setServerAddress(serverAddress)
+              // WALL sampling drops span_id labels — breaks the trace↔profile link in Grafana.
               .setProfilingEvent(EventType.ITIMER)
               .setFormat(Format.JFR)
               .setLogLevel(Logger.Level.ERROR)
