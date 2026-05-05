@@ -11,6 +11,13 @@ exporters:
       insecure: true
 
 processors:
+  # Back-pressure: if memory crosses the soft limit, the receiver returns
+  # 503 to clients (which nginx surfaces) until usage drops. Last line of
+  # defence behind the per-IP rate limit at nginx.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 25
   batch:
     timeout: 10s
 
@@ -18,5 +25,5 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlp]

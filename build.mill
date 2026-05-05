@@ -76,7 +76,7 @@ object profilingRuntime extends CommonScalaModule {
   def mvnDeps = Seq(
     mvn"org.typelevel::otel4s-sdk-trace:0.13.1",
     mvn"org.typelevel::otel4s-sdk-exporter:0.13.1",
-    mvn"io.pyroscope:agent:2.1.2"
+    mvn"io.pyroscope:agent:2.5.2"
   )
 
   object test extends ScalaTests with TestModule.Munit {
