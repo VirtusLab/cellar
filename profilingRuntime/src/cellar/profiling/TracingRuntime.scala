@@ -14,7 +14,7 @@ import org.typelevel.otel4s.sdk.exporter.otlp.OtlpProtocol
 import org.typelevel.otel4s.sdk.exporter.otlp.trace.OtlpSpanExporter
 import org.typelevel.otel4s.sdk.trace.SdkTracerProvider
 import org.typelevel.otel4s.sdk.trace.exporter.SpanExporter
-import org.typelevel.otel4s.sdk.trace.processor.{BatchSpanProcessor, SimpleSpanProcessor, SpanProcessor}
+import org.typelevel.otel4s.sdk.trace.processor.{BatchSpanProcessor, SpanProcessor}
 import org.typelevel.otel4s.trace.{StatusCode, Tracer}
 
 import scala.concurrent.duration.*
@@ -24,11 +24,14 @@ object TracingRuntime:
   val NativeImage: Boolean =
     sys.props.get("org.graalvm.nativeimage.imagecode").contains("runtime")
 
-  /** Builds a [[Tracer]] for one CLI invocation. Returns a noop tracer if nothing is configured. */
+  /** Builds a [[Tracer]] for one CLI invocation. Returns a noop tracer when no OTLP
+    * endpoint is configured — without an exporter, spans have nowhere to go and
+    * `ProfilingSpanProcessor`'s `pyroscope.profile.id` tags would be unqueryable.
+    * Pyroscope can still run independently and produce uncorrelated flame graphs.
+    */
   def resource(config: TracingConfig, ioLocal: IOLocal[Context]): Resource[IO, Tracer[IO]] =
-    val wantLocal  = config.local.isDefined
-    val wantRemote = config.remote.isDefined
-    if !wantLocal && !wantRemote then Resource.pure[IO, Tracer[IO]](Tracer.noop[IO])
+    if config.otlpEndpoint.isEmpty then
+      Resource.pure[IO, Tracer[IO]](Tracer.noop[IO])
     else
       for
         localCtx       <- Resource.eval {
@@ -46,23 +49,17 @@ object TracingRuntime:
       yield tracer
 
   private def buildProcessors(config: TracingConfig): Resource[IO, List[SpanProcessor[IO]]] =
-    val hasAnyEndpoint = config.local.isDefined || config.remote.isDefined
-    val profileProc    = Option.when(!NativeImage && hasAnyEndpoint)(new ProfilingSpanProcessor)
-    val localProc   = config.local.traverse(spec => localProcessor(spec.otlpEndpoint))
-    val remoteProc  = config.remote.traverse(spec => remoteProcessor(spec))
-    (localProc, remoteProc).mapN((l, r) => List(profileProc, l, r).flatten)
+    val profileProc = Option.when(!NativeImage && config.pyroscopeEndpoint.isDefined)(new ProfilingSpanProcessor)
+    val otlpProc    = config.otlpEndpoint.traverse(otlpProcessor)
+    otlpProc.map(o => List(profileProc, o).flatten)
 
-  private def localProcessor(endpoint: String): Resource[IO, SpanProcessor[IO]] =
-    (if NativeImage then Resource.pure(JavaNetHttpOtlpExporter(endpoint))
-     else otlpExporter(endpoint)).map(SimpleSpanProcessor(_))
-
-  private def remoteProcessor(spec: RemoteTelemetrySpec): Resource[IO, SpanProcessor[IO]] =
-    remoteExporter(spec.otlpEndpoint)
-      .map(new AllowlistExporter(_, spec.allowlistedAttributes))
+  private def otlpProcessor(endpoint: String): Resource[IO, SpanProcessor[IO]] =
+    otlpSpanExporter(endpoint)
+      .map(new AllowlistExporter(_, AllowedAttributes.default))
       .flatMap(batched)
 
   // On native image, Ember has no reachability metadata — use java.net.http.HttpClient instead.
-  private def remoteExporter(endpoint: String): Resource[IO, SpanExporter[IO]] =
+  private def otlpSpanExporter(endpoint: String): Resource[IO, SpanExporter[IO]] =
     if NativeImage then Resource.pure(JavaNetHttpOtlpExporter(endpoint))
     else otlpExporter(endpoint)
 

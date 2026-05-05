@@ -1,24 +1,17 @@
 package cellar.cli
 
 import cellar.Config
-import cellar.profiling.{AllowedAttributes, LocalTracingSpec, RemoteTelemetrySpec, TracingConfig}
+import cellar.profiling.TracingConfig
 
-/** Translates cellar's domain `Config` into the library-agnostic
-  * `TracingConfig` consumed by `profilingRuntime`. Local tracing always
-  * targets the developer-stack endpoints; remote telemetry honors the
-  * configurable endpoint from `cellar.conf`.
+/** Translates cellar's domain `Config` into the library-agnostic `TracingConfig`
+  * consumed by `profilingRuntime`. Each endpoint is opt-in independently:
+  * `profiling.enabled` switches Pyroscope on, `otel.enabled` switches OTLP traces on.
   */
 object TracingConfigBridge:
 
-  private val LocalOtlpEndpoint = "http://localhost:4318/v1/traces"
-
   def fromCellarConfig(c: Config): TracingConfig =
     TracingConfig(
-      appName = "cellar",
-      local = Option.when(c.profiling.enabled)(
-        LocalTracingSpec(LocalOtlpEndpoint, c.profiling.pyroscopeEndpoint)
-      ),
-      remote = Option.when(c.telemetry.enabled)(
-        RemoteTelemetrySpec(c.telemetry.endpoint, AllowedAttributes.default)
-      )
+      appName           = "cellar",
+      otlpEndpoint      = Option.when(c.otel.enabled)(c.otel.endpoint),
+      pyroscopeEndpoint = Option.when(c.profiling.enabled)(c.profiling.pyroscopeEndpoint)
     )

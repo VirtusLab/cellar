@@ -185,9 +185,9 @@ starvation-checks {
   enabled = false             # env: CELLAR_STARVATION_CHECKS_ENABLED
 }
 
-telemetry {
-  enabled = false             # env: CELLAR_TELEMETRY_ENABLED
-  endpoint = "https://telemetry.cellar.dev/v1/traces"  # env: CELLAR_TELEMETRY_ENDPOINT
+otel {
+  enabled = false             # env: CELLAR_OTEL_ENABLED
+  endpoint = "http://localhost:4318/v1/traces"  # env: CELLAR_OTEL_ENDPOINT
 }
 ```
 
@@ -253,9 +253,9 @@ cellar telemetry reset-id  # generate a new anonymous installation ID
 Telemetry can also be controlled via `~/.cellar/cellar.conf` or environment variables:
 
 ```hocon
-telemetry {
-  enabled = true                        # env: CELLAR_TELEMETRY_ENABLED
-  endpoint = "https://telemetry.cellar.dev/v1/traces"  # env: CELLAR_TELEMETRY_ENDPOINT
+otel {
+  enabled = true                        # env: CELLAR_OTEL_ENABLED
+  endpoint = "http://localhost:4318/v1/traces"  # env: CELLAR_OTEL_ENDPOINT
 }
 ```
 

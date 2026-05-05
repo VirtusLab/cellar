@@ -18,8 +18,11 @@ object PyroscopeSetup:
   def resource(serverAddress: String, applicationName: String): Resource[IO, Unit] =
     if TracingRuntime.NativeImage then Resource.unit
     else Resource.eval(reachable(serverAddress)).flatMap {
-      case false => Resource.unit
+      case false =>
+        println("unreachable")
+        Resource.unit
       case true  =>
+        println("reachable")
         Resource.make {
           IO.blocking {
             val cfg = new Config.Builder()

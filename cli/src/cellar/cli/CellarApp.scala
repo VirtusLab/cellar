@@ -41,12 +41,11 @@ object CellarApp extends ProfilingIOApp:
   private lazy val tracingConfig = TracingConfigBridge.fromCellarConfig(Config.global)
 
   private val pyroscopeResource: Resource[IO, Unit] =
-    if TracingRuntime.NativeImage then Resource.unit[IO]
-    else tracingConfig.local.fold(Resource.unit[IO])(spec => PyroscopeSetup.resource(spec.pyroscopeEndpoint, "cellar"))
+    tracingConfig.pyroscopeEndpoint.fold(Resource.unit[IO])(PyroscopeSetup.resource(_, "cellar"))
 
   private def traced(commandName: String)(body: Tracer[IO] ?=> IO[ExitCode]): IO[ExitCode] =
     val maybeInstallationId =
-      if tracingConfig.remote.isDefined then InstallationId.read else IO.pure(None)
+      if tracingConfig.otlpEndpoint.isDefined then InstallationId.read else IO.pure(None)
     pyroscopeResource.use { _ =>
       maybeInstallationId.flatMap { installationId =>
         TracingRuntime.tracedCommand(

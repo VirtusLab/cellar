@@ -13,14 +13,14 @@ case class StarvationChecksConfig(enabled: Boolean) derives ConfigReader
 
 case class ProfilingConfig(enabled: Boolean, pyroscopeEndpoint: String) derives ConfigReader
 
-case class TelemetryConfig(enabled: Boolean, endpoint: String) derives ConfigReader
+case class OtelConfig(enabled: Boolean, endpoint: String) derives ConfigReader
 
 case class Config(
     mill: MillConfig,
     sbt: SbtConfig,
     starvationChecks: StarvationChecksConfig,
     profiling: ProfilingConfig,
-    telemetry: TelemetryConfig
+    otel: OtelConfig
 ) derives ConfigReader
 
 object Config {

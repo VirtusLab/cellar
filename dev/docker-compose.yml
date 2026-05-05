@@ -26,6 +26,9 @@ services:
       - "4040:4040"
     networks:
       - cellar-network
+    command:
+      - "server"
+      - "--self-profiling.disable-push=true"
 
   grafana:
     image: grafana/grafana

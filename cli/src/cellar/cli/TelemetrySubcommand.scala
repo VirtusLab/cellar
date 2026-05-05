@@ -33,7 +33,7 @@ object TelemetrySubcommand:
         setEnabled(false) *>
           IO.whenA(global)(markAnswered) *>
           IO.blocking(Config.loadFresh()).flatMap { fresh =>
-            IO.whenA(fresh.telemetry.enabled)(
+            IO.whenA(fresh.otel.enabled)(
               IO(System.err.println(
                 "Note: a project-level .cellar/cellar.conf enables telemetry and overrides this setting. " +
                 "Edit it directly to disable telemetry for that project."
@@ -51,7 +51,7 @@ object TelemetrySubcommand:
   private def statusCmd: Opts[IO[ExitCode]] =
     Opts.subcommand("status", "Show telemetry status") {
       Opts.unit.map { _ =>
-        val cfg = Config.global.telemetry
+        val cfg = Config.global.otel
         val statusLine =
           if cfg.enabled then s"Telemetry: enabled\nEndpoint:  ${cfg.endpoint}"
           else "Telemetry: disabled"
@@ -77,12 +77,12 @@ object TelemetrySubcommand:
       Files[IO].readUtf8(confFile).compile.string
         .recover { case _: java.nio.file.NoSuchFileException => "" }
         .flatMap { content =>
-          val updated = replaceTelemetryBlock(content, enabled)
+          val updated = replaceOtelBlock(content, enabled)
           fs2.Stream.emit(updated).through(Files[IO].writeUtf8(confFile)).compile.drain
         }
 
-  private def replaceTelemetryBlock(content: String, enabled: Boolean): String =
-    val stripped = content.replaceAll("""(?s)telemetry\s*\{[^}]*\}\n?""", "").strip
-    val block    = s"telemetry {\n  enabled = $enabled\n}"
+  private def replaceOtelBlock(content: String, enabled: Boolean): String =
+    val stripped = content.replaceAll("""(?s)otel\s*\{[^}]*\}\n?""", "").strip
+    val block    = s"otel {\n  enabled = $enabled\n}"
     if stripped.isEmpty then block + "\n"
     else stripped + "\n\n" + block + "\n"
