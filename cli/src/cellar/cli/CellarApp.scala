@@ -95,7 +95,7 @@ object CellarApp extends ProfilingIOApp:
   override def run(args: List[String]): IO[ExitCode] =
     val versionOpt = Opts
       .flag("version", "Print the version number and exit", short = "V")
-      .map(_ => IO.println(BuildInfo.version).as(ExitCode.Success))
+      .map(_ => IO.println(s"${BuildInfo.version} ($runtimeLabel, $platformLabel)").as(ExitCode.Success))
     val command = Command("cellar", "Inspect Maven-published JVM dependency APIs")(main <+> versionOpt)
     command.parse(args, sys.env) match
       case Left(help) if help.errors.nonEmpty =>

@@ -17,3 +17,9 @@ datasources:
     uid: pyroscope
     access: proxy
     url: http://pyroscope:4040
+
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090

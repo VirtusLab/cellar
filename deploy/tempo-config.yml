@@ -17,3 +17,38 @@ storage:
       path: /var/tempo/blocks
     wal:
       path: /var/tempo/wal
+
+# 30-day cap on raw traces — they carry installation.id and other
+# pseudonymous identifiers, so this is the GDPR retention boundary.
+compactor:
+  compaction:
+    block_retention: 720h
+
+# Pre-aggregated span metrics shipped to Prometheus. The dimension allowlist
+# below is the privacy boundary: anything not listed (installation.id,
+# session.id) cannot end up as a Prometheus label, so the long-retention
+# metrics store stays free of personal data by construction.
+metrics_generator:
+  registry:
+    external_labels:
+      source: cellar
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+  processor:
+    span_metrics:
+      dimensions:
+        - command.name
+        - command.success
+        - error.category
+        - error.type
+        - cellar.version
+        - os.type
+        - build.tool
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [span-metrics]

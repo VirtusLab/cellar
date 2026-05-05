@@ -24,7 +24,7 @@ services:
     restart: unless-stopped
     command:
       - "server"
-      - "--self-profiling.disable-push=true"
+      - "-self-profiling.disable-push=true"
     networks:
       - cellar-network
 
@@ -34,6 +34,24 @@ services:
     volumes:
       - ./tempo-config.yml:/etc/tempo-config.yml:ro
       - tempo-data:/var/tempo
+    depends_on: [prometheus]
+    restart: unless-stopped
+    networks:
+      - cellar-network
+
+  # Stores pre-aggregated span metrics (RED + duration histograms) shipped from
+  # Tempo's metrics_generator. By construction the data has no installation.id
+  # or session.id labels, so retention is unbounded.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=10y"
+      - "--web.enable-remote-write-receiver"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
     restart: unless-stopped
     networks:
       - cellar-network
@@ -46,9 +64,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Public URL — LB terminates TLS in front of this.
-      - GF_SERVER_ROOT_URL=https://cellar-telemetry.virtuslab.com/
-      - GF_SERVER_DOMAIN=cellar-telemetry.virtuslab.com
+      # Localhost defaults; CI/Besom overrides at deploy time.
+      - GF_SERVER_ROOT_URL=${GF_SERVER_ROOT_URL:-http://localhost:3000/}
+      - GF_SERVER_DOMAIN=${GF_SERVER_DOMAIN:-localhost}
       # Admin credentials are injected by the deploy job (GitHub Actions → shell env).
       - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:?GF_ADMIN_USER must be set}
       - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:?GF_ADMIN_PASSWORD must be set}
@@ -73,3 +91,4 @@ networks:
 volumes:
   tempo-data:
   grafana-data:
+  prometheus-data:

@@ -192,7 +192,7 @@ otel {
 
 profiling {
   enabled = false                                 # env: CELLAR_PROFILING_ENABLED
-  pyroscope-endpoint = "http://localhost:4040"    # env: CELLAR_PYROSCOPE_ENDPOINT
+  pyroscope-endpoint = "http://localhost:4318"    # env: CELLAR_PYROSCOPE_ENDPOINT
 }
 ```
 
@@ -266,7 +266,7 @@ otel {
 # async-profiler linked to traces only available when running from jar
 profiling {
   enabled = true                                  # env: CELLAR_PROFILING_ENABLED
-  pyroscope-endpoint = "http://localhost:4040"    # env: CELLAR_PYROSCOPE_ENDPOINT
+  pyroscope-endpoint = "http://localhost:4318"    # env: CELLAR_PYROSCOPE_ENDPOINT
 }
 ```
 
