@@ -192,7 +192,7 @@ otel {
 
 profiling {
   enabled = false                                 # env: CELLAR_PROFILING_ENABLED
-  pyroscope-endpoint = "http://localhost:4318"    # env: CELLAR_PYROSCOPE_ENDPOINT
+  pyroscope-endpoint = "http://localhost:4040"    # env: CELLAR_PYROSCOPE_ENDPOINT
 }
 ```
 
@@ -220,7 +220,7 @@ Or via environment: `CELLAR_SBT_BINARY=sbtn cellar get --module core cats.Monad`
 
 ## Telemetry
 
-Cellar collects **anonymous usage telemetry** to help improve the tool. It is opt-in: the first time you run cellar you'll see a notice on stderr, and telemetry stays disabled until you explicitly enable it.
+Cellar collects **anonymous usage telemetry** to help improve the tool. It is opt-in: the first time you run cellar you'll see a one-time notice on stderr (the command still runs normally), and telemetry stays disabled until you explicitly enable it.
 
 ### What is collected
 
@@ -263,10 +263,11 @@ otel {
   endpoint = "http://localhost:4318/v1/traces"  # env: CELLAR_OTEL_ENDPOINT
 }
 
-# async-profiler linked to traces only available when running from jar
+# Pyroscope JVM-agent profiles linked to traces (local-dev only; the production
+# stack does not accept profiles). Only active when running from the JAR.
 profiling {
   enabled = true                                  # env: CELLAR_PROFILING_ENABLED
-  pyroscope-endpoint = "http://localhost:4318"    # env: CELLAR_PYROSCOPE_ENDPOINT
+  pyroscope-endpoint = "http://localhost:4040"    # env: CELLAR_PYROSCOPE_ENDPOINT
 }
 ```
 

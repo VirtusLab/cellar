@@ -84,4 +84,21 @@ object JavaNetHttpOtlpExporter:
     case SpanKind.Consumer => 5
 
   private def str(s: String): String =
-    "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+    val sb = new StringBuilder(s.length + 2)
+    sb.append('"')
+    var i = 0
+    while i < s.length do
+      val c = s.charAt(i)
+      c match
+        case '"'                 => sb.append("\\\"")
+        case '\\'                => sb.append("\\\\")
+        case '\b'                => sb.append("\\b")
+        case '\f'                => sb.append("\\f")
+        case '\n'                => sb.append("\\n")
+        case '\r'                => sb.append("\\r")
+        case '\t'                => sb.append("\\t")
+        case ch if ch.toInt < 32 => sb.append(f"\\u${ch.toInt}%04x")
+        case ch                  => sb.append(ch)
+      i += 1
+    sb.append('"')
+    sb.toString

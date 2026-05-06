@@ -59,29 +59,32 @@ object CellarApp extends ProfilingIOApp:
       }
     }
 
-  private val firstRunNotice: IO[Boolean] =
-    val projectMarker = Path(".cellar") / ".telemetry-seen"
-    val globalMarker  = TelemetrySubcommand.globalSeenMarker
-    (Files[IO].exists(projectMarker), Files[IO].exists(globalMarker)).mapN(_ || _).flatMap {
-      case true  => IO.pure(false)
-      case false =>
-        val json =
-          """|{
-             |  "status": "needs_input",
-             |  "ui": "AskUserQuestion",
-             |  "question": "Would you like to enable anonymous cellar usage stats? (No coordinates, symbols, or user data — just command names and success/failure.)",
-             |  "options": [
-             |    { "label": "Enable",          "description": "Opt in — helps improve cellar.",          "command": "cellar telemetry enable" },
-             |    { "label": "Disable",          "description": "Opt out for this project.",               "command": "cellar telemetry disable" },
-             |    { "label": "Disable globally", "description": "Never ask again across any project.",     "command": "cellar telemetry disable --global" }
-             |  ],
-             |  "details": "https://github.com/VirtusLab/cellar#telemetry"
-             |}""".stripMargin
-        IO(System.err.println(json)) *>
-          Files[IO].createDirectories(projectMarker.parent.get) *>
-          Files[IO].open(projectMarker, Flags.Write).use_ *>
-          IO.pure(true)
-    }
+  private val firstRunNotice: IO[Unit] =
+    val telemetryAlreadyAnswered =
+      Config.global.otel.enabled || Config.global.profiling.enabled
+    if telemetryAlreadyAnswered then IO.unit
+    else
+      val projectMarker = Path(".cellar") / ".telemetry-seen"
+      val globalMarker  = TelemetrySubcommand.globalSeenMarker
+      (Files[IO].exists(projectMarker), Files[IO].exists(globalMarker)).mapN(_ || _).flatMap {
+        case true  => IO.unit
+        case false =>
+          val json =
+            """|{
+               |  "status": "needs_input",
+               |  "ui": "AskUserQuestion",
+               |  "question": "Would you like to enable anonymous cellar usage stats? (No coordinates, symbols, or user data — just command names and success/failure.)",
+               |  "options": [
+               |    { "label": "Enable",          "description": "Opt in — helps improve cellar.",          "command": "cellar telemetry enable" },
+               |    { "label": "Disable",          "description": "Opt out for this project.",               "command": "cellar telemetry disable" },
+               |    { "label": "Disable globally", "description": "Never ask again across any project.",     "command": "cellar telemetry disable --global" }
+               |  ],
+               |  "details": "https://github.com/VirtusLab/cellar#telemetry"
+               |}""".stripMargin
+          IO(System.err.println(json)) *>
+            Files[IO].createDirectories(projectMarker.parent.get) *>
+            Files[IO].open(projectMarker, Flags.Write).use_
+      }
 
   def main: Opts[IO[ExitCode]] =
     val regularCmds =
@@ -90,7 +93,7 @@ object CellarApp extends ProfilingIOApp:
         listSubcmd orElse listExternalSubcmd orElse
         searchSubcmd orElse searchExternalSubcmd orElse
         depsSubcmd orElse metaSubcmd
-    regularCmds.map(cmd => firstRunNotice.flatMap(if _ then IO.pure(ExitCode.Success) else cmd)) orElse TelemetrySubcommand.opts
+    regularCmds.map(cmd => firstRunNotice *> cmd) orElse TelemetrySubcommand.opts
 
   override def run(args: List[String]): IO[ExitCode] =
     val versionOpt = Opts

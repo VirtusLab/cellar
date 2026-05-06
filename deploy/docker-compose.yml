@@ -4,8 +4,8 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
-      - "4318:4318"   # public OTLP HTTP + Pyroscope ingest, rate-limited per-IP
-    depends_on: [otel-collector, pyroscope]
+      - "4318:4318"   # public OTLP HTTP, rate-limited per-IP
+    depends_on: [otel-collector]
     restart: unless-stopped
     networks:
       - cellar-network
@@ -16,15 +16,6 @@ services:
     volumes:
       - ./otel-collector-config.yml:/etc/otel-collector-config.yml:ro
     restart: unless-stopped
-    networks:
-      - cellar-network
-
-  pyroscope:
-    image: grafana/pyroscope:2.0.1
-    restart: unless-stopped
-    command:
-      - "server"
-      - "-self-profiling.disable-push=true"
     networks:
       - cellar-network
 
@@ -80,7 +71,7 @@ services:
       - GF_USERS_ALLOW_ORG_CREATE=false
       - GF_USERS_AUTO_ASSIGN_ORG=true
       - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Admin
-    depends_on: [tempo, pyroscope]
+    depends_on: [tempo]
     restart: unless-stopped
     networks:
       - cellar-network

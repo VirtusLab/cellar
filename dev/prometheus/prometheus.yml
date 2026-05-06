@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 30s
+  external_labels:
+    source: cellar
+
+# No scrape jobs: Tempo's metrics_generator pushes to /api/v1/write
+# (the remote-write receiver is enabled via the --web flag).

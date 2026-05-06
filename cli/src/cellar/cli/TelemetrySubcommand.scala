@@ -3,6 +3,7 @@ package cellar.cli
 import cats.effect.{ExitCode, IO}
 import cellar.Config
 import com.monovore.decline.Opts
+import com.typesafe.config.{ConfigFactory, ConfigRenderOptions, ConfigValueFactory}
 import fs2.io.file.{Files, Flags, Path}
 
 object TelemetrySubcommand:
@@ -72,17 +73,16 @@ object TelemetrySubcommand:
     }
 
   private[cli] def setEnabled(enabled: Boolean): IO[Unit] =
-    val dir = confFile.parent.get
-    Files[IO].createDirectories(dir) *>
-      Files[IO].readUtf8(confFile).compile.string
-        .recover { case _: java.nio.file.NoSuchFileException => "" }
-        .flatMap { content =>
-          val updated = replaceOtelBlock(content, enabled)
-          fs2.Stream.emit(updated).through(Files[IO].writeUtf8(confFile)).compile.drain
-        }
-
-  private def replaceOtelBlock(content: String, enabled: Boolean): String =
-    val stripped = content.replaceAll("""(?s)otel\s*\{[^}]*\}\n?""", "").strip
-    val block    = s"otel {\n  enabled = $enabled\n}"
-    if stripped.isEmpty then block + "\n"
-    else stripped + "\n\n" + block + "\n"
+    Files[IO].createDirectories(confFile.parent.get) *>
+      IO.blocking {
+        val nio    = confFile.toNioPath
+        val parsed =
+          if java.nio.file.Files.exists(nio) then ConfigFactory.parseFile(nio.toFile)
+          else ConfigFactory.empty()
+        val updated  = parsed.withValue("otel.enabled", ConfigValueFactory.fromAnyRef(enabled))
+        val rendered = updated.root().render(
+          ConfigRenderOptions.defaults().setOriginComments(false).setComments(false).setJson(false)
+        )
+        java.nio.file.Files.writeString(nio, rendered)
+        ()
+      }

@@ -11,7 +11,7 @@ object InstallationId:
 
   def read: IO[Option[String]] =
     Files[IO].readUtf8(idFile).compile.string
-      .map(s => Some(s.trim))
+      .map(s => Some(s.trim).filter(_.nonEmpty))
       .recover { case _: java.nio.file.NoSuchFileException => None }
 
   def ensure: IO[String] =

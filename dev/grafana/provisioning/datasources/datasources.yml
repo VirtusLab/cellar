@@ -7,6 +7,16 @@ datasources:
     access: proxy
     url: http://tempo:3200
     isDefault: true
+    jsonData:
+      tracesToProfiles:
+        datasourceUid: pyroscope
+        profileIdAttribute: pyroscope.profile.id
+
+  - name: Pyroscope
+    type: grafana-pyroscope-datasource
+    uid: pyroscope
+    access: proxy
+    url: http://pyroscope:4040
 
   - name: Prometheus
     type: prometheus
