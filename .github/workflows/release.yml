@@ -92,9 +92,32 @@ jobs:
           name: jar
           path: ${{ env.JAR }}
 
+  publish-maven:
+    name: Publish lib to Maven Central
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Publish to Maven Central
+        run: ./mill lib.publishSonatypeCentral
+        env:
+          CELLAR_VERSION: v${{ inputs.version }}
+          MILL_SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          MILL_SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          MILL_PGP_SECRET_BASE64: ${{ secrets.PGP_SECRET }}
+          MILL_PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
+
   release:
     name: Publish Release
-    needs: [build, jar]
+    needs: [build, jar, publish-maven]
     runs-on: ubuntu-latest
     # OIDC token for cosign keyless signing; write access for release publishing
     permissions:

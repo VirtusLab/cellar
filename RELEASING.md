@@ -15,9 +15,12 @@ This document describes how to cut a release, what artifacts are produced, and h
 3. The [Release workflow](.github/workflows/release.yml) runs automatically and:
    - Builds GraalVM native binaries for all supported platforms in parallel.
    - Packages each binary into a platform-appropriate archive.
+   - Publishes the `lib` module to Maven Central as `org.virtuslab:cellar-lib_3:<version>`.
    - Generates a SHA256 checksum file.
    - Signs the checksum file using cosign keyless (OIDC).
    - Publishes a GitHub Release with all artifacts attached.
+
+The Maven publish runs in parallel with the binary builds and blocks the GitHub Release; if Sonatype rejects the upload (e.g. duplicate version, namespace mismatch, signature failure), no GitHub Release is created.
 
 No container images are built or published by this release flow.
 
@@ -40,6 +43,31 @@ Each GitHub Release contains:
 | `cellar-<version>-<os>-<arch>.tar.gz` | Archive containing the `cellar` binary and `README.md` |
 | `checksums.txt` | SHA256 checksums for all archives |
 | `checksums.txt.bundle` | Sigstore bundle for the checksum file |
+
+## Maven Central artifact
+
+The `lib` module is published as `org.virtuslab:cellar-lib_3:<version>`. This is what coursier resolves when a user runs `cs install cellar` — the [coursier/apps](https://github.com/coursier/apps) descriptor for cellar reads `maven-metadata.xml` for this coordinate to determine the latest version, then downloads the matching native binary from this repo's GitHub Release.
+
+The library is also independently usable as a Scala 3 dependency:
+
+```scala
+mvn"org.virtuslab::cellar-lib:<version>"
+```
+
+### Required GitHub secrets
+
+The Maven publish step in `.github/workflows/release.yml` reads four repository secrets:
+
+| Secret | Purpose |
+|---|---|
+| `SONATYPE_USERNAME` | Central Portal user-token name (generated at central.sonatype.com) |
+| `SONATYPE_PASSWORD` | Central Portal user-token value |
+| `PGP_SECRET` | Base64-encoded ASCII-armored PGP private key (artifact signatures) |
+| `PGP_PASSPHRASE` | Passphrase for the PGP key |
+
+Mill reads these via `MILL_SONATYPE_USERNAME` / `MILL_SONATYPE_PASSWORD` / `MILL_PGP_SECRET_BASE64` / `MILL_PGP_PASSPHRASE` environment variables.
+
+The PGP signing here is unrelated to the cosign signing of `checksums.txt` — Sonatype Central mandates `.asc` signatures on every uploaded artifact (`.jar`, `.pom`, `-sources.jar`, `-javadoc.jar`), while cosign covers the GitHub Release assets.
 
 ## Verifying checksums
 

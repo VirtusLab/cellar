@@ -6,6 +6,7 @@ import mill.scalalib._
 import mill.scalalib.Assembly
 import mill.scalalib.publish._
 import mill.javalib.NativeImageModule
+import mill.javalib.SonatypeCentralPublishModule
 import com.goyeau.mill.scalafix.ScalafixModule
 
 trait CommonScalaModule extends ScalaModule with ScalafixModule {
@@ -14,8 +15,22 @@ trait CommonScalaModule extends ScalaModule with ScalafixModule {
   def scalacOptions = Seq("-deprecation", "-feature", "-Wunused:all")
 }
 
-// Minimal PomSettings for test fixtures
-object lib extends CommonScalaModule {
+def cellarVersion: T[String] = Task.Input {
+  sys.env.getOrElse("CELLAR_VERSION", "0.1.0-SNAPSHOT").stripPrefix("v")
+}
+
+object lib extends CommonScalaModule with SonatypeCentralPublishModule {
+  def publishVersion = cellarVersion()
+  def artifactName = "cellar-lib"
+  def pomSettings = PomSettings(
+    description    = "Programmatic access to JVM dependency APIs (Scala 3, Scala 2, Java)",
+    organization   = "org.virtuslab",
+    url            = "https://github.com/VirtusLab/cellar",
+    licenses       = Seq(License.`MPL-2.0`),
+    versionControl = VersionControl.github("VirtusLab", "cellar"),
+    developers     = Seq(Developer("rochala", "Jakub Rochala", "https://github.com/rochala"))
+  )
+
   def mvnDeps = Seq(
     mvn"org.typelevel::cats-effect:3.5.7",
     mvn"co.fs2::fs2-io:3.11.0",
@@ -89,10 +104,6 @@ object cli extends CommonScalaModule with NativeImageModule {
   }
 
   override def resources = super.resources() ++ Seq(bundledJreJar())
-
-  def cellarVersion: T[String] = Task.Input {
-    sys.env.getOrElse("CELLAR_VERSION", "0.1.0-SNAPSHOT").stripPrefix("v")
-  }
 
   def generatedSources = Task {
     val dir = Task.dest
