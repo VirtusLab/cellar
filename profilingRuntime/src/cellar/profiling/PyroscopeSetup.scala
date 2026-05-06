@@ -10,10 +10,8 @@ import java.time.Duration
 
 object PyroscopeSetup:
 
-  // The Pyroscope agent's default logger writes upload failures and lifecycle
-  // info to stderr. cellar is a CLI — that noise is user-facing clutter, so
-  // we plug in a no-op logger and let the agent fail silently if the server
-  // is unreachable.
+  // Pyroscope's default logger writes upload errors to stderr; silence it
+  // so a misconfigured remote doesn't paint the CLI's output.
   private val silentLogger: Logger =
     new Logger:
       override def log(level: Logger.Level, message: String, args: Object*): Unit = ()
