@@ -5,22 +5,25 @@ This document describes how to cut a release, what artifacts are produced, and h
 ## Cutting a release
 
 1. Ensure the `main` branch is in a releasable state and tests pass.
-2. Push a version tag (the workflow triggers on `v*`):
+2. Trigger the [Release workflow](.github/workflows/release.yml) manually — either via the GitHub Actions UI ("Run workflow" → enter version without `v` prefix) or via `gh`:
 
    ```sh
-   git tag v1.2.3
-   git push origin v1.2.3
+   gh workflow run release.yml -f version=1.2.3
    ```
 
-3. The [Release workflow](.github/workflows/release.yml) runs automatically and:
+   All jobs check out `main`, so the dispatch ref is irrelevant.
+
+3. The workflow:
    - Builds GraalVM native binaries for all supported platforms in parallel.
    - Packages each binary into a platform-appropriate archive.
    - Publishes the `lib` module to Maven Central as `org.virtuslab:cellar-lib_3:<version>`.
    - Generates a SHA256 checksum file.
    - Signs the checksum file using cosign keyless (OIDC).
+   - Updates `flake.nix` with the new version and SRI hashes, commits to `main`.
+   - Creates and pushes a `v<version>` git tag.
    - Publishes a GitHub Release with all artifacts attached.
 
-The Maven publish runs in parallel with the binary builds and blocks the GitHub Release; if Sonatype rejects the upload (e.g. duplicate version, namespace mismatch, signature failure), no GitHub Release is created.
+The Maven publish runs in parallel with the binary builds and blocks the GitHub Release; if Sonatype rejects the upload (e.g. duplicate version, namespace mismatch, signature failure), no GitHub Release is created and no tag is pushed.
 
 No container images are built or published by this release flow.
 
