@@ -65,9 +65,13 @@ mvn"org.virtuslab::cellar-lib:<version>"
 mvn"org.virtuslab::cellar-cli:<version>"
 ```
 
-### Required GitHub secrets
+### Required secrets — on the `maven-central` GitHub Environment
 
-The Maven publish step in `.github/workflows/release.yml` reads four repository secrets:
+The `publish-maven` job is gated on a GitHub Environment named `maven-central`. Without it the job will fail to start and no secrets are exposed. Configure the environment under **Settings → Environments → New environment → `maven-central`**:
+
+- **Required reviewers**: at least one trusted maintainer. Each release run pauses at the publish step until a reviewer approves in the Actions UI.
+- **Deployment branches and tags**: "Selected branches" → only `main`. Prevents a workflow_dispatch from a feature branch from accessing the secrets at all.
+- **Environment secrets** (NOT repo-level secrets):
 
 | Secret | Purpose |
 |---|---|
@@ -76,7 +80,9 @@ The Maven publish step in `.github/workflows/release.yml` reads four repository 
 | `PGP_SECRET` | Base64-encoded ASCII-armored PGP private key (artifact signatures) |
 | `PGP_PASSPHRASE` | Passphrase for the PGP key |
 
-Mill reads these via `MILL_SONATYPE_USERNAME` / `MILL_SONATYPE_PASSWORD` / `MILL_PGP_SECRET_BASE64` / `MILL_PGP_PASSPHRASE` environment variables.
+Why on the environment, not the repo: a workflow on a non-`main` branch can read any repo-level secret if it's modified to `echo` it; environment secrets are only injected when the environment's branch rule is satisfied AND the reviewer approves.
+
+Mill reads these via `MILL_SONATYPE_USERNAME` / `MILL_SONATYPE_PASSWORD` / `MILL_PGP_SECRET_BASE64` / `MILL_PGP_PASSPHRASE` environment variables — the workflow's `env:` block is the bridge.
 
 The PGP signing here is unrelated to the cosign signing of `checksums.txt` — Sonatype Central mandates `.asc` signatures on every uploaded artifact (`.jar`, `.pom`, `-sources.jar`, `-javadoc.jar`), while cosign covers the GitHub Release assets.
 
