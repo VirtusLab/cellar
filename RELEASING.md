@@ -16,7 +16,7 @@ This document describes how to cut a release, what artifacts are produced, and h
 3. The workflow:
    - Builds GraalVM native binaries for all supported platforms in parallel.
    - Packages each binary into a platform-appropriate archive.
-   - Publishes the `lib` module to Maven Central as `org.virtuslab:cellar-lib_3:<version>`.
+   - Publishes the `lib` and `cli` modules to Maven Central as `org.virtuslab:cellar-lib_3:<version>` and `org.virtuslab:cellar-cli_3:<version>`.
    - Generates a SHA256 checksum file.
    - Signs the checksum file using cosign keyless (OIDC).
    - Updates `flake.nix` with the new version and SRI hashes, commits to `main`.
@@ -47,14 +47,22 @@ Each GitHub Release contains:
 | `checksums.txt` | SHA256 checksums for all archives |
 | `checksums.txt.bundle` | Sigstore bundle for the checksum file |
 
-## Maven Central artifact
+## Maven Central artifacts
 
-The `lib` module is published as `org.virtuslab:cellar-lib_3:<version>`. This is what coursier resolves when a user runs `cs install cellar` — the [coursier/apps](https://github.com/coursier/apps) descriptor for cellar reads `maven-metadata.xml` for this coordinate to determine the latest version, then downloads the matching native binary from this repo's GitHub Release.
+Two modules are published per release:
 
-The library is also independently usable as a Scala 3 dependency:
+| Coordinate | Contents |
+|---|---|
+| `org.virtuslab:cellar-lib_3:<version>` | The dependency-API library — symbol resolver, formatters, Maven coordinate parsing, etc. |
+| `org.virtuslab:cellar-cli_3:<version>` | The CLI driver (`cellar.cli.CellarApp` and friends). Regular Scala library JAR — does **not** include the bundled JRE blob used by the GraalVM native image. |
+
+`cellar-lib` is what coursier resolves for `cs install cellar` — the [coursier/apps](https://github.com/coursier/apps) descriptor reads `maven-metadata.xml` for `cellar-lib_3` to determine the latest version, then downloads the matching native binary from this repo's GitHub Release.
+
+Both modules are independently usable as Scala 3 dependencies:
 
 ```scala
 mvn"org.virtuslab::cellar-lib:<version>"
+mvn"org.virtuslab::cellar-cli:<version>"
 ```
 
 ### Required GitHub secrets

@@ -19,17 +19,19 @@ def cellarVersion: T[String] = Task.Input {
   sys.env.getOrElse("CELLAR_VERSION", "0.1.0-SNAPSHOT").stripPrefix("v")
 }
 
+def cellarPom(desc: String) = PomSettings(
+  description    = desc,
+  organization   = "org.virtuslab",
+  url            = "https://github.com/VirtusLab/cellar",
+  licenses       = Seq(License.`MPL-2.0`),
+  versionControl = VersionControl.github("VirtusLab", "cellar"),
+  developers     = Seq(Developer("rochala", "Jakub Rochala", "https://github.com/rochala"))
+)
+
 object lib extends CommonScalaModule with SonatypeCentralPublishModule {
   def publishVersion = cellarVersion()
-  def artifactName = "cellar-lib"
-  def pomSettings = PomSettings(
-    description    = "Programmatic access to JVM dependency APIs (Scala 3, Scala 2, Java)",
-    organization   = "org.virtuslab",
-    url            = "https://github.com/VirtusLab/cellar",
-    licenses       = Seq(License.`MPL-2.0`),
-    versionControl = VersionControl.github("VirtusLab", "cellar"),
-    developers     = Seq(Developer("rochala", "Jakub Rochala", "https://github.com/rochala"))
-  )
+  def artifactName   = "cellar-lib"
+  def pomSettings    = cellarPom("Programmatic access to JVM dependency APIs (Scala 3, Scala 2, Java)")
 
   def mvnDeps = Seq(
     mvn"org.typelevel::cats-effect:3.5.7",
@@ -69,10 +71,16 @@ object lib extends CommonScalaModule with SonatypeCentralPublishModule {
   }
 }
 
-object cli extends CommonScalaModule with NativeImageModule {
-  def moduleDeps = Seq(lib)
-  def mainClass = Some("cellar.cli.CellarApp")
+object cli extends CommonScalaModule with NativeImageModule with SonatypeCentralPublishModule {
+  def moduleDeps  = Seq(lib)
+  def mainClass   = Some("cellar.cli.CellarApp")
 
+  def publishVersion = cellarVersion()
+  def artifactName   = "cellar-cli"
+  def pomSettings    = cellarPom("Cellar command-line interface — JVM dependency API explorer")
+
+  // Only consumed in native-image mode (JRT filesystem is unreliable there —
+  // graal#10013), so kept off `resources` to avoid bloating the published lib JAR.
   def bundledJreJar: T[PathRef] = Task {
     import java.net.URI
     import java.nio.file.{Files, FileSystems}
@@ -103,7 +111,9 @@ object cli extends CommonScalaModule with NativeImageModule {
     PathRef(Task.dest)
   }
 
-  override def resources = super.resources() ++ Seq(bundledJreJar())
+  override def nativeImageClasspath = Task {
+    super.nativeImageClasspath() ++ Seq(bundledJreJar())
+  }
 
   def generatedSources = Task {
     val dir = Task.dest

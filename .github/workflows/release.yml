@@ -97,7 +97,7 @@ jobs:
           path: ${{ env.JAR }}
 
   publish-maven:
-    name: Publish lib to Maven Central
+    name: Publish lib + cli to Maven Central
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -113,7 +113,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Publish to Maven Central
-        run: ./mill lib.publishSonatypeCentral
+        run: ./mill lib.publishSonatypeCentral cli.publishSonatypeCentral
         env:
           CELLAR_VERSION: v${{ inputs.version }}
           MILL_SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
