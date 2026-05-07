@@ -116,7 +116,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Publish to Maven Central
-        run: ./mill lib.publishSonatypeCentral cli.publishSonatypeCentral
+        run: ./mill lib.publishSonatypeCentral + cli.publishSonatypeCentral
         env:
           CELLAR_VERSION: v${{ inputs.version }}
           MILL_SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
