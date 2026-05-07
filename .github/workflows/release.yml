@@ -99,6 +99,10 @@ jobs:
   publish-maven:
     name: Publish lib + cli to Maven Central
     runs-on: ubuntu-latest
+    # Gate the upload on native-binary + JAR builds: a Sonatype release is
+    # immutable, so we must not publish a version whose GitHub Release assets
+    # (referenced by the coursier descriptor's prebuiltBinaries) won't exist.
+    needs: [build, jar]
     # No-op unless `maven-central` env is configured in repo settings with the
     # SONATYPE_* / PGP_* secrets moved onto it (see RELEASING.md).
     environment: maven-central

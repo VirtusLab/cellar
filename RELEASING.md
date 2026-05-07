@@ -23,7 +23,7 @@ This document describes how to cut a release, what artifacts are produced, and h
    - Creates and pushes a `v<version>` git tag.
    - Publishes a GitHub Release with all artifacts attached.
 
-The Maven publish runs in parallel with the binary builds and blocks the GitHub Release; if Sonatype rejects the upload (e.g. duplicate version, namespace mismatch, signature failure), no GitHub Release is created and no tag is pushed.
+The Maven publish waits for the native-binary and JAR builds to succeed before uploading — a Sonatype release is immutable, so we must not publish a version whose corresponding GitHub Release assets (referenced by the coursier app descriptor) failed to build. If Sonatype then rejects the upload (e.g. duplicate version, namespace mismatch, signature failure), no GitHub Release is created and no tag is pushed.
 
 No container images are built or published by this release flow.
 
