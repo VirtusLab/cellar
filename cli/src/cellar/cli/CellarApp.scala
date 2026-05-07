@@ -12,11 +12,27 @@ import fs2.io.file.Path
 
 import scala.concurrent.duration.Duration
 
+private def runtimeLabel: String =
+  if System.getProperty("org.graalvm.nativeimage.imagecode") == "runtime" then "native-image"
+  else s"JVM ${System.getProperty("java.version")}"
+
+private def platformLabel: String =
+  val os = System.getProperty("os.name").toLowerCase match
+    case n if n.contains("mac")   => "macos"
+    case n if n.contains("linux") => "linux"
+    case n if n.contains("win")   => "windows"
+    case other                    => other
+  val arch = System.getProperty("os.arch") match
+    case "aarch64"          => "arm64"
+    case "x86_64" | "amd64" => "x86_64"
+    case other              => other
+  s"$os-$arch"
+
 object CellarApp
     extends CommandIOApp(
       name = "cellar",
       header = "Inspect Maven-published JVM dependency APIs",
-      version = BuildInfo.version
+      version = s"${BuildInfo.version} ($runtimeLabel, $platformLabel)"
     ):
 
   override def runtimeConfig: IORuntimeConfig =
