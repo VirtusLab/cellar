@@ -24,6 +24,16 @@ Cellar gives agents — and humans — a single shell command that returns exact
 
 ## Installation
 
+### Coursier (recommended)
+
+If you have [Coursier](https://get-coursier.io/) installed:
+
+```sh
+cs install --contrib cellar
+```
+
+This pulls the GraalVM native binary for your platform from the latest GitHub Release. Update with `cs update cellar`.
+
 ### Nix
 
 Run without installing:
