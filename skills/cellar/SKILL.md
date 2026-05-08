@@ -34,8 +34,8 @@ Query any published artifact by explicit coordinate (`group:artifact:version`):
     cellar deps <coordinate>                     # dependency tree
 
 - Coordinates must be explicit: `group:artifact_3:version` (no `::` shorthand)
-- For sbt plugins, use the full Scala and sbt suffix: `group:artifact_2.12_1.0:version` (e.g. `org.scala-native:sbt-scala-native_2.12_1.0:latest`)
-- For compiler plugins and other artifacts with full Scala version suffixes, use the full version: `group:artifact_3.3.8:version`
+- For sbt plugins, use the full Scala and sbt-binary-version suffix: `group:artifact_2.12_1.0:version` (the `_1.0` is sbt's binary version, e.g. `org.scala-native:sbt-scala-native_2.12_1.0:latest`)
+- For compiler plugins (published per Scala patch version) and similar artifacts, use the full Scala version in the suffix: `group:artifact_3.3.8:version`
 - Use `latest` as the version to resolve the most recent release
 - `-r`, `--repository <url>`: extra Maven repository (repeatable)
 

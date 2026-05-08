@@ -263,11 +263,11 @@ Install cellar as a Claude Code plugin for auto-updates:
 /plugin install cellar@virtuslab-cellar
 ```
 
-Claude will automatically have access to the `/cellar:cellar` skill and know when to use it.
+Claude will have access to the `/cellar:cellar` skill, which loads on demand for JVM library API questions. For more consistent triggering, also add the snippet below to your project's `CLAUDE.md`.
 
 ### Manual setup
 
-Alternatively, add the following to your project's `CLAUDE.md`:
+Add the following to your project's `CLAUDE.md`:
 
 ````markdown
 ## Cellar
