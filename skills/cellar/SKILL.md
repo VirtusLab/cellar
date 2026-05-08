@@ -1,11 +1,24 @@
 ---
 name: cellar
-description: Look up the public API of any JVM dependency (Scala 3, Scala 2, Java) from the terminal. Returns type signatures, members, docstrings, and source code as Markdown.
+description: >
+  Look up the public API of any JVM dependency (Scala 3, Scala 2, Java) from
+  the terminal — type signatures, members, docs, and source as Markdown, no
+  JAR unpacking needed. Use this skill whenever you need to call an unfamiliar
+  library method, explore a package's types, or check a dependency's API.
+  Prefer cellar over Metals MCP only for looking up external dependency APIs
+  (`cellar get-external` vs Metals `inspect`/`get-docs`) — cellar needs no
+  project import and queries any published Maven artifact. For everything else
+  (references, rename, goto definition, diagnostics, compile), use Metals.
 ---
 
 # Cellar
 
-Use cellar to look up the API of JVM dependencies instead of guessing or hallucinating signatures.
+Use cellar to look up the API of JVM dependencies instead of guessing or manually downloading, unpacking, and searching JAR files for type signatures.
+
+## Prerequisites
+
+Run `cellar --version` to verify cellar is on PATH. If not found, the user
+needs to install it: https://github.com/VirtusLab/cellar#installation
 
 ## Project-aware commands (run from project root)
 
@@ -75,6 +88,30 @@ cellar get --module lib cats.Monad
 cellar list --module core cats
 cellar search --module lib flatMap
 ```
+
+## Example output
+
+`cellar get-external --hide-inherited org.typelevel:cats-core_3:2.10.0 cats.Monad`
+
+```markdown
+## cats.Monad
+`trait Monad[F] extends FlatMap[F] with Applicative[F]`
+**Flags:** abstract
+**Origin:** cats.Monad
+**Members:**
+def iterateWhile[A](f: F[A]): (p: A => Boolean): F[A]
+def untilM[G, A](f: F[A]): (cond: => F[Boolean]): (G: Alternative[G]): F[G[A]]
+def whileM_[A](p: F[Boolean]): (body: => F[A]): F[Unit]
+def iterateUntil[A](f: F[A]): (p: A => Boolean): F[A]
+… (+ 7 more)
+**Companion members:** trait Ops[F, A], def apply[F](instance: Monad[F]): Monad[F], …
+```
+
+Use `--hide-inherited` to get only own members. Without it, all inherited members are shown (can be large for deep hierarchies).
+
+## When Metals MCP is also available
+
+Prefer cellar **only** for external dependency API lookups (`cellar get-external` vs Metals `inspect`/`get-docs`): cellar requires no project import and works with any published Maven coordinate. For all other tasks — goto definition, find references, rename, diagnostics, compilation — use Metals.
 
 ## Output
 
