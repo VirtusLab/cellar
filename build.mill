@@ -72,7 +72,11 @@ object lib extends CommonScalaModule with SonatypeCentralPublishModule {
   }
 }
 
-object profilingRuntime extends CommonScalaModule {
+object profilingRuntime extends CommonScalaModule with SonatypeCentralPublishModule {
+  def publishVersion = cellarVersion()
+  def artifactName   = "cellar-profiling-runtime"
+  def pomSettings    = cellarPom("Cellar profiling and tracing runtime (Pyroscope + OTLP)")
+
   def mvnDeps = Seq(
     mvn"org.typelevel::otel4s-sdk-trace:0.13.1",
     mvn"org.typelevel::otel4s-sdk-exporter:0.13.1",
@@ -88,7 +92,7 @@ object profilingRuntime extends CommonScalaModule {
 }
 
 object cli extends CommonScalaModule with NativeImageModule with SonatypeCentralPublishModule {
-  def moduleDeps  = Seq(lib)
+  def moduleDeps  = Seq(lib, profilingRuntime)
   def mainClass   = Some("cellar.cli.CellarApp")
 
   def publishVersion = cellarVersion()
