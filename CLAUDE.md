@@ -97,10 +97,11 @@ Examples are testing match exhaustivity, typesystem etc.
 
 - Use `fs2.io.file.Path` for file references, not `java.io.File` or `java.nio.file.Path`
 - Coursier error handling: match `coursierapi.error.CoursierError`, call `CoordinateCompleter.suggest` to attach suggestions to `CellarError.CoordinateNotFound`
-- Telemetry allowlists are enforced server-side and silently drop unknown data. When you:
-  - **add a new span** (`Tracer[IO].span("...")` or `.spanBuilder("...")`): also add the name to `deploy/otel-collector-config.yml`'s `filter/span_names`
-  - **add a new span or resource attribute**: also add the key to `AllowedAttributes.default` in `profilingRuntime/src/cellar/profiling/TracingConfig.scala` *and* to `transform/allowlist` in `deploy/otel-collector-config.yml`
+- Telemetry allowlists are enforced server-side and silently drop unknown data. The Privacy Policy is the legal disclosure of that allowlist and must not drift from it. When you:
+  - **add a new span** (`Tracer[IO].span("...")` or `.spanBuilder("...")`): also add the name to `deploy/otel-collector-config.yml`'s `filter/span_names`, *and* to the allow-listed span names in `PRIVACY_POLICY.md`
+  - **add a new span or resource attribute**: also add the key to `AllowedAttributes.default` in `profilingRuntime/src/cellar/profiling/TracingConfig.scala`, to `transform/allowlist` in `deploy/otel-collector-config.yml`, *and* to the data-fields list in `PRIVACY_POLICY.md` ("Purposes and legal basis of data processing")
   - **promote an attribute to a Prometheus dimension**: also add it to `metrics_generator.processor.span_metrics.dimensions` in `deploy/tempo-config.yml`
+  - **add or change a subprocessor** (hosting provider, third-party service that touches telemetry): update the subprocessor paragraph in `PRIVACY_POLICY.md` and flag it to the DPO (dpo@virtuslab.com) for the Art. 30 GDPR register
 
 ## Documentation
 

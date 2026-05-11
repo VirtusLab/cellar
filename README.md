@@ -222,6 +222,8 @@ Or via environment: `CELLAR_SBT_BINARY=sbtn cellar get --module core cats.Monad`
 
 Cellar collects **anonymous usage telemetry** to help improve the tool. It is opt-in: the first time you run cellar you'll see a one-time notice on stderr (the command still runs normally), and telemetry stays disabled until you explicitly enable it.
 
+The formal data-protection terms covering this telemetry are in the [Privacy Policy](PRIVACY_POLICY.md).
+
 ### What is collected
 
 Each command sends an OpenTelemetry trace with a root `cellar.command` span (plus child spans for hot-path operations). These are the only attributes emitted — nothing else:
@@ -235,7 +237,6 @@ Each command sends an OpenTelemetry trace with a root `cellar.command` span (plu
 | `error.category` | `user` or `system` (only on failure) | root |
 | `error.type` | `CoordinateNotFound` (only on failure) | root |
 | `installation.id` | anonymous UUID (see below) | root |
-| `session.id` | `$CELLAR_SESSION_ID` env var (optional) | root |
 | `build.tool` | `mill`, `sbt`, etc. | `build.classpath` |
 
 **What is never sent**: Maven coordinates, fully-qualified symbol names, search queries, error messages, stack traces, or any other user data.

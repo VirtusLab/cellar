@@ -34,9 +34,8 @@ processors:
   # profilingRuntime/src/cellar/profiling/TracingConfig.scala — the two
   # lists must stay in sync (defense-in-depth: client filter + server
   # filter). truncate_all bounds string length on allowed keys.
-  # installation.id and session.id are kept on spans (30-day Tempo
-  # retention) but never promoted to metrics dimensions (see
-  # tempo-config.yml).
+  # installation.id is kept on spans (30-day Tempo retention) but never
+  # promoted to metrics dimensions (see tempo-config.yml).
   transform/allowlist:
     error_mode: ignore
     trace_statements:
@@ -45,7 +44,7 @@ processors:
           - keep_keys(attributes, ["service.name"])
       - context: span
         statements:
-          - keep_keys(attributes, ["command.name", "command.success", "error.category", "error.type", "build.tool", "cellar.version", "os.type", "installation.id", "session.id", "pyroscope.profile.id"])
+          - keep_keys(attributes, ["command.name", "command.success", "error.category", "error.type", "build.tool", "cellar.version", "os.type", "installation.id", "pyroscope.profile.id"])
           - truncate_all(attributes, 256)
           # Format validation on attributes that flow into Prometheus
           # dimensions. delete_key (not drop_span) — a single bad value

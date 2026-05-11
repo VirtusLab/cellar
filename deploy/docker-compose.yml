@@ -32,7 +32,7 @@ services:
 
   # Stores pre-aggregated span metrics (RED + duration histograms) shipped from
   # Tempo's metrics_generator. By construction the data has no installation.id
-  # or session.id labels, so retention is unbounded.
+  # label, so retention is unbounded.
   prometheus:
     image: prom/prometheus:v2.55.1
     command:

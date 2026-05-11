@@ -20,6 +20,5 @@ object AllowedAttributes:
     "os.type",
     "service.name",
     "installation.id",
-    "session.id",
     "pyroscope.profile.id"
   )

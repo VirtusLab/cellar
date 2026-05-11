@@ -25,9 +25,9 @@ compactor:
     block_retention: 720h
 
 # Pre-aggregated span metrics shipped to Prometheus. The dimension allowlist
-# below is the privacy boundary: anything not listed (installation.id,
-# session.id) cannot end up as a Prometheus label, so the long-retention
-# metrics store stays free of personal data by construction.
+# below is the privacy boundary: anything not listed (installation.id) cannot
+# end up as a Prometheus label, so the long-retention metrics store stays
+# free of personal data by construction.
 metrics_generator:
   registry:
     external_labels:

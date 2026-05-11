@@ -115,7 +115,6 @@ object TracingRuntime:
         Attribute("cellar.version", cellarVersion),
         Attribute("os.type", System.getProperty("os.name", "unknown"))
       ) ++
-        sys.env.get("CELLAR_SESSION_ID").map(Attribute("session.id", _)) ++
         installationId.map(Attribute("installation.id", _))
       Tracer[IO]
         .spanBuilder("cellar.command")
