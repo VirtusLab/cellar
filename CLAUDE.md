@@ -97,6 +97,10 @@ Examples are testing match exhaustivity, typesystem etc.
 
 - Use `fs2.io.file.Path` for file references, not `java.io.File` or `java.nio.file.Path`
 - Coursier error handling: match `coursierapi.error.CoursierError`, call `CoordinateCompleter.suggest` to attach suggestions to `CellarError.CoordinateNotFound`
+- Telemetry allowlists are enforced server-side and silently drop unknown data. When you:
+  - **add a new span** (`Tracer[IO].span("...")` or `.spanBuilder("...")`): also add the name to `deploy/otel-collector-config.yml`'s `filter/span_names`
+  - **add a new span or resource attribute**: also add the key to `AllowedAttributes.default` in `profilingRuntime/src/cellar/profiling/TracingConfig.scala` *and* to `transform/allowlist` in `deploy/otel-collector-config.yml`
+  - **promote an attribute to a Prometheus dimension**: also add it to `metrics_generator.processor.span_metrics.dimensions` in `deploy/tempo-config.yml`
 
 ## Documentation
 

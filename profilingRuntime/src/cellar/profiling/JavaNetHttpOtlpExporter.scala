@@ -17,23 +17,26 @@ import java.time.Duration as JDuration
   */
 object JavaNetHttpOtlpExporter:
 
-  def apply(endpoint: String): SpanExporter[IO] =
+  def apply(endpoint: String, installationId: Option[String]): SpanExporter[IO] =
     val client = HttpClient.newBuilder().connectTimeout(JDuration.ofSeconds(2)).build()
-    new Impl(client, endpoint)
+    new Impl(client, endpoint, installationId)
 
-  private final class Impl(client: HttpClient, endpoint: String) extends SpanExporter[IO]:
+  private final class Impl(client: HttpClient, endpoint: String, installationId: Option[String])
+      extends SpanExporter[IO]:
 
     def name: String = "JavaNetHttpOtlpExporter"
 
     def exportSpans[G[_]: Foldable](spans: G[SpanData]): IO[Unit] =
       IO.blocking {
         val body    = buildJson(Foldable[G].toList(spans))
-        val request = HttpRequest.newBuilder()
+        val builder = HttpRequest.newBuilder()
           .uri(URI.create(endpoint))
           .header("Content-Type", "application/json")
           .POST(HttpRequest.BodyPublishers.ofString(body))
           .timeout(JDuration.ofSeconds(2))
-          .build()
+        // Used by the ingest gateway's per-installation rate-limit zone.
+        installationId.foreach(builder.header("X-Installation-Id", _))
+        val request = builder.build()
         try { client.send(request, HttpResponse.BodyHandlers.discarding()); () }
         catch case _: Exception => () // silent drop — don't hang the CLI
       }

@@ -4,7 +4,8 @@ import cats.effect.{ExitCode, IO, IOLocal, Resource}
 import cats.effect.std.Console
 import cats.mtl.Local
 import cats.syntax.all.*
-import org.http4s.Uri
+import org.http4s.{Header, Headers, Uri}
+import org.typelevel.ci.CIString
 import org.typelevel.otel4s.{Attribute, Attributes}
 import org.typelevel.otel4s.context.LocalProvider
 import org.typelevel.otel4s.sdk.TelemetryResource
@@ -29,7 +30,11 @@ object TracingRuntime:
     * `ProfilingSpanProcessor`'s `pyroscope.profile.id` tags would be unqueryable.
     * Pyroscope can still run independently and produce uncorrelated flame graphs.
     */
-  def resource(config: TracingConfig, ioLocal: IOLocal[Context]): Resource[IO, Tracer[IO]] =
+  def resource(
+      config: TracingConfig,
+      ioLocal: IOLocal[Context],
+      installationId: Option[String] = None
+  ): Resource[IO, Tracer[IO]] =
     if config.otlpEndpoint.isEmpty then
       Resource.pure[IO, Tracer[IO]](Tracer.noop[IO])
     else
@@ -38,7 +43,7 @@ object TracingRuntime:
                             given IOLocal[Context] = ioLocal
                             LocalProvider[IO, Context].local
                           }
-        processors     <- buildProcessors(config)
+        processors     <- buildProcessors(config, installationId)
         tracerProvider <- Resource.eval {
                             given Local[IO, Context] = localCtx
                             val serviceResource      = TelemetryResource(Attributes(Attribute("service.name", config.appName)), None)
@@ -48,20 +53,20 @@ object TracingRuntime:
         tracer         <- Resource.eval(tracerProvider.get(config.appName))
       yield tracer
 
-  private def buildProcessors(config: TracingConfig): Resource[IO, List[SpanProcessor[IO]]] =
+  private def buildProcessors(config: TracingConfig, installationId: Option[String]): Resource[IO, List[SpanProcessor[IO]]] =
     val profileProc = Option.when(!NativeImage && config.pyroscopeEndpoint.isDefined)(new ProfilingSpanProcessor)
-    val otlpProc    = config.otlpEndpoint.traverse(otlpProcessor)
+    val otlpProc    = config.otlpEndpoint.traverse(otlpProcessor(_, installationId))
     otlpProc.map(o => List(profileProc, o).flatten)
 
-  private def otlpProcessor(endpoint: String): Resource[IO, SpanProcessor[IO]] =
-    otlpSpanExporter(endpoint)
+  private def otlpProcessor(endpoint: String, installationId: Option[String]): Resource[IO, SpanProcessor[IO]] =
+    otlpSpanExporter(endpoint, installationId)
       .map(new AllowlistExporter(_, AllowedAttributes.default))
       .flatMap(batched)
 
   // On native image, Ember has no reachability metadata — use java.net.http.HttpClient instead.
-  private def otlpSpanExporter(endpoint: String): Resource[IO, SpanExporter[IO]] =
-    if NativeImage then Resource.pure(JavaNetHttpOtlpExporter(endpoint))
-    else otlpExporter(endpoint)
+  private def otlpSpanExporter(endpoint: String, installationId: Option[String]): Resource[IO, SpanExporter[IO]] =
+    if NativeImage then Resource.pure(JavaNetHttpOtlpExporter(endpoint, installationId))
+    else otlpExporter(endpoint, installationId)
 
   private given Console[IO] = new Console[IO]:
     def readLineWithCharset(charset: java.nio.charset.Charset): IO[String] =
@@ -71,14 +76,16 @@ object TracingRuntime:
     def error[A](a: A)(using cats.Show[A]): IO[Unit]    = IO.unit
     def errorln[A](a: A)(using cats.Show[A]): IO[Unit]  = IO.unit
 
-  private def otlpExporter(endpoint: String): Resource[IO, SpanExporter[IO]] =
+  private def otlpExporter(endpoint: String, installationId: Option[String]): Resource[IO, SpanExporter[IO]] =
     Resource.eval(IO.fromEither(Uri.fromString(endpoint))).flatMap { uri =>
+      val headers = installationId.fold(Headers.empty)(id => Headers(Header.Raw(CIString("X-Installation-Id"), id)))
       OtlpSpanExporter
         .builder[IO]
         .withEndpoint(uri)
         .withProtocol(OtlpProtocol.httpJson)
         .withTimeout(2.seconds)
         .withRetryPolicy(RetryPolicy.builder.withMaxAttempts(2).withInitialBackoff(50.milliseconds).build)
+        .addHeaders(headers)
         .build
     }
 
@@ -101,7 +108,7 @@ object TracingRuntime:
       installationId: Option[String] = None,
       classifyUserError: Throwable => Boolean = _ => false
   )(body: Tracer[IO] ?=> IO[ExitCode]): IO[ExitCode] =
-    resource(config, ioLocal).use { tracer =>
+    resource(config, ioLocal, installationId).use { tracer =>
       given Tracer[IO] = tracer
       val rootAttrs    = List(
         Attribute("command.name", commandName),

@@ -52,3 +52,17 @@ overrides:
   defaults:
     metrics_generator:
       processors: [span-metrics]
+      # Default is 0 (unlimited). With the dimension set above, realistic
+      # steady-state is 5–20k series — 15k catches a `cellar.version =
+      # $(uuid)` poisoning attempt before it reaches Prometheus.
+      max_active_series: 15000
+    # Pinned to Tempo 2.10.5 defaults. Restated explicitly so a future
+    # Tempo version cannot silently relax them — if upstream changes the
+    # default, the explicit value here keeps us at the known-good ceiling
+    # until someone consciously bumps it.
+    ingestion:
+      rate_limit_bytes: 15000000   # 15 MB/s sustained
+      burst_size_bytes: 20000000   # 20 MB burst
+      max_traces_per_user: 10000
+    global:
+      max_bytes_per_trace: 5000000 # 5 MB per-trace ceiling
