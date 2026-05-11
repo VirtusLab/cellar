@@ -97,7 +97,7 @@ jobs:
           path: ${{ env.JAR }}
 
   publish-maven:
-    name: Publish lib + cli to Maven Central
+    name: Publish lib + profilingRuntime + cli to Maven Central
     runs-on: ubuntu-latest
     # Gate the upload on native-binary + JAR builds: a Sonatype release is
     # immutable, so we must not publish a version whose GitHub Release assets
@@ -120,7 +120,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Publish to Maven Central
-        run: ./mill lib.publishSonatypeCentral + cli.publishSonatypeCentral
+        run: ./mill lib.publishSonatypeCentral + profilingRuntime.publishSonatypeCentral + cli.publishSonatypeCentral
         env:
           CELLAR_VERSION: v${{ inputs.version }}
           MILL_SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
