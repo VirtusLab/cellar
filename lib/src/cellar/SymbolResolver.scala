@@ -21,7 +21,11 @@ object SymbolResolver:
       case None         => IO.blocking(tryNestedLookup(fqn)).map(_.getOrElse(LookupResult.NotFound))
     }
 
-  /** Try to resolve as a top-level class, module, term, type, or package. */
+  /**
+   * Try to resolve as a top-level class, module, term, type, package, or
+   * Scala-3 top-level decl (which lives in a synthetic `<filename>$package$`
+   * module class). All public hits with the same FQN are returned.
+   */
   private def tryTopLevel(fqn: String)(using ctx: Context): Option[LookupResult] =
     var caught: Option[Throwable] = None
     // ClassCastException is a known tastyquery quirk: thrown (instead of MemberNotFoundException)
@@ -42,12 +46,17 @@ object SymbolResolver:
       t(ctx.findStaticModuleClass(stripped)).map(s => LookupResult.Found(List(s)))
         .orElse(caught.map(LookupResult.LookupFailed(_)))
     else
-      t(ctx.findStaticClass(fqn)).map(s => LookupResult.Found(List(s)))
-        .orElse(t(ctx.findStaticModuleClass(fqn)).map(s => LookupResult.Found(List(s))))
-        .orElse(tryOrNone(ctx.findStaticTerm(fqn)).map(s => LookupResult.Found(List(s))))
-        .orElse(tryOrNone(ctx.findStaticType(fqn)).map(s => LookupResult.Found(List(s))))
-        .orElse(tryOrNone(ctx.findPackage(fqn)).map(_ => LookupResult.IsPackage))
-        .orElse(caught.map(LookupResult.LookupFailed(_)))
+      val direct = List(
+        t(ctx.findStaticClass(fqn)),
+        t(ctx.findStaticModuleClass(fqn)),
+        tryOrNone(ctx.findStaticTerm(fqn)),
+        tryOrNone(ctx.findStaticType(fqn))
+      ).flatten
+      val all = (direct ++ packageWrapperMembers(fqn)).distinct
+      if all.nonEmpty then Some(LookupResult.Found(all))
+      else
+        tryOrNone(ctx.findPackage(fqn)).map(_ => LookupResult.IsPackage)
+          .orElse(caught.map(LookupResult.LookupFailed(_)))
 
   /**
    * Multi-segment nested member walk.
@@ -191,10 +200,37 @@ object SymbolResolver:
           case scala.util.control.NonFatal(e) =>
             if firstError.isEmpty then firstError = Some(e)
             None
-      val found = t(ctx.findStaticClass(prefix)).orElse(t(ctx.findStaticModuleClass(prefix)))
+      val found = t(ctx.findStaticClass(prefix))
+        .orElse(t(ctx.findStaticModuleClass(prefix)))
+        .orElse(packageWrapperClass(prefix))
       if found.isDefined then best = Some((found.get, i + 1))
       i += 1
     (best, firstError)
+
+  /**
+   * Scala 3 top-level defs/types/objects in `pkg` live inside a synthetic
+   * `<filename>$package$` module class. Walks every such wrapper in `pkg` and
+   * applies `f` with the member name to be looked up.
+   */
+  private def withPackageWrappers[A](fqn: String)(f: (ClassSymbol, String) => IterableOnce[A])(using ctx: Context): List[A] =
+    val idx = fqn.lastIndexOf('.')
+    if idx < 0 then return Nil
+    val name = fqn.substring(idx + 1)
+    tryOrNone(ctx.findPackage(fqn.substring(0, idx))).toList.flatMap { pkg =>
+      tryOrNone(pkg.declarations).getOrElse(Nil).flatMap {
+        case c: ClassSymbol if c.isModuleClass && c.name.toString.endsWith("$package$") =>
+          f(c, name).iterator.toList
+        case _ => Nil
+      }
+    }
+
+  private def packageWrapperMembers(fqn: String)(using ctx: Context): List[Symbol] =
+    withPackageWrappers[Symbol](fqn) { (w, name) =>
+      w.getAllOverloadedDecls(termName(name)) ++ w.getDecl(typeName(name))
+    }.filter(PublicApiFilter.isPublic)
+
+  private def packageWrapperClass(fqn: String)(using ctx: Context): Option[ClassSymbol] =
+    withPackageWrappers[ClassSymbol](fqn)((w, name) => directClassMember(w, name)).headOption
 
   private[cellar] val universalBaseClasses = Set("scala.Any", "scala.AnyRef", "java.lang.Object")
 

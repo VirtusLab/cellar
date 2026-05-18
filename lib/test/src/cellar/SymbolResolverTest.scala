@@ -190,3 +190,46 @@ class SymbolResolverTest extends CatsEffectSuite:
         case other => fail(s"Expected PartialMatch, got $other")
       }
     }
+
+  // Scala 3 top-level defs/types/objects live in a synthetic `<filename>$package$`
+  // wrapper class. SymbolResolver fans out into those wrappers so users can refer
+  // to top-level symbols by their natural FQN.
+  // Fixture: fixtureScala3/src/myapp/Hello.scala
+  //   package myapp
+  //   @main def hello = println(42)
+  //   opaque type Hello = Int
+  //   object Hello:
+  //     def fromInt(a: Int): Hello = a
+
+  test("top-level @main def myapp.hello resolves to both the def and the synthetic wrapper class"):
+    withCtx { ctx =>
+      given Context = ctx
+      SymbolResolver.resolve("myapp.hello").map {
+        case LookupResult.Found(syms) =>
+          assert(
+            syms.exists(s => s.isInstanceOf[tastyquery.Symbols.TermSymbol] && s.name.toString == "hello"),
+            s"Expected to find the top-level def, got $syms"
+          )
+        case other => fail(s"Expected Found, got $other")
+      }
+    }
+
+  test("top-level opaque type myapp.Hello resolves"):
+    withCtx { ctx =>
+      given Context = ctx
+      SymbolResolver.resolve("myapp.Hello").map {
+        case LookupResult.Found(syms) =>
+          assert(syms.exists(_.name.toString == "Hello"), s"Expected to find Hello, got $syms")
+        case other => fail(s"Expected Found, got $other")
+      }
+    }
+
+  test("top-level companion member myapp.Hello.fromInt resolves"):
+    withCtx { ctx =>
+      given Context = ctx
+      SymbolResolver.resolve("myapp.Hello.fromInt").map {
+        case LookupResult.Found(syms) =>
+          assert(syms.exists(_.name.toString == "fromInt"), s"Expected to find fromInt, got $syms")
+        case other => fail(s"Expected Found, got $other")
+      }
+    }
