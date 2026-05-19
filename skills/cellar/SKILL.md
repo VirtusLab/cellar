@@ -7,8 +7,7 @@ description: >
   library method, explore a package's types, or check a dependency's API.
   Prefer cellar over Metals MCP only for looking up external dependency APIs
   (`cellar get-external` vs Metals `inspect`/`get-docs`) — cellar needs no
-  project import and queries any published Maven artifact. For everything else
-  (references, rename, goto definition, diagnostics, compile), use Metals.
+  project import and queries any published Maven artifact.
 ---
 
 # Cellar
