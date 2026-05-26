@@ -38,3 +38,8 @@ class SearchHandlerTest extends FunSuite:
   test("rankKey: companion module ($-suffixed) sorts right after exact match"):
     val sorted = sort("Monad", List("MonadError", "Monad$", "Monad", "Bimonad"))
     assertEquals(sorted.take(2), List("Monad", "Monad$"))
+
+  test("rankKey: FQN-style query ranks the exact full-name match first"):
+    // FQN queries are matched/ranked against the symbol's full name.
+    val sorted = sort("cats.FlatMap", List("cats.syntax.FlatMapOps", "cats.FlatMap", "cats.FlatMapArityFunctions"))
+    assertEquals(sorted.head, "cats.FlatMap")

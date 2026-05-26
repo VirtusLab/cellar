@@ -35,13 +35,22 @@ object SearchHandler:
       jreClasspath: tastyquery.Classpaths.Classpath
   )(using tastyquery.Contexts.Context, Console[IO]): IO[ExitCode] =
     val lowerQuery = query.toLowerCase
+    // A dotted query (e.g. `cats.FlatMap`) is FQN-style: match it against the
+    // symbol's full name rather than its simple name, otherwise it can never
+    // match and search silently returns nothing.
+    val isFqnQuery = lowerQuery.contains('.')
+    def matchTarget(sym: tastyquery.Symbols.TermOrTypeSymbol): String =
+      if isFqnQuery then
+        try sym.displayFullName
+        catch case _: Exception => sym.name.toString
+      else sym.name.toString
     val matchingStream = AllSymbolsStream
       .stream(classpath, jreClasspath)
-      .filter(sym => sym.name.toString.toLowerCase.contains(lowerQuery))
+      .filter(sym => matchTarget(sym).toLowerCase.contains(lowerQuery))
     // Rank exact-name matches first, then prefix matches, then by length — so
     // `Monad` beats `Bimonad`/`MonadError` regardless of declaration order.
     matchingStream.compile.toList.flatMap { allMatches =>
-      val sorted  = allMatches.sortBy(sym => rankKey(lowerQuery, sym.name.toString))
+      val sorted  = allMatches.sortBy(sym => rankKey(lowerQuery, matchTarget(sym)))
       val limited = sorted.take(limit)
       val note    = if sorted.length > limit then
         Console[IO].errorln(s"Note: results truncated at $limit. Use --limit to increase.")
