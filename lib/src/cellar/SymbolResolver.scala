@@ -116,11 +116,20 @@ object SymbolResolver:
       ).flatten
       val wrapped = packageWrapperMembers(fqn)
       if wrapped.nonEmpty then trace.add(s"package wrapper: ${wrapped.size} member(s)")
+      // `@main def foo` emits a launcher class `pkg.foo` whose only decls are
+      // `<init>` and `main`. When a top-level def with the same FQN exists, the
+      // class is implementation detail of the def -- drop it.
+      val filteredDirect =
+        if wrapped.nonEmpty then direct.filterNot {
+          case c: ClassSymbol => isMainLauncher(c)
+          case _              => false
+        }
+        else direct
       // findStaticModuleClass returns the `Foo$` class while findStaticTerm returns
       // the `object Foo` val -- both denote the same object. Represent it by the
       // class: only that carries the parents, flags, members and source span that
       // the renderers and get-source need. `distinct` then drops the duplicate.
-      val all = (direct ++ wrapped).map {
+      val all = (filteredDirect ++ wrapped).map {
         case t: TermSymbol if t.isModuleVal => t.moduleClass.getOrElse(t)
         case s                              => s
       }.distinct
@@ -311,6 +320,10 @@ object SymbolResolver:
 
   private def packageWrapperClass(fqn: String)(using ctx: Context): Option[ClassSymbol] =
     withPackageWrappers[ClassSymbol](fqn)((w, name) => directClassMember(w, name)).headOption
+
+  private def isMainLauncher(cls: ClassSymbol)(using ctx: Context): Boolean =
+    val names = tryOrNone(cls.declarations).getOrElse(Nil).map(_.name.toString).toSet
+    names.subsetOf(Set("<init>", "main")) && names.contains("main")
 
   private[cellar] val universalBaseClasses = Set("scala.Any", "scala.AnyRef", "java.lang.Object")
 

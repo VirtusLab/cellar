@@ -322,3 +322,54 @@ class GetFormatterTest extends CatsEffectSuite:
         assert(limited.contains("more members"), s"Expected 'more members' in: $limited")
       }
     }
+
+  // Scala-3 top-level decls live inside a synthetic `<file>$package$` wrapper
+  // class. The wrapper must not leak into the rendered Markdown heading,
+  // origin line, or signature. Fixture: fixtureScala3/src/myapp/Hello.scala
+  //   package myapp
+  //   @main def hello = println(42)
+  //   opaque type Hello = Int
+  //   object Hello:
+  //     def fromInt(a: Int): Hello = a
+
+  test("formatGetResult for @main top-level def hides $package$ and synthetic launcher class"):
+    withCtx { ctx =>
+      given Context = ctx
+      SymbolResolver.resolve("myapp.hello").map {
+        case LookupResult.Found(syms) =>
+          val output = GetFormatter.formatGetResult("myapp.hello", syms)
+          assert(!output.contains("$package$"), s"Expected no $$package$$ in:\n$output")
+          assert(output.contains("## myapp.hello"), s"Expected '## myapp.hello' heading in:\n$output")
+          assert(output.contains("**Origin:** myapp"), s"Expected origin 'myapp' in:\n$output")
+          assert(output.contains("def hello: Unit"), s"Expected 'def hello: Unit' in:\n$output")
+          // @main wrapper class is implementation detail — must not appear
+          assert(!output.contains("class hello"), s"Unexpected '@main' wrapper class in:\n$output")
+        case other => fail(s"Expected Found, got $other")
+      }
+    }
+
+  test("formatGetResult for top-level opaque type renders 'opaque type X = ...'"):
+    withCtx { ctx =>
+      given Context = ctx
+      SymbolResolver.resolve("myapp.Hello").map {
+        case LookupResult.Found(syms) =>
+          val output = GetFormatter.formatGetResult("myapp.Hello", syms)
+          assert(!output.contains("$package$"), s"Expected no $$package$$ in:\n$output")
+          assert(output.contains("opaque type Hello = Int"), s"Expected opaque-type signature in:\n$output")
+          assert(!output.contains("symbol["), s"Unexpected raw symbol[] sentinel in:\n$output")
+        case other => fail(s"Expected Found, got $other")
+      }
+    }
+
+  test("formatGetResult for top-level companion member hides $package$"):
+    withCtx { ctx =>
+      given Context = ctx
+      SymbolResolver.resolve("myapp.Hello.fromInt").map {
+        case LookupResult.Found(syms) =>
+          val output = GetFormatter.formatGetResult("myapp.Hello.fromInt", syms)
+          assert(!output.contains("$package$"), s"Expected no $$package$$ in:\n$output")
+          assert(output.contains("## myapp.Hello.fromInt"), s"Expected '## myapp.Hello.fromInt' heading in:\n$output")
+          assert(output.contains("**Origin:** myapp.Hello"), s"Expected origin 'myapp.Hello' in:\n$output")
+        case other => fail(s"Expected Found, got $other")
+      }
+    }

@@ -1,7 +1,15 @@
 package cellar
 
 import tastyquery.Contexts.Context
-import tastyquery.Symbols.{ClassSymbol, ClassTypeParamSymbol, Symbol, TermOrTypeSymbol, TermSymbol}
+import tastyquery.Symbols.{
+  ClassSymbol,
+  ClassTypeParamSymbol,
+  Symbol,
+  TermOrTypeSymbol,
+  TermSymbol,
+  TypeMemberDefinition,
+  TypeMemberSymbol
+}
 import tastyquery.Types.*
 
 enum DetectedLanguage:
@@ -116,6 +124,17 @@ object TypePrinter:
         val keyword = termKeyword(term)
         if term.isModuleVal then s"$keyword ${term.name}"
         else s"$keyword ${term.name}${printTopLevelMethodic(term.declaredType)}"
+
+      case tm: TypeMemberSymbol =>
+        tm.typeDef match
+          case TypeMemberDefinition.OpaqueTypeAlias(_, alias) =>
+            s"opaque type ${tm.name} = ${printType(alias)}"
+          case TypeMemberDefinition.TypeAlias(alias) =>
+            s"type ${tm.name} = ${printType(alias)}"
+          case TypeMemberDefinition.AbstractType(bounds) =>
+            val lo = if bounds.low.toString == "Nothing" then "" else s" >: ${printType(bounds.low)}"
+            val hi = if bounds.high.toString == "Any" then "" else s" <: ${printType(bounds.high)}"
+            s"type ${tm.name}$lo$hi"
 
       case other => other.toString
 

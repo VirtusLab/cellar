@@ -171,11 +171,16 @@ object GetFormatter:
 
   /** `displayFullName` uses the JVM module-class encoding: `Foo$` for an object,
    *  and `Outer$.Inner` for anything nested inside one. Render both at source level.
-   *  The trailing marker is stripped only for an actual module class, so names that
-   *  genuinely end in `$` (a `$` member, a Scala 3 `Foo$package`) are left alone.
+   *  The trailing marker is stripped only for an actual module class, so a name that
+   *  genuinely ends in `$` (a `$` member) is left alone.
+   *
+   *  Scala 3 top-level defs/types/objects live in a synthetic `<file>$package`
+   *  class that is not part of the name a user would write, so that segment is
+   *  dropped too: `pkg.Hello$package$.Hello$.fromInt` becomes `pkg.Hello.fromInt`.
    */
-  private def displayFqn(sym: Symbol): String =
+  private[cellar] def displayFqn(sym: Symbol): String =
     val fqn = sym.displayFullName.replace("$.", ".")
-    sym match
+    val unmangled = sym match
       case cls: ClassSymbol if cls.isModuleClass => fqn.stripSuffix("$")
       case _                                     => fqn
+    unmangled.split('.').iterator.filterNot(_.endsWith("$package")).mkString(".")
