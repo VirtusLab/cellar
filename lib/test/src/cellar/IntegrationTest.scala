@@ -272,6 +272,25 @@ class IntegrationTest extends CatsEffectSuite:
         assert(out.contains("object CellarTC"), s"Expected 'object CellarTC' in: $out")
       }
 
+  test("get-source: standalone object returns the whole object body"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetSourceHandler
+      .run(
+        TestFixtures.scala3Coord,
+        "cellar.fixture.scala3.Celsius",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        val out = console.outBuf.toString
+        // The module val's ValDef has a zero-extent span; only the module class
+        // carries the object body, so the resolver must hand over the class.
+        assert(out.contains("object Celsius"), s"Expected 'object Celsius' in: $out")
+        assert(out.contains("toFahrenheit"), s"Expected the object body in: $out")
+      }
+
   // ─── list subcommand ─────────────────────────────────────────────────────
 
   test("list: package scala3 fixture lists top-level types"):

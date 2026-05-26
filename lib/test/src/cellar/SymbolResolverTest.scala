@@ -4,6 +4,7 @@ import cats.effect.IO
 import munit.CatsEffectSuite
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 import tastyquery.Contexts.Context
+import tastyquery.Symbols.{ClassSymbol, TermSymbol}
 
 class SymbolResolverTest extends CatsEffectSuite:
 
@@ -13,6 +14,15 @@ class SymbolResolverTest extends CatsEffectSuite:
       jrePaths <- JreClasspath.jrtPath()
       jars     <- CoursierFetchClient.fetchClasspath(
                     TestFixtures.scala3Coord, Seq(TestFixtures.localM2Repo))
+      result   <- ContextResource.make(jars, jrePaths).use { (ctx, _) => body(ctx) }
+    yield result
+
+  private def withScala2Ctx[A](body: Context => IO[A]): IO[A] =
+    TestFixtures.assumeFixturesAvailable()
+    for
+      jrePaths <- JreClasspath.jrtPath()
+      jars     <- CoursierFetchClient.fetchClasspath(
+                    TestFixtures.scala2Coord, Seq(TestFixtures.localM2Repo))
       result   <- ContextResource.make(jars, jrePaths).use { (ctx, _) => body(ctx) }
     yield result
 
@@ -231,6 +241,52 @@ class SymbolResolverTest extends CatsEffectSuite:
       SymbolResolver.resolve("myapp.Hello.fromInt").map {
         case LookupResult.Found(syms) =>
           assert(syms.exists(_.name.toString == "fromInt"), s"Expected to find fromInt, got $syms")
+        case other => fail(s"Expected Found, got $other")
+      }
+    }
+
+  // Scala 2 ADT: sealed trait with subtypes nested inside the companion object.
+  // Fixture: fixtureScala2/src/cellar/fixture/scala2/CellarADT.scala
+  //   sealed trait CellarADT
+  //   object CellarADT {
+  //     case object CellarAA extends CellarADT
+  //     final case class CellarAB(value: Int) extends CellarADT
+  //   }
+
+  test("Scala 2: resolve nested case object inside companion returns Found"):
+    withScala2Ctx { ctx =>
+      given Context = ctx
+      SymbolResolver.resolve("cellar.fixture.scala2.CellarADT.CellarAA").map {
+        case LookupResult.Found(syms) =>
+          assert(syms.nonEmpty, s"Expected non-empty Found, got $syms")
+          assert(syms.exists(_.name.toString.stripSuffix("$") == "CellarAA"), s"Expected CellarAA symbol, got $syms")
+        case other => fail(s"Expected Found for CellarAA, got $other")
+      }
+    }
+
+  test("Scala 2: resolve nested case class inside companion returns Found"):
+    withScala2Ctx { ctx =>
+      given Context = ctx
+      SymbolResolver.resolve("cellar.fixture.scala2.CellarADT.CellarAB").map {
+        case LookupResult.Found(syms) =>
+          assert(syms.nonEmpty, s"Expected non-empty Found, got $syms")
+          assert(syms.exists(_.name.toString == "CellarAB"), s"Expected CellarAB symbol, got $syms")
+        case other => fail(s"Expected Found for CellarAB, got $other")
+      }
+    }
+
+  test("Scala 2: resolving sealed trait returns the trait and one symbol for the companion"):
+    withScala2Ctx { ctx =>
+      given Context = ctx
+      SymbolResolver.resolve("cellar.fixture.scala2.CellarADT").map {
+        case LookupResult.Found(syms) =>
+          // The companion is represented once, by its module class -- not also by
+          // the module val that findStaticTerm returns for the same object.
+          assertEquals(syms.size, 2, s"Expected trait + companion, got $syms")
+          assert(!syms.exists { case t: TermSymbol => t.isModuleVal; case _ => false },
+            s"Module val should have been widened to its module class: $syms")
+          val moduleClasses = syms.collect { case c: ClassSymbol if c.isModuleClass => c }
+          assertEquals(moduleClasses.size, 1, s"Expected exactly one module class, got $syms")
         case other => fail(s"Expected Found, got $other")
       }
     }
