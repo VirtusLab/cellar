@@ -7,9 +7,16 @@ import fs2.io.file.Path
 
 trait BuildTool:
   def kind: BuildToolKind
-  def compile(module: Option[String]): IO[Unit]
-  def extractClasspath(module: Option[String]): IO[List[Path]]
+  def compile(module: Option[String], testScope: Boolean): IO[Unit]
+  def extractClasspath(module: Option[String], testScope: Boolean): IO[List[Path]]
   def fingerprintFiles: IO[List[Path]]
+
+  /** Whether the tool has a Compile/Test scope axis that `--test` can select. */
+  def supportsTestScope: Boolean
+
+  /** Rejects `--test` before any build-tool work happens. */
+  final def validateTestScope(testScope: Boolean): IO[Unit] =
+    IO.raiseWhen(testScope && !supportsTestScope)(CellarError.TestScopeNotSupported(kind))
 
   protected def requireModule(module: Option[String]): IO[String] =
     module match

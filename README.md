@@ -116,6 +116,12 @@ cellar search [--module <name>] <query>
 - **Mill / sbt**: `--module` is required (e.g. `--module lib`, `--module core`)
 - **scala-cli**: `--module` is not supported — omit it
 
+Add `--test` to query the test-scope classpath (test dependencies and test sources):
+
+- **sbt**: resolves `<module>/Test/fullClasspath`
+- **scala-cli**: compiles with `--test`
+- **Mill**: not supported — test code is a separate module, query it directly (e.g. `--module foo.test`)
+
 The classpath is cached after the first run. Use `--no-cache` to force re-extraction.
 
 ### External commands
@@ -165,6 +171,7 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 |---|---|---|
 | `--module <name>`, `-m` | project commands | Build module name (required for Mill/sbt) |
 | `--no-cache` | project commands | Skip classpath cache, re-extract from build tool |
+| `--test` | project commands | Use the test-scope classpath (sbt/scala-cli; not supported for Mill) |
 | `--java-home <path>` | all | Use a specific JDK for JRE classpath |
 | `-r`, `--repository <url>` | external commands | Extra Maven repository URL (repeatable) |
 | `-l`, `--limit <N>` | `list`, `list-external`, `search`, `search-external` | Max results (default: 50) |
@@ -388,6 +395,7 @@ For querying the current project's code and dependencies (auto-detects build too
 
 - Mill/sbt projects: `--module` is required (e.g. `--module lib`, `--module core`)
 - scala-cli projects: `--module` is not supported (omit it)
+- `--test`: query the test-scope classpath (sbt/scala-cli; for Mill, use the test module directly, e.g. `--module foo.test`)
 - `--no-cache`: skip classpath cache, re-extract from build tool
 - `--java-home`: override JRE classpath
 

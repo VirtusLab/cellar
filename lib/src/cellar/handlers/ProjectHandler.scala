@@ -14,13 +14,14 @@ object ProjectHandler:
       cwd: Option[Path],
       module: Option[String],
       noCache: Boolean,
-      config: Config = Config.global
+      config: Config = Config.global,
+      testScope: Boolean = false
   )(body: (Context, Classpath, Classpath) => IO[ExitCode])(using Console[IO], Tracer[IO]): IO[ExitCode] =
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
         workingDir   = cwd.getOrElse(Path(System.getProperty("user.dir")))
-        result       <- build.ProjectClasspathProvider.provide(workingDir, module, jreClasspath, noCache, config).use { (ctx, classpath) =>
+        result       <- build.ProjectClasspathProvider.provide(workingDir, module, jreClasspath, noCache, config, testScope).use { (ctx, classpath) =>
           body(ctx, classpath, jreClasspath)
         }
       yield result

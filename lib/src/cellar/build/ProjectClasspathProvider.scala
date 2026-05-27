@@ -15,9 +15,10 @@ object ProjectClasspathProvider:
       module: Option[String],
       jreClasspath: Classpath,
       noCache: Boolean,
-      config: Config = Config.global
+      config: Config = Config.global,
+      testScope: Boolean = false
   )(using Tracer[IO]): Resource[IO, (Context, Classpath)] =
-    Resource.eval(resolveClasspath(cwd, module, noCache, config)).flatMap { paths =>
+    Resource.eval(resolveClasspath(cwd, module, noCache, config, testScope)).flatMap { paths =>
       ContextResource.make(paths, jreClasspath)
     }
 
@@ -25,32 +26,33 @@ object ProjectClasspathProvider:
       cwd: Path,
       module: Option[String],
       noCache: Boolean,
-      config: Config
+      config: Config,
+      testScope: Boolean
   )(using Tracer[IO]): IO[List[Path]] =
     BuildToolDetector.detectKind(cwd).flatMap { kind =>
       val buildTool = instantiate(kind, cwd, config)
       val useCache  = kind != BuildToolKind.ScalaCli && !noCache
-      Tracer[IO]
+      buildTool.validateTestScope(testScope) >> Tracer[IO]
         .spanBuilder("build.classpath")
         .addAttribute(Attribute("build.tool", kind.toString))
         .build
         .surround {
-          if useCache then cachedFlow(buildTool, module, cwd)
-          else buildTool.extractClasspath(module)
+          if useCache then cachedFlow(buildTool, module, cwd, testScope)
+          else buildTool.extractClasspath(module, testScope)
         }
     }
 
-  private def cachedFlow(buildTool: BuildTool, module: Option[String], cwd: Path): IO[List[Path]] =
+  private def cachedFlow(buildTool: BuildTool, module: Option[String], cwd: Path, testScope: Boolean): IO[List[Path]] =
     val cache = ClasspathCache(cwd)
-    val moduleKey = module.getOrElse("")
+    val moduleKey = s"${module.getOrElse("")}${if testScope then "/test" else ""}"
 
     for
       fingerFiles <- buildTool.fingerprintFiles
       hash        <- BuildFingerprint.compute(fingerFiles, moduleKey)
       cached      <- cache.get(hash)
       paths <- cached match
-        case Some(paths) => buildTool.compile(module).as(paths)
-        case None        => buildTool.extractClasspath(module).flatTap(paths => cache.put(hash, paths))
+        case Some(paths) => buildTool.compile(module, testScope).as(paths)
+        case None        => buildTool.extractClasspath(module, testScope).flatTap(paths => cache.put(hash, paths))
     yield paths
 
   private def instantiate(kind: BuildToolKind, cwd: Path, config: Config): BuildTool = kind match

@@ -14,6 +14,7 @@ For querying the current project's code and dependencies (auto-detects build too
 
 - Mill/sbt projects: `--module` is required (e.g. `--module lib`, `--module core`)
 - scala-cli projects: `--module` is not supported (omit it)
+- `--test`: query the test-scope classpath (sbt/scala-cli; for Mill, use the test module directly, e.g. `--module foo.test`)
 - `--no-cache`: skip classpath cache, re-extract from build tool
 - `--java-home`: override JRE classpath
 

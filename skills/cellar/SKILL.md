@@ -29,6 +29,7 @@ Query the current project's code and all its dependencies. Cellar auto-detects t
 
 - Mill/sbt projects: `--module` is required (e.g. `--module lib`, `--module core`)
 - scala-cli projects: omit `--module`
+- `--test`: query the test-scope classpath (sbt/scala-cli; for Mill, use the test module directly, e.g. `--module foo.test`)
 - `--no-cache`: skip classpath cache, re-extract from build tool
 - `--java-home <path>`: override JRE classpath
 - `-l`, `--limit <N>`: max results for `list`/`search` (default: 50), max members for `get`
