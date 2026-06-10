@@ -46,7 +46,7 @@ object lib extends CommonScalaModule with SonatypeCentralPublishModule {
   object test extends ScalaTests with TestModule.Munit {
     def mvnDeps = super.mvnDeps() ++ Seq(
       mvn"org.scalameta::munit:1.0.4",
-      mvn"org.typelevel::munit-cats-effect:2.0.0"
+      mvn"org.typelevel::munit-cats-effect:2.2.0"
     )
     def forkArgs = Task {
       // Publish fixtures to ~/.m2 before running tests
@@ -155,7 +155,7 @@ object cli extends CommonScalaModule with NativeImageModule with SonatypeCentral
   object test extends ScalaTests with TestModule.Munit {
     def mvnDeps = super.mvnDeps() ++ Seq(
       mvn"org.scalameta::munit:1.0.4",
-      mvn"org.typelevel::munit-cats-effect:2.0.0"
+      mvn"org.typelevel::munit-cats-effect:2.2.0"
     )
   }
 }
