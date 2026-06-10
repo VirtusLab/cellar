@@ -186,7 +186,7 @@ object fixtureJava extends JavaModule with PublishModule {
 }
 
 object fixtureScala2 extends ScalaModule with PublishModule {
-  def scalaVersion   = "2.13.16"
+  def scalaVersion   = "2.13.18"
   def javacOptions   = Seq("--release", "17")
   def publishVersion = "0.1.0-SNAPSHOT"
   def artifactName   = "cellar-fixture-scala2"
