@@ -159,34 +159,35 @@ jobs:
         working-directory: artifacts
         run: cosign sign-blob --yes checksums.txt --bundle checksums.txt.bundle
 
+      - uses: cachix/install-nix-action@526118121621777ccd86f79b04685a9319637641 # v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Regenerate scala.lock.json
+        run: |
+          VERSION="${{ inputs.version }}"
+          # Maven Central propagation can take a few minutes after publish.
+          for i in $(seq 1 10); do
+            nix run github:scala-nix/scala-cli-nix -- lock-coords \
+              --dep "org.virtuslab::cellar-cli:${VERSION}" \
+              --main-class cellar.cli.CellarApp && break
+            echo "Attempt $i failed, retrying in 30s..."
+            sleep 30
+          done
+
       - name: Update flake.nix
         run: |
           VERSION="${{ inputs.version }}"
-
-          # Convert hex sha256 to Nix SRI format (sha256-<base64>)
-          sri_hash() {
-            echo -n "$1" | xxd -r -p | base64 | tr -d '\n' | sed 's/^/sha256-/'
-          }
-
-          LINUX_X86=$(sri_hash "$(grep "linux-x86_64.tar.gz" artifacts/checksums.txt | awk '{print $1}')")
-          LINUX_ARM=$(sri_hash "$(grep "linux-aarch64.tar.gz" artifacts/checksums.txt | awk '{print $1}')")
-          MACOS_ARM=$(sri_hash "$(grep "macos-arm64.tar.gz" artifacts/checksums.txt | awk '{print $1}')")
-          MACOS_X86=$(sri_hash "$(grep "macos-x86_64.tar.gz" artifacts/checksums.txt | awk '{print $1}')")
-
-          sed -i "0,/version = \".*\";/s|version = \".*\";|version = \"${VERSION}\";|" flake.nix
-          sed -i "/linux-x86_64/{n;s|hash = \".*\";|hash = \"${LINUX_X86}\";|}" flake.nix
-          sed -i "/linux-aarch64/{n;s|hash = \".*\";|hash = \"${LINUX_ARM}\";|}" flake.nix
-          sed -i "/macos-x86_64/{n;s|hash = \".*\";|hash = \"${MACOS_X86}\";|}" flake.nix
-          sed -i "/macos-arm64/{n;s|hash = \".*\";|hash = \"${MACOS_ARM}\";|}" flake.nix
+          sed -i "s/version = \".*\";/version = \"${VERSION}\";/" flake.nix
 
       - name: Commit, tag, and push
         run: |
           VERSION="${{ inputs.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add flake.nix
-          git diff --cached --quiet && echo "No flake changes" && exit 0
-          git commit -m "Update flake.nix to ${VERSION}"
+          git add flake.nix scala.lock.json
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Release ${VERSION}"
           git push origin main
           git tag "v${VERSION}"
           git push origin "v${VERSION}"

@@ -18,7 +18,28 @@
     },
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "scala-cli-nix": "scala-cli-nix"
+      }
+    },
+    "scala-cli-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1782242239,
+        "narHash": "sha256-kqPVxdAUFFFDktEcCjd+9mK1cphEKMr6PER4Z6hHVJ4=",
+        "owner": "scala-nix",
+        "repo": "scala-cli-nix",
+        "rev": "ee6c4edc6f1bb418df5eeafe87786410a6a400a9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "scala-nix",
+        "repo": "scala-cli-nix",
+        "type": "github"
       }
     }
   },

@@ -1,0 +1,121 @@
+{
+  "dependencies": [
+    {
+      "sha256": "OA529lAByYzWLHso5/iZtgkhhRmgKHkqSEviB371KnI=",
+      "url": "https://repo1.maven.org/maven2/ch/epfl/scala/tasty-query_3/1.7.0/tasty-query_3-1.7.0.jar"
+    },
+    {
+      "sha256": "K8oTN3Jp8zpXW/adfoSvW5EkMVZgYq2EWbvtye1TnTo=",
+      "url": "https://repo1.maven.org/maven2/co/fs2/fs2-core_3/3.11.0/fs2-core_3-3.11.0.jar"
+    },
+    {
+      "sha256": "iI6009BvNxzxSxwddOiA92nzdK4+M4KZV57WLYQIefk=",
+      "url": "https://repo1.maven.org/maven2/co/fs2/fs2-io_3/3.11.0/fs2-io_3-3.11.0.jar"
+    },
+    {
+      "sha256": "Cdz2y1DslaqBj+7G7YhRJjHB7cQOjLpA/h924SuXYgw=",
+      "url": "https://repo1.maven.org/maven2/com/comcast/ip4s-core_3/3.6.0/ip4s-core_3-3.6.0.jar"
+    },
+    {
+      "sha256": "MujJhkU2nQVICqSFSHwQ0zFH6FeHYKhbUgTbGLo/U10=",
+      "url": "https://repo1.maven.org/maven2/com/github/pureconfig/pureconfig-core_3/0.17.10/pureconfig-core_3-0.17.10.jar"
+    },
+    {
+      "sha256": "moeOOawIhNMK/w692tjlk1Tv92AOgz4v5SNzlm9YEmM=",
+      "url": "https://repo1.maven.org/maven2/com/monovore/decline-effect_3/2.4.1/decline-effect_3-2.4.1.jar"
+    },
+    {
+      "sha256": "FD3U1rV2G0CVVHHF948zcWS0u21Rlfm1fw4Ruu3TE00=",
+      "url": "https://repo1.maven.org/maven2/com/monovore/decline_3/2.4.1/decline_3-2.4.1.jar"
+    },
+    {
+      "sha256": "SksK/7IqlXJAnTpr3pnOPyBFxVHK3Byn/glpCJLFJsM=",
+      "url": "https://repo1.maven.org/maven2/com/typesafe/config/1.4.5/config-1.4.5.jar"
+    },
+    {
+      "sha256": "dZL+SceJtVQpSDGFrCKsbaQ2gKOcU7gYxQvKD7fdang=",
+      "url": "https://repo1.maven.org/maven2/io/get-coursier/interface/1.0.28/interface-1.0.28.jar"
+    },
+    {
+      "sha256": "daw2bo7LaR4Gp+hQQe7Q9nkZpkblJi+gkBIlaYwQQ3U=",
+      "url": "https://repo1.maven.org/maven2/org/scala-lang/modules/scala-asm/9.9.0-scala-1/scala-asm-9.9.0-scala-1.jar"
+    },
+    {
+      "sha256": "p9n/OHsFlubmL+YJVEg+Mcu1h1ih7FcWerwsCYKM2gE=",
+      "url": "https://repo1.maven.org/maven2/org/scala-lang/scala-library/3.8.1/scala-library-3.8.1.jar"
+    },
+    {
+      "sha256": "4SeOyxKgqhbnZEBURQJ5wlRux7dr27aIisgumm75rHE=",
+      "url": "https://repo1.maven.org/maven2/org/scala-lang/scala3-compiler_3/3.8.1/scala3-compiler_3-3.8.1.jar"
+    },
+    {
+      "sha256": "ixyn2NtnhQqam1uDr6DlLPDQ1BuBGMY3oT0z8RHsga8=",
+      "url": "https://repo1.maven.org/maven2/org/scala-lang/scala3-interfaces/3.8.1/scala3-interfaces-3.8.1.jar"
+    },
+    {
+      "sha256": "XpruRQyaFYDYYQl0RI6ewVJZJUt3rkUVBhnB4u2PATc=",
+      "url": "https://repo1.maven.org/maven2/org/scala-lang/scala3-library_3/3.8.1/scala3-library_3-3.8.1.jar"
+    },
+    {
+      "sha256": "kHC+2OchuPiAJBNKyuWGs0v98gkq8jk016NZn/CF09U=",
+      "url": "https://repo1.maven.org/maven2/org/scala-lang/scala3-tasty-inspector_3/3.8.1/scala3-tasty-inspector_3-3.8.1.jar"
+    },
+    {
+      "sha256": "OpQLU5cbO5CLt/EgL/pAnQ5cZ8++wD8xqlmS3hK0QL0=",
+      "url": "https://repo1.maven.org/maven2/org/scala-lang/tasty-core_3/3.8.1/tasty-core_3-3.8.1.jar"
+    },
+    {
+      "sha256": "K6zFdh4DkgoijlydILM9nFHUOq8vUuj4OezmMJZuuIA=",
+      "url": "https://repo1.maven.org/maven2/org/scala-sbt/compiler-interface/1.10.7/compiler-interface-1.10.7.jar"
+    },
+    {
+      "sha256": "HWuR76QrcPwGTK7W1iliN04Tsnc3+IWofITGZ7ML5iU=",
+      "url": "https://repo1.maven.org/maven2/org/scala-sbt/util-interface/1.10.7/util-interface-1.10.7.jar"
+    },
+    {
+      "sha256": "mR7vOKAZiT7WXXfY2O8WuF/615ntJ9XwzLVHM3/JbG0=",
+      "url": "https://repo1.maven.org/maven2/org/scodec/scodec-bits_3/1.1.38/scodec-bits_3-1.1.38.jar"
+    },
+    {
+      "sha256": "0+9XXj5JeWeNwBvx3M5RAhSTtNEft/G+itmCh3wWocA=",
+      "url": "https://repo1.maven.org/maven2/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar"
+    },
+    {
+      "sha256": "yFP3SjGdfbZH3LsfHATEt0yaQRZDoYZGXUa2PbA3M8Y=",
+      "url": "https://repo1.maven.org/maven2/org/typelevel/cats-core_3/2.11.0/cats-core_3-2.11.0.jar"
+    },
+    {
+      "sha256": "NapvXrU5w/opPF6A0GUBEtrDWG6pXZJ/JI7bhImLPdI=",
+      "url": "https://repo1.maven.org/maven2/org/typelevel/cats-effect-kernel_3/3.5.7/cats-effect-kernel_3-3.5.7.jar"
+    },
+    {
+      "sha256": "xkh/mJURMEmxpuzANedKBbcQ4CWMANFPLZiUq4pdam4=",
+      "url": "https://repo1.maven.org/maven2/org/typelevel/cats-effect-std_3/3.5.7/cats-effect-std_3-3.5.7.jar"
+    },
+    {
+      "sha256": "nU7cB0rXaOjImdXVoyJ2Xu0xgOsGy8JKCsjWdD8ZTnA=",
+      "url": "https://repo1.maven.org/maven2/org/typelevel/cats-effect_3/3.5.7/cats-effect_3-3.5.7.jar"
+    },
+    {
+      "sha256": "If5JZ1NaJ1jYAIdpxxsdbJtulDb083YxGV200DSoHiA=",
+      "url": "https://repo1.maven.org/maven2/org/typelevel/cats-kernel_3/2.11.0/cats-kernel_3-2.11.0.jar"
+    },
+    {
+      "sha256": "LLFM1L2XsfcwPH3Fs7j/b6o/vITOLwkWKI0hm42cFA0=",
+      "url": "https://repo1.maven.org/maven2/org/typelevel/literally_3/1.1.0/literally_3-1.1.0.jar"
+    },
+    {
+      "sha256": "uhx6r5q6Mhe5GUKRH/RQ46QVINvfUKttLqxRPH/zOH8=",
+      "url": "https://repo1.maven.org/maven2/org/virtuslab/cellar-cli_3/0.1.0-M9/cellar-cli_3-0.1.0-M9.jar"
+    },
+    {
+      "sha256": "+JKcnxZZU7YDKB/TX3nSaisOB/KzhCmst9sXVtIJjU0=",
+      "url": "https://repo1.maven.org/maven2/org/virtuslab/cellar-lib_3/0.1.0-M9/cellar-lib_3-0.1.0-M9.jar"
+    }
+  ],
+  "javaOptions": [
+  ],
+  "kind": "coursier-app",
+  "mainClass": "cellar.cli.CellarApp",
+  "version": 9
+}
