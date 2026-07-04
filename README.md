@@ -320,10 +320,11 @@ profiling {
     **Origin:** cats.Monad
     **Members:**
     ```scala
-    def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B]
     def pure[A](x: A): F[A]
+    def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B]
     def flatten[A](ffa: F[F[A]]): F[A]
-    def iterateWhile[A](f: F[A])(p: A => Boolean): F[A]
+    def untilM[G[_], A](f: F[A])(cond: => F[Boolean])(implicit G: Alternative[G]): F[G[A]]
+    def compose[G[_]](implicit evidence$1: Applicative[G]): Applicative[[α] =>> F[G[α]]]
     ...
     ```
 
@@ -333,7 +334,7 @@ profiling {
 <summary><code>cellar list-external org.typelevel:cats-core_3:2.10.0 cats --limit 5</code></summary>
 
     object Eval$
-    trait ComposedContravariantCovariant[F, G] extends Contravariant[TypeLambda]
+    trait ComposedContravariantCovariant[F, G] extends Contravariant[[α] =>> F[G[α]]]
     object Later$
     object Show$
     trait EvalSemigroup[A] extends Semigroup[Eval[A]]

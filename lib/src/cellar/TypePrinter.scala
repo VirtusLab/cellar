@@ -25,7 +25,7 @@ object TypePrinter:
         t.prefix match
           case NoPrefix                          => name
           case _: ThisType                       => name
-          case p: Type if isPackageOrNone(p)    => name
+          case p: Type if isElidedPrefix(p)      => name
           case p: Type                           => s"${printType(p)}.$name"
           case _                                 => name
 
@@ -38,8 +38,15 @@ object TypePrinter:
               case _ => params.map(printTypeOrWildcard).mkString("(", ", ", ")")
             s"$lhs$arrow${printTypeOrWildcard(result)}"
           case None =>
-            val args = t.args.map(printTypeOrWildcard).mkString(", ")
-            s"${printType(t.tycon)}[$args]"
+            asTuple(t) match
+              case Some(elems) => elems.map(printTypeOrWildcard).mkString("(", ", ", ")")
+              case None =>
+                asInfix(t) match
+                  case Some((lhs, op, rhs)) =>
+                    s"${printTypeOrWildcard(lhs)} $op ${printTypeOrWildcard(rhs)}"
+                  case None =>
+                    val args = t.args.map(printTypeOrWildcard).mkString(", ")
+                    s"${printType(t.tycon)}[$args]"
 
       case t: ByNameType     => s"=> ${printType(t.resultType)}"
       case t: AndType        => s"${printType(t.first)} & ${printType(t.second)}"
@@ -56,6 +63,9 @@ object TypePrinter:
       case t: ConstantType   => t.value.value.toString
       case t: MatchType      => s"${printType(t.scrutinee)} match { ... }"
       case t: FlexibleType   => printType(t.nonNullableType)
+      case t: TypeLambda =>
+        val params = t.paramNames.zip(t.paramTypeBounds).map(printTypeParam)
+        s"[${params.mkString(", ")}] =>> ${printType(t.resultType)}"
       case _                 => tpe.getClass.getSimpleName
 
   def printMethodic(tpe: TypeOrMethodic)(using ctx: Context): String =
@@ -75,14 +85,7 @@ object TypePrinter:
         s"$paramStr$rest"
 
       case t: PolyType =>
-        val typeParams = t.paramNames.zip(t.paramTypeBounds).map { (n, bounds) =>
-          bounds match
-            case b: AbstractTypeBounds =>
-              val lo = if printType(b.low) == "Nothing" then "" else s" >: ${printType(b.low)}"
-              val hi = if printType(b.high) == "Any" then "" else s" <: ${printType(b.high)}"
-              s"$n$lo$hi"
-            case _ => n.toString
-        }
+        val typeParams = t.paramNames.zip(t.paramTypeBounds).map(printTypeParam)
         s"[${typeParams.mkString(", ")}]${printMethodic(t.resultType)}"
 
       case t: Type => printType(t)
@@ -108,9 +111,7 @@ object TypePrinter:
       case term: TermSymbol =>
         val keyword = termKeyword(term)
         if term.isModuleVal then s"$keyword ${term.name}"
-        else
-          val sig = printMethodic(term.declaredType)
-          s"$keyword ${term.name}$sig"
+        else s"$keyword ${term.name}${printTopLevelMethodic(term.declaredType)}"
 
       case other => other.toString
 
@@ -121,25 +122,70 @@ object TypePrinter:
     else if sym.isModuleVal then "object"
     else "val"
 
-  private def printClassTypeParams(params: List[ClassTypeParamSymbol]): String =
+  private def printTopLevelMethodic(tpe: TypeOrMethodic)(using ctx: Context): String =
+    tpe match
+      case t: Type => s": ${printType(t)}"
+      case t: PolyType =>
+        val typeParams = t.paramNames.zip(t.paramTypeBounds).map(printTypeParam)
+        s"[${typeParams.mkString(", ")}]${printTopLevelMethodic(t.resultType)}"
+      case t: MethodType => printMethodic(t)
+
+  private def printClassTypeParams(params: List[ClassTypeParamSymbol])(using ctx: Context): String =
     if params.isEmpty then ""
     else
-      val rendered = params.map { p =>
-        val variance = p.declaredVariance.productPrefix match
-          case "Covariant"     => "+"
-          case "Contravariant" => "-"
-          case _               => ""
-        s"$variance${p.name}"
-      }
+      val rendered = params.map(printClassTypeParam)
       s"[${rendered.mkString(", ")}]"
+
+  private def printClassTypeParam(param: ClassTypeParamSymbol)(using ctx: Context): String =
+    val variance = param.declaredVariance.productPrefix match
+      case "Covariant"     => "+"
+      case "Contravariant" => "-"
+      case _               => ""
+    s"$variance${printTypeParam(param.name, param.declaredBounds)}"
+
+  private def printTypeParam(name: tastyquery.Names.TypeName, bounds: TypeBounds)(using ctx: Context): String =
+    bounds match
+      case b: AbstractTypeBounds =>
+        b.high match
+          case tl: TypeLambda => s"$name${printHkParams(tl)}"
+          case _ =>
+            val lo = if printType(b.low) == "Nothing" then "" else s" >: ${printType(b.low)}"
+            val hi = if printType(b.high) == "Any" then "" else s" <: ${printType(b.high)}"
+            s"$name$lo$hi"
+      case _ => name.toString
+
+  private def printHkParams(tl: TypeLambda)(using ctx: Context): String =
+    val rendered = tl.paramNames.zip(tl.paramTypeBounds).map { (name, bounds) =>
+      val (lo, hi) = bounds match
+        case b: AbstractTypeBounds =>
+          val lo = if printType(b.low) == "Nothing" then "" else s" >: ${printType(b.low)}"
+          val hi = if printType(b.high) == "Any" then "" else s" <: ${printType(b.high)}"
+          (lo, hi)
+        case _ => ("", "")
+      (name.toString, lo, hi)
+    }
+    // A parameter must be named (not `_`) when it is referenced elsewhere in the lambda:
+    // in a bound (self-referential, e.g. `A <: Comparable[A]`) or in the constructor
+    // bound (the lambda's result, e.g. `F[A] <: Iterable[A]`).
+    val resultStr = printType(tl.resultType)
+    val context   = (resultStr :: rendered.flatMap((_, lo, hi) => List(lo, hi))).mkString(" ")
+    val params = rendered.map { (name, lo, hi) =>
+      val head = if isMentioned(context, name) then name else "_"
+      s"$head$lo$hi"
+    }
+    val constructorBound = if resultStr == "Any" then "" else s" <: $resultStr"
+    s"[${params.mkString(", ")}]$constructorBound"
+
+  private def isMentioned(context: String, name: String): Boolean =
+    context.matches(s"(?s).*\\b${java.util.regex.Pattern.quote(name)}\\b.*")
 
   private def printTypeOrWildcard(tow: TypeOrWildcard)(using ctx: Context): String =
     tow match
       case w: WildcardTypeArg =>
         w.bounds match
           case b: AbstractTypeBounds =>
-            val lo = if b.low.toString == "Nothing" then "" else s" >: ${printType(b.low)}"
-            val hi = if b.high.toString == "Any" then "" else s" <: ${printType(b.high)}"
+            val lo = if printType(b.low) == "Nothing" then "" else s" >: ${printType(b.low)}"
+            val hi = if printType(b.high) == "Any" then "" else s" <: ${printType(b.high)}"
             if lo.isEmpty && hi.isEmpty then "?" else s"?$lo$hi"
           case _ => "?"
       case t: Type => printType(t)
@@ -151,9 +197,10 @@ object TypePrinter:
       case t: AppliedType if asFunction(t).isDefined => s"($rendered)"
       case _                                         => rendered
 
-  private def isPackageOrNone(prefix: Type): Boolean =
+  private def isElidedPrefix(prefix: Type): Boolean =
     prefix match
       case _: ThisType => true
+      case t: TermRef  => t.name.toString == "Predef" || t.name.toString == "package"
       case _           => false
 
   /** Decompose `scala.FunctionN` / `scala.ContextFunctionN` into (isContextual, params, result). */
@@ -172,13 +219,33 @@ object TypePrinter:
         }
       case _ => None
 
+  /** Decompose `scala.TupleN` (arity >= 2) into its element types. */
+  private def asTuple(t: AppliedType): Option[List[TypeOrWildcard]] =
+    t.tycon match
+      case tycon: TypeRef if isScalaPackage(tycon.prefix) =>
+        tycon.name.toString.stripPrefix("Tuple").toIntOption
+          .filter(arity => arity >= 2 && t.args.sizeIs == arity)
+          .map(_ => t.args)
+      case _ => None
+
+  /** Decompose a binary applied type whose tycon is a symbolic operator (e.g. `F ~> G`). */
+  private def asInfix(t: AppliedType): Option[(TypeOrWildcard, String, TypeOrWildcard)] =
+    t.tycon match
+      case tycon: TypeRef if t.args.sizeIs == 2 && isOperatorName(tycon.name.toString) =>
+        Some((t.args.head, tycon.name.toString, t.args(1)))
+      case _ => None
+
+  /** An identifier composed solely of operator characters (no letters/digits/`_`/`$`). */
+  private def isOperatorName(name: String): Boolean =
+    name.nonEmpty && name.forall(c => !c.isLetterOrDigit && c != '_' && c != '$')
+
   private def isScalaPackage(prefix: Prefix): Boolean =
     prefix match
       case p: PackageRef => p.fullyQualifiedName.toString == "scala"
       case _             => false
 
-  /** A function-typed left operand of `=>` must be parenthesised: `(A => B) => C`. */
+  /** A function- or tuple-typed left operand of `=>` must be parenthesised: `(A => B) => C`, `((A, B)) => C`. */
   private def functionArgNeedsParens(tow: TypeOrWildcard): Boolean =
     tow match
-      case t: AppliedType => asFunction(t).isDefined
+      case t: AppliedType => asFunction(t).isDefined || asTuple(t).isDefined
       case _              => false
