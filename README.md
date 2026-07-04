@@ -320,10 +320,10 @@ profiling {
     **Origin:** cats.Monad
     **Members:**
     ```scala
-    def flatMap[A, B](fa: F[A])(f: Function1[A, F[B]]): F[B]
+    def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B]
     def pure[A](x: A): F[A]
     def flatten[A](ffa: F[F[A]]): F[A]
-    def iterateWhile[A](f: F[A])(p: Function1[A, Boolean]): F[A]
+    def iterateWhile[A](f: F[A])(p: A => Boolean): F[A]
     ...
     ```
 

@@ -30,8 +30,16 @@ object TypePrinter:
           case _                                 => name
 
       case t: AppliedType =>
-        val args = t.args.map(printTypeOrWildcard).mkString(", ")
-        s"${printType(t.tycon)}[$args]"
+        asFunction(t) match
+          case Some((contextual, params, result)) =>
+            val arrow = if contextual then " ?=> " else " => "
+            val lhs = params match
+              case single :: Nil if !functionArgNeedsParens(single) => printTypeOrWildcard(single)
+              case _ => params.map(printTypeOrWildcard).mkString("(", ", ", ")")
+            s"$lhs$arrow${printTypeOrWildcard(result)}"
+          case None =>
+            val args = t.args.map(printTypeOrWildcard).mkString(", ")
+            s"${printType(t.tycon)}[$args]"
 
       case t: ByNameType     => s"=> ${printType(t.resultType)}"
       case t: AndType        => s"${printType(t.first)} & ${printType(t.second)}"
@@ -53,19 +61,25 @@ object TypePrinter:
   def printMethodic(tpe: TypeOrMethodic)(using ctx: Context): String =
     tpe match
       case t: MethodType =>
-        val prefix = if t.isContextual then "using " else ""
+        val prefix =
+          if t.isContextual then "using "
+          else if t.isImplicit then "implicit "
+          else ""
         val params = t.paramNames.zip(t.paramTypes).map { (n, tp) =>
           s"$n: ${printType(tp)}"
         }
         val paramStr = s"($prefix${params.mkString(", ")})"
-        s"$paramStr: ${printMethodic(t.resultType)}"
+        val rest = t.resultType match
+          case _: MethodType | _: PolyType => printMethodic(t.resultType)
+          case r                           => s": ${printMethodic(r)}"
+        s"$paramStr$rest"
 
       case t: PolyType =>
         val typeParams = t.paramNames.zip(t.paramTypeBounds).map { (n, bounds) =>
           bounds match
             case b: AbstractTypeBounds =>
-              val lo = if b.low.toString == "Nothing" then "" else s" >: ${printType(b.low)}"
-              val hi = if b.high.toString == "Any" then "" else s" <: ${printType(b.high)}"
+              val lo = if printType(b.low) == "Nothing" then "" else s" >: ${printType(b.low)}"
+              val hi = if printType(b.high) == "Any" then "" else s" <: ${printType(b.high)}"
               s"$n$lo$hi"
             case _ => n.toString
         }
@@ -87,7 +101,7 @@ object TypePrinter:
       case cls: ClassSymbol =>
         val kind       = if cls.isTrait then "trait" else if cls.isModuleClass then "object" else "class"
         val typeParams = printClassTypeParams(cls.typeParams)
-        val parents    = cls.parents.map(printType).filter(p => p != "Object" && p != "Any")
+        val parents    = cls.parents.map(printParent).filter(p => p != "Object" && p != "Any")
         val extendsStr = if parents.isEmpty then "" else s" extends ${parents.mkString(" with ")}"
         s"$kind ${cls.name}$typeParams$extendsStr"
 
@@ -130,7 +144,41 @@ object TypePrinter:
           case _ => "?"
       case t: Type => printType(t)
 
+  /** Render a class parent, parenthesising function-arrow sugar so it is valid in `extends` position. */
+  private def printParent(tpe: Type)(using ctx: Context): String =
+    val rendered = printType(tpe)
+    tpe match
+      case t: AppliedType if asFunction(t).isDefined => s"($rendered)"
+      case _                                         => rendered
+
   private def isPackageOrNone(prefix: Type): Boolean =
     prefix match
       case _: ThisType => true
       case _           => false
+
+  /** Decompose `scala.FunctionN` / `scala.ContextFunctionN` into (isContextual, params, result). */
+  private def asFunction(t: AppliedType): Option[(Boolean, List[TypeOrWildcard], TypeOrWildcard)] =
+    t.tycon match
+      case tycon: TypeRef if isScalaPackage(tycon.prefix) =>
+        val name = tycon.name.toString
+        val decoded =
+          if name.startsWith("ContextFunction") then Some((true, name.stripPrefix("ContextFunction")))
+          else if name.startsWith("Function") then Some((false, name.stripPrefix("Function")))
+          else None
+        decoded.flatMap { (contextual, digits) =>
+          digits.toIntOption
+            .filter(arity => arity >= 0 && t.args.sizeIs == arity + 1)
+            .map(_ => (contextual, t.args.init, t.args.last))
+        }
+      case _ => None
+
+  private def isScalaPackage(prefix: Prefix): Boolean =
+    prefix match
+      case p: PackageRef => p.fullyQualifiedName.toString == "scala"
+      case _             => false
+
+  /** A function-typed left operand of `=>` must be parenthesised: `(A => B) => C`. */
+  private def functionArgNeedsParens(tow: TypeOrWildcard): Boolean =
+    tow match
+      case t: AppliedType => asFunction(t).isDefined
+      case _              => false
