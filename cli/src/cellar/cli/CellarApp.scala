@@ -79,7 +79,7 @@ object CellarApp extends ProfilingIOApp:
                |    { "label": "Disable",          "description": "Opt out for this project.",               "command": "cellar telemetry disable" },
                |    { "label": "Disable globally", "description": "Never ask again across any project.",     "command": "cellar telemetry disable --global" }
                |  ],
-               |  "details": "https://github.com/VirtusLab/cellar#telemetry"
+               |  "details": "Telemetry overview: https://github.com/VirtusLab/cellar#telemetry — Privacy Policy: https://github.com/VirtusLab/cellar/blob/main/PRIVACY_POLICY.md"
                |}""".stripMargin
           IO(System.err.println(json)) *>
             Files[IO].createDirectories(projectMarker.parent.get) *>

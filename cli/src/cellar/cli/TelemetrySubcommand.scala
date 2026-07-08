@@ -22,7 +22,10 @@ object TelemetrySubcommand:
       Opts.unit.map { _ =>
         setEnabled(true) *> markAnswered *>
           InstallationId.ensure.flatMap(id =>
-            IO.println(s"Telemetry enabled. Installation ID: $id")
+            IO.println(
+              s"Telemetry enabled. Installation ID: $id\n" +
+                "Privacy Policy: https://github.com/VirtusLab/cellar/blob/main/PRIVACY_POLICY.md"
+            )
           ).as(ExitCode.Success)
       }
     }
