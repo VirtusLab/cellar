@@ -235,7 +235,7 @@ Or via environment: `CELLAR_SBT_BINARY=sbtn cellar get --module core cats.Monad`
 Cellar collects **anonymous usage telemetry** to help improve the tool. It is opt-in. On first use cellar asks you to choose before running:
 
 - **In an interactive terminal** you're prompted inline (`[1] enable  [2] enable globally  [3] disable (default)  [4] disable globally`); once you answer, the requested command continues in the same run.
-- **Non-interactively** (output piped, CI, or an AI agent) cellar withholds the command and prints a machine-readable consent request instead. It repeats this up to three times; if still unanswered, it proceeds with telemetry disabled.
+- **Non-interactively** (output piped, CI, or an AI agent) cellar withholds the command and prints a machine-readable consent request instead. The command stays withheld on every run until a choice is recorded (e.g. with `cellar telemetry disable`).
 
 Either way, telemetry stays disabled until you explicitly enable it.
 
