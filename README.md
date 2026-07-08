@@ -61,6 +61,18 @@ sudo mv cellar /usr/local/bin/
 
 To verify checksums and signatures, see [RELEASING.md](RELEASING.md).
 
+### Development snapshots
+
+Unstable builds of the latest development code are published to a rolling [`snapshot`](https://github.com/VirtusLab/cellar/releases/tag/snapshot) prerelease. The download URLs are stable and always serve the newest build:
+
+```sh
+# Linux x86_64 (also: linux-aarch64, macos-arm64, macos-x86_64)
+curl -fsSL https://github.com/VirtusLab/cellar/releases/download/snapshot/cellar-linux-x86_64.tar.gz | tar xz
+sudo mv cellar /usr/local/bin/
+```
+
+Snapshots are not published to Maven Central and are not picked up by `cs install`. See [RELEASING.md](RELEASING.md#development-snapshots) for how they are produced.
+
 ## Quick start
 
 ```sh
