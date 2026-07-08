@@ -1,0 +1,63 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    command: ["--config=/etc/otel-collector-config.yml"]
+    volumes:
+      - ./otel-collector-config.yml:/etc/otel-collector-config.yml:ro
+    ports:
+      - "4318:4318"   # OTLP HTTP (cellar -> collector)
+    networks:
+      - cellar-network
+
+  pyroscope:
+    image: grafana/pyroscope:2.0.1
+    command:
+      - "server"
+      - "-self-profiling.disable-push=true"
+    ports:
+      - "4040:4040"   # Pyroscope ingest (cellar agent -> pyroscope)
+    networks:
+      - cellar-network
+
+  tempo:
+    image: grafana/tempo:2.10.5
+    command: ["-config.file=/etc/tempo-config.yml"]
+    volumes:
+      - ./tempo-config.yml:/etc/tempo-config.yml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo HTTP query (Grafana -> Tempo)
+    depends_on: [prometheus]
+    networks:
+      - cellar-network
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-remote-write-receiver"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - cellar-network
+
+  grafana:
+    image: grafana/grafana:13.0.1
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    depends_on: [tempo, pyroscope, prometheus]
+    networks:
+      - cellar-network
+
+networks:
+  cellar-network:
+
+volumes:
+  tempo-data:

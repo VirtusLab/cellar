@@ -184,6 +184,16 @@ starvation-checks {
   # Set to true during development or CI to surface warnings.
   enabled = false             # env: CELLAR_STARVATION_CHECKS_ENABLED
 }
+
+otel {
+  enabled = false             # env: CELLAR_OTEL_ENABLED
+  endpoint = "http://localhost:4318/v1/traces"  # env: CELLAR_OTEL_ENDPOINT
+}
+
+profiling {
+  enabled = false                                 # env: CELLAR_PROFILING_ENABLED
+  pyroscope-endpoint = "http://localhost:4040"    # env: CELLAR_PYROSCOPE_ENDPOINT
+}
 ```
 
 ### Examples
@@ -207,6 +217,60 @@ mill { binary = "./millw" }
 ```
 
 Or via environment: `CELLAR_SBT_BINARY=sbtn cellar get --module core cats.Monad`
+
+## Telemetry
+
+Cellar collects **anonymous usage telemetry** to help improve the tool. It is opt-in: the first time you run cellar you'll see a one-time notice on stderr (the command still runs normally), and telemetry stays disabled until you explicitly enable it.
+
+The formal data-protection terms covering this telemetry are in the [Privacy Policy](PRIVACY_POLICY.md).
+
+### What is collected
+
+Each command sends an OpenTelemetry trace with a root `cellar.command` span (plus child spans for hot-path operations). These are the only attributes emitted — nothing else:
+
+| Attribute | Example | Span |
+|---|---|---|
+| `command.name` | `get-external` | root |
+| `cellar.version` | `0.4.0` | root |
+| `os.type` | `Mac OS X` | root |
+| `command.success` | `true` | root |
+| `error.category` | `user` or `system` (only on failure) | root |
+| `error.type` | `CoordinateNotFound` (only on failure) | root |
+| `installation.id` | anonymous UUID (see below) | root |
+| `build.tool` | `mill`, `sbt`, etc. | `build.classpath` |
+
+**What is never sent**: Maven coordinates, fully-qualified symbol names, search queries, error messages, stack traces, or any other user data.
+
+### Installation ID
+
+The installation ID is a randomly-generated UUID stored in `~/.cellar/installation_id`. It identifies your installation, not you: there is no account, no email, and no way to link it to a person. You can reset it at any time with `cellar telemetry reset-id`.
+
+### Managing telemetry
+
+```sh
+cellar telemetry enable    # opt in
+cellar telemetry disable   # opt out
+cellar telemetry status    # show current status and installation ID
+cellar telemetry reset-id  # generate a new anonymous installation ID
+```
+
+### Configuration
+
+Telemetry can also be controlled via `~/.cellar/cellar.conf` or environment variables:
+
+```hocon
+otel {
+  enabled = true                        # env: CELLAR_OTEL_ENABLED
+  endpoint = "http://localhost:4318/v1/traces"  # env: CELLAR_OTEL_ENDPOINT
+}
+
+# Pyroscope JVM-agent profiles linked to traces (local-dev only; the production
+# stack does not accept profiles). Only active when running from the JAR.
+profiling {
+  enabled = true                                  # env: CELLAR_PROFILING_ENABLED
+  pyroscope-endpoint = "http://localhost:4040"    # env: CELLAR_PYROSCOPE_ENDPOINT
+}
+```
 
 ## Output conventions
 
@@ -283,6 +347,10 @@ Alternatively, add the following to your project's `CLAUDE.md`:
 ## Cellar
 
 When you need the API of a JVM dependency, use cellar. Always prefer cellar over hallucinating API signatures.
+
+### Telemetry notice
+
+On first run in a project, cellar emits a `{"status":"needs_input",...}` JSON object on stderr. When you see it, pause and ask the user the question before continuing.
 
 ### Project-aware commands (run from project root)
 

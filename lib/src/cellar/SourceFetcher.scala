@@ -4,6 +4,7 @@ import cats.effect.{IO, Resource}
 import coursierapi.Repository
 import fs2.io.file.Path
 import fs2.io.readInputStream
+import org.typelevel.otel4s.trace.Tracer
 
 import java.util.zip.ZipFile
 import scala.jdk.CollectionConverters.*
@@ -17,7 +18,7 @@ object SourceFetcher:
       startLine: Int,
       endLine: Int,
       extraRepositories: Seq[Repository] = Seq.empty
-  ): IO[Either[String, SourceResult]] =
+  )(using Tracer[IO]): IO[Either[String, SourceResult]] =
     CoursierFetchClient.fetchSourcesJar(coord, extraRepositories).flatMap {
       case None =>
         IO.pure(Left(s"No sources JAR published for '${coord.render}'."))

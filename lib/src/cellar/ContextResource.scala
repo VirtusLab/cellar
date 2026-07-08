@@ -4,24 +4,27 @@ import cats.effect.{IO, Resource}
 import cats.syntax.monadError.*
 import coursierapi.Repository
 import fs2.io.file.Path
+import org.typelevel.otel4s.trace.Tracer
 import tastyquery.Classpaths.Classpath
 import tastyquery.Contexts.Context
 import tastyquery.jdk.ClasspathLoaders
 
 object ContextResource:
-  def make(jars: Seq[Path], jreClasspath: Classpath): Resource[IO, (Context, Classpath)] =
+  def make(jars: Seq[Path], jreClasspath: Classpath)(using Tracer[IO]): Resource[IO, (Context, Classpath)] =
     Resource.eval {
-      for
-        jarClasspath <- IO.blocking(readClasspathRobust(jars.toList)).adaptError { case e =>
-                          new RuntimeException(
-                            s"Failed to load classpath (${e.getClass.getSimpleName}: ${e.getMessage}). " +
-                              "If JRE paths are invalid, set JAVA_HOME or use --java-home.",
-                            e
-                          )
-                        }
-        classpath    = jreClasspath ++ jarClasspath
-        ctx          <- IO.blocking(Context.initialize(classpath))
-      yield (ctx, classpath)
+      Tracer[IO].span("tasty.context.init").surround {
+        for
+          jarClasspath <- IO.blocking(readClasspathRobust(jars.toList)).adaptError { case e =>
+                            new RuntimeException(
+                              s"Failed to load classpath (${e.getClass.getSimpleName}: ${e.getMessage}). " +
+                                "If JRE paths are invalid, set JAVA_HOME or use --java-home.",
+                              e
+                            )
+                          }
+          classpath    = jreClasspath ++ jarClasspath
+          ctx          <- IO.blocking(Context.initialize(classpath))
+        yield (ctx, classpath)
+      }
     }
 
   /** Reads the classpath, excluding paths that cause `MatchError` in tasty-query
@@ -43,7 +46,7 @@ object ContextResource:
       coord: MavenCoordinate,
       jreClasspath: Classpath,
       extraRepositories: Seq[Repository] = Seq.empty
-  ): Resource[IO, (Context, Classpath)] =
+  )(using Tracer[IO]): Resource[IO, (Context, Classpath)] =
     Resource.eval(CoursierFetchClient.fetchClasspath(coord, extraRepositories)).flatMap { jars =>
       make(jars, jreClasspath).evalMap { (ctx, classpath) =>
         IO.blocking {

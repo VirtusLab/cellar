@@ -1,14 +1,15 @@
 package cellar.cli
 
-import cats.effect.{ExitCode, IO}
+import cats.effect.{ExitCode, IO, Resource}
 import cats.effect.unsafe.IORuntimeConfig
 import cats.syntax.all.*
 import cellar.*
 import cellar.handlers.{DepsHandler, GetHandler, GetSourceHandler, ListHandler, MetaHandler, ProjectGetHandler, ProjectListHandler, ProjectSearchHandler, SearchHandler}
+import cellar.profiling.{ProfilingIOApp, PyroscopeSetup, TracingRuntime}
 import com.monovore.decline.*
-import com.monovore.decline.effect.*
 import coursierapi.{MavenRepository, Repository}
-import fs2.io.file.Path
+import fs2.io.file.{Files, Flags, Path}
+import org.typelevel.otel4s.trace.Tracer
 
 import scala.concurrent.duration.Duration
 
@@ -28,24 +29,85 @@ private def platformLabel: String =
     case other              => other
   s"$os-$arch"
 
-object CellarApp
-    extends CommandIOApp(
-      name = "cellar",
-      header = "Inspect Maven-published JVM dependency APIs",
-      version = s"${BuildInfo.version} ($runtimeLabel, $platformLabel)"
-    ):
+object CellarApp extends ProfilingIOApp:
+
+  override def profilingEnabled: Boolean = Config.global.profiling.enabled
 
   override def runtimeConfig: IORuntimeConfig =
     val base = super.runtimeConfig
     if Config.global.starvationChecks.enabled then base
     else base.copy(cpuStarvationCheckInitialDelay = Duration.Inf)
 
-  override def main: Opts[IO[ExitCode]] =
-    getSubcmd orElse getExternalSubcmd orElse
-      getSourceSubcmd orElse
-      listSubcmd orElse listExternalSubcmd orElse
-      searchSubcmd orElse searchExternalSubcmd orElse
-      depsSubcmd orElse metaSubcmd
+  private lazy val tracingConfig = TracingConfigBridge.fromCellarConfig(Config.global)
+
+  private val pyroscopeResource: Resource[IO, Unit] =
+    tracingConfig.pyroscopeEndpoint.fold(Resource.unit[IO])(PyroscopeSetup.resource(_, "cellar"))
+
+  private def traced(commandName: String)(body: Tracer[IO] ?=> IO[ExitCode]): IO[ExitCode] =
+    val maybeInstallationId =
+      if tracingConfig.otlpEndpoint.isDefined then InstallationId.read else IO.pure(None)
+    pyroscopeResource.use { _ =>
+      maybeInstallationId.flatMap { installationId =>
+        TracingRuntime.tracedCommand(
+          tracingConfig,
+          sharedIOLocal,
+          BuildInfo.version,
+          commandName,
+          installationId = installationId,
+          classifyUserError = _.isInstanceOf[CellarError]
+        )(body)
+      }
+    }
+
+  private val firstRunNotice: IO[Unit] =
+    val telemetryAlreadyAnswered =
+      Config.global.otel.enabled || Config.global.profiling.enabled
+    if telemetryAlreadyAnswered then IO.unit
+    else
+      val projectMarker = Path(".cellar") / ".telemetry-seen"
+      val globalMarker  = TelemetrySubcommand.globalSeenMarker
+      (Files[IO].exists(projectMarker), Files[IO].exists(globalMarker)).mapN(_ || _).flatMap {
+        case true  => IO.unit
+        case false =>
+          val json =
+            """|{
+               |  "status": "needs_input",
+               |  "ui": "AskUserQuestion",
+               |  "question": "Would you like to enable anonymous cellar usage stats? (No coordinates, symbols, or user data — just command names and success/failure.)",
+               |  "options": [
+               |    { "label": "Enable",          "description": "Opt in — helps improve cellar.",          "command": "cellar telemetry enable" },
+               |    { "label": "Disable",          "description": "Opt out for this project.",               "command": "cellar telemetry disable" },
+               |    { "label": "Disable globally", "description": "Never ask again across any project.",     "command": "cellar telemetry disable --global" }
+               |  ],
+               |  "details": "https://github.com/VirtusLab/cellar#telemetry"
+               |}""".stripMargin
+          IO(System.err.println(json)) *>
+            Files[IO].createDirectories(projectMarker.parent.get) *>
+            Files[IO].open(projectMarker, Flags.Write).use_
+      }
+
+  def main: Opts[IO[ExitCode]] =
+    val regularCmds =
+      getSubcmd orElse getExternalSubcmd orElse
+        getSourceSubcmd orElse
+        listSubcmd orElse listExternalSubcmd orElse
+        searchSubcmd orElse searchExternalSubcmd orElse
+        depsSubcmd orElse metaSubcmd
+    regularCmds.map(cmd => firstRunNotice *> cmd) orElse TelemetrySubcommand.opts
+
+  override def run(args: List[String]): IO[ExitCode] =
+    val versionOpt = Opts
+      .flag("version", "Print the version number and exit", short = "V")
+      .map(_ => IO.println(s"${BuildInfo.version} ($runtimeLabel, $platformLabel)").as(ExitCode.Success))
+    val command = Command("cellar", "Inspect Maven-published JVM dependency APIs")(main <+> versionOpt)
+    command.parse(args, sys.env) match
+      case Left(help) if help.errors.nonEmpty =>
+        traced("parse-error")(IO.pure(ExitCode.Error)).void *>
+          IO.blocking(System.err.println(help)).as(ExitCode.Error)
+      case Left(help) =>
+        IO.blocking(System.out.println(help)).as(ExitCode.Success)
+      case Right(action) =>
+        action
 
   private given Argument[Path] = Argument[java.nio.file.Path].map(Path.fromNioPath)
 
@@ -94,14 +156,18 @@ object CellarApp
     Opts.subcommand("get", "Fetch symbol info from the current project") {
       (symbolArg, moduleOpt, memberLimitOpt, hideInheritedOpt, groupInheritedOpt, javaHomeOpt, noCacheOpt).mapN {
         (fqn, module, limit, hideInherited, groupInherited, javaHome, noCache) =>
-          ProjectGetHandler.run(fqn, module, javaHome, noCache, limit, hideInherited, groupInherited)
+          traced("get") {
+            ProjectGetHandler.run(fqn, module, javaHome, noCache, limit, hideInherited, groupInherited)
+          }
       }
     }
 
   private val listSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("list", "List symbols in a package or class from the current project") {
       (symbolArg, moduleOpt, limitOpt, javaHomeOpt, noCacheOpt).mapN { (fqn, module, limit, javaHome, noCache) =>
-        ProjectListHandler.run(fqn, module, limit, javaHome, noCache)
+        traced("list") {
+          ProjectListHandler.run(fqn, module, limit, javaHome, noCache)
+        }
       }
     }
 
@@ -109,7 +175,9 @@ object CellarApp
     Opts.subcommand("search", "Substring search for symbol names in the current project") {
       (Opts.argument[String]("query"), moduleOpt, limitOpt, javaHomeOpt, noCacheOpt).mapN {
         (query, module, limit, javaHome, noCache) =>
-          ProjectSearchHandler.run(query, module, limit, javaHome, noCache)
+          traced("search") {
+            ProjectSearchHandler.run(query, module, limit, javaHome, noCache)
+          }
       }
     }
 
@@ -117,9 +185,12 @@ object CellarApp
     Opts.subcommand("get-external", "Fetch symbol info from a Maven coordinate") {
       (coordArg, symbolArg, memberLimitOpt, hideInheritedOpt, groupInheritedOpt, javaHomeOpt, extraReposOpt).mapN {
         (rawCoord, fqn, limit, hideInherited, groupInherited, javaHome, extraRepos) =>
-          parseAndResolve(rawCoord, extraRepos).flatMap {
-            case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-            case Right(coord) => GetHandler.run(coord, fqn, javaHome, extraRepos, limit, hideInherited, groupInherited)
+          traced("get-external") {
+            parseAndResolve(rawCoord, extraRepos).flatMap {
+              case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
+              case Right(coord) =>
+                GetHandler.run(coord, fqn, javaHome, extraRepos, limit, hideInherited, groupInherited)
+            }
           }
       }
     }
@@ -127,9 +198,11 @@ object CellarApp
   private val getSourceSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("get-source", "Fetch the source code of a named symbol") {
       (coordArg, symbolArg, javaHomeOpt, extraReposOpt).mapN { (rawCoord, fqn, javaHome, extraRepos) =>
-        parseAndResolve(rawCoord, extraRepos).flatMap {
-          case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-          case Right(coord) => GetSourceHandler.run(coord, fqn, javaHome, extraRepos)
+        traced("get-source") {
+          parseAndResolve(rawCoord, extraRepos).flatMap {
+            case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
+            case Right(coord) => GetSourceHandler.run(coord, fqn, javaHome, extraRepos)
+          }
         }
       }
     }
@@ -137,9 +210,11 @@ object CellarApp
   private val listExternalSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("list-external", "List symbols from a Maven coordinate") {
       (coordArg, symbolArg, limitOpt, javaHomeOpt, extraReposOpt).mapN { (rawCoord, fqn, limit, javaHome, extraRepos) =>
-        parseAndResolve(rawCoord, extraRepos).flatMap {
-          case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-          case Right(coord) => ListHandler.run(coord, fqn, limit, javaHome, extraRepos)
+        traced("list-external") {
+          parseAndResolve(rawCoord, extraRepos).flatMap {
+            case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
+            case Right(coord) => ListHandler.run(coord, fqn, limit, javaHome, extraRepos)
+          }
         }
       }
     }
@@ -148,9 +223,11 @@ object CellarApp
     Opts.subcommand("search-external", "Substring search for symbol names from a Maven coordinate") {
       (coordArg, Opts.argument[String]("query"), limitOpt, javaHomeOpt, extraReposOpt).mapN {
         (rawCoord, query, limit, javaHome, extraRepos) =>
-          parseAndResolve(rawCoord, extraRepos).flatMap {
-            case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-            case Right(coord) => SearchHandler.run(coord, query, limit, javaHome, extraRepos)
+          traced("search-external") {
+            parseAndResolve(rawCoord, extraRepos).flatMap {
+              case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
+              case Right(coord) => SearchHandler.run(coord, query, limit, javaHome, extraRepos)
+            }
           }
       }
     }
@@ -158,9 +235,11 @@ object CellarApp
   private val depsSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("deps", "Print the transitive dependency list") {
       (coordArg, extraReposOpt).mapN { (rawCoord, extraRepos) =>
-        parseAndResolve(rawCoord, extraRepos).flatMap {
-          case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-          case Right(coord) => DepsHandler.run(coord, extraRepositories = extraRepos)
+        traced("deps") {
+          parseAndResolve(rawCoord, extraRepos).flatMap {
+            case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
+            case Right(coord) => DepsHandler.run(coord, extraRepositories = extraRepos)
+          }
         }
       }
     }
@@ -168,9 +247,11 @@ object CellarApp
   private val metaSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("meta", "Print POM metadata (name, description, license, SCM, developers)") {
       (coordArg, extraReposOpt).mapN { (rawCoord, extraRepos) =>
-        parseAndResolve(rawCoord, extraRepos).flatMap {
-          case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-          case Right(coord) => MetaHandler.run(coord, extraRepositories = extraRepos)
+        traced("meta") {
+          parseAndResolve(rawCoord, extraRepos).flatMap {
+            case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
+            case Right(coord) => MetaHandler.run(coord, extraRepositories = extraRepos)
+          }
         }
       }
     }

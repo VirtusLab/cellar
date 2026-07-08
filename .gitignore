@@ -18,4 +18,5 @@ langoustine-tracer
 .claude
 ai
 .cellar/cache
+.cellar/.telemetry-seen
 result

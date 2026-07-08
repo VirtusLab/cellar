@@ -5,6 +5,7 @@ import cats.effect.std.Console
 import cellar.*
 import coursierapi.Repository
 import fs2.io.file.Path
+import org.typelevel.otel4s.trace.Tracer
 import tastyquery.Classpaths.Classpath
 import tastyquery.Contexts.Context
 import tastyquery.Symbols.Symbol
@@ -18,7 +19,7 @@ object GetHandler:
       limit: Option[Int] = None,
       hideInherited: Boolean = false,
       groupInherited: Boolean = false
-  )(using Console[IO]): IO[ExitCode] =
+  )(using Console[IO], Tracer[IO]): IO[ExitCode] =
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
@@ -28,9 +29,7 @@ object GetHandler:
         }
       yield result
 
-    program.handleErrorWith { case e: Throwable =>
-      Console[IO].errorln(e.getMessage).as(ExitCode.Error)
-    }
+    program
 
   def runCore(
       fqn: String,
@@ -39,7 +38,7 @@ object GetHandler:
       limit: Option[Int] = None,
       hideInherited: Boolean = false,
       groupInherited: Boolean = false
-  )(using Context, Console[IO]): IO[ExitCode] =
+  )(using Context, Console[IO], Tracer[IO]): IO[ExitCode] =
     SymbolResolver.resolve(fqn).flatMap {
       case LookupResult.Found(symbols) =>
         val jars = classpath.filter(_.toString.endsWith(".jar")).map(e => Path(e.toString)).toSeq
@@ -74,7 +73,7 @@ object GetHandler:
     }
 
   /** Warns to stderr if the target FQN exists in more than one JAR on the classpath. */
-  private def warnShadedDuplicate(fqn: String, classpath: Classpath)(using Console[IO]): IO[Unit] =
+  private def warnShadedDuplicate(fqn: String, classpath: Classpath)(using Console[IO], Tracer[IO]): IO[Unit] =
     IO.blocking(findShadedDuplicate(fqn, classpath)).flatMap {
       case Some(err) => Console[IO].errorln(s"Warning: ${err.getMessage}")
       case None      => IO.unit
@@ -105,7 +104,7 @@ object GetHandler:
     else None
 
   /** Warns to stderr when any resolved symbol is from a Scala 2 artifact. */
-  private def warnScala2(symbols: List[Symbol])(using Console[IO]): IO[Unit] =
+  private def warnScala2(symbols: List[Symbol])(using Console[IO], Tracer[IO]): IO[Unit] =
     val isScala2 = symbols.exists(s => TypePrinter.detectLanguage(s) == DetectedLanguage.Scala2)
     if isScala2 then
       Console[IO].errorln("Note: Scala 2 artifact — type information may be incomplete.")

@@ -11,18 +11,32 @@ case class SbtConfig(binary: String, extraArgs: String) derives ConfigReader {
 
 case class StarvationChecksConfig(enabled: Boolean) derives ConfigReader
 
-case class Config(mill: MillConfig, sbt: SbtConfig, starvationChecks: StarvationChecksConfig) derives ConfigReader
+case class ProfilingConfig(enabled: Boolean, pyroscopeEndpoint: String) derives ConfigReader
+
+case class OtelConfig(enabled: Boolean, endpoint: String) derives ConfigReader
+
+case class Config(
+    mill: MillConfig,
+    sbt: SbtConfig,
+    starvationChecks: StarvationChecksConfig,
+    profiling: ProfilingConfig,
+    otel: OtelConfig
+) derives ConfigReader
 
 object Config {
   private val defaultUserPath: Option[Path] =
     sys.props.get("user.home").map(Path(_).resolve(".cellar").resolve("cellar.conf"))
   private val defaultProjectPath: Path = Path(".cellar").resolve("cellar.conf")
 
-  lazy val global: Config = {
+  private def load(): Config = {
     val paths = (defaultUserPath.toList ++ List(defaultProjectPath))
       .filter(p => java.nio.file.Files.exists(p.toNioPath))
     paths
       .foldLeft(ConfigSource.default)((cs, p) => ConfigSource.file(p.toNioPath).withFallback(cs))
       .loadOrThrow[Config]
   }
+
+  lazy val global: Config = load()
+
+  def loadFresh(): Config = load()
 }

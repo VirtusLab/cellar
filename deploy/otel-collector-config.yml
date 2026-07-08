@@ -1,0 +1,66 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+        # Must equal nginx's client_max_body_size (deploy/nginx/nginx.conf).
+        max_request_body_size: 1048576  # 1 MiB
+
+exporters:
+  otlp:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+processors:
+  # On memory pressure, return 503 to clients (surfaced by nginx) instead
+  # of OOMing.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+  # Defends span_metrics generator from name-based cardinality bombs
+  # (`span.name = "op_$(uuid)"`). A malicious or pre-allowlist client
+  # could emit anything; the CLI's own AllowlistExporter only filters
+  # attributes, not span names.
+  filter/span_names:
+    error_mode: ignore
+    traces:
+      span:
+        - 'not (name == "cellar.command" or name == "symbol.resolve" or name == "build.classpath" or name == "coursier.fetch" or name == "tasty.context.init")'
+
+  # Mirror of AllowedAttributes.default in
+  # profilingRuntime/src/cellar/profiling/TracingConfig.scala — the two
+  # lists must stay in sync (defense-in-depth: client filter + server
+  # filter). truncate_all bounds string length on allowed keys.
+  # installation.id is kept on spans (30-day Tempo retention) but never
+  # promoted to metrics dimensions (see tempo-config.yml).
+  transform/allowlist:
+    error_mode: ignore
+    trace_statements:
+      - context: resource
+        statements:
+          - keep_keys(attributes, ["service.name"])
+      - context: span
+        statements:
+          - keep_keys(attributes, ["command.name", "command.success", "error.category", "error.type", "build.tool", "cellar.version", "os.type", "installation.id", "pyroscope.profile.id"])
+          - truncate_all(attributes, 256)
+          # Format validation on attributes that flow into Prometheus
+          # dimensions. delete_key (not drop_span) — a single bad value
+          # becomes a missing label, not a lost trace. Prevents
+          # `cellar.version = $(uuid)` cardinality attacks from reaching
+          # the generator at all; max_active_series in Tempo is the
+          # backstop.
+          - delete_key(attributes, "cellar.version") where attributes["cellar.version"] != nil and not IsMatch(attributes["cellar.version"], "^[0-9]+\\.[0-9]+\\.[0-9]+")
+          - delete_key(attributes, "installation.id") where attributes["installation.id"] != nil and not IsMatch(attributes["installation.id"], "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+  batch:
+    timeout: 10s
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, filter/span_names, transform/allowlist, batch]
+      exporters: [otlp]

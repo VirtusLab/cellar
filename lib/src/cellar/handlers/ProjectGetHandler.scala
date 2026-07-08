@@ -4,6 +4,7 @@ import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
 import cellar.*
 import fs2.io.file.Path
+import org.typelevel.otel4s.trace.Tracer
 import tastyquery.Contexts.Context
 
 object ProjectGetHandler:
@@ -17,7 +18,7 @@ object ProjectGetHandler:
       groupInherited: Boolean = false,
       cwd: Option[Path] = None,
       config: Config = Config.global
-  )(using Console[IO]): IO[ExitCode] =
+  )(using Console[IO], Tracer[IO]): IO[ExitCode] =
     ProjectHandler.run(javaHome, cwd, module, noCache, config) { (ctx, classpath, _) =>
       given Context = ctx
       GetHandler.runCore(fqn, classpath, coord = None, limit, hideInherited, groupInherited)

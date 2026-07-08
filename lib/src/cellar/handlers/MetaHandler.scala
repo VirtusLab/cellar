@@ -4,12 +4,13 @@ import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
 import cellar.*
 import coursierapi.Repository
+import org.typelevel.otel4s.trace.Tracer
 
 object MetaHandler:
   def run(
       coord: MavenCoordinate,
       extraRepositories: Seq[Repository] = Seq.empty
-  )(using Console[IO]): IO[ExitCode] =
+  )(using Console[IO], Tracer[IO]): IO[ExitCode] =
     val program =
       for
         pomPath  <- CoursierFetchClient.fetchPom(coord, extraRepositories)
@@ -19,6 +20,4 @@ object MetaHandler:
         _        <- Console[IO].println(formatted)
       yield ExitCode.Success
 
-    program.handleErrorWith { e =>
-      Console[IO].errorln(e.getMessage).as(ExitCode.Error)
-    }
+    program

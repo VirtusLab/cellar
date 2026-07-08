@@ -1,0 +1,68 @@
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/blocks
+    wal:
+      path: /var/tempo/wal
+
+# 30-day cap on raw traces — they carry installation.id and other
+# pseudonymous identifiers, so this is the GDPR retention boundary.
+compactor:
+  compaction:
+    block_retention: 720h
+
+# Pre-aggregated span metrics shipped to Prometheus. The dimension allowlist
+# below is the privacy boundary: anything not listed (installation.id) cannot
+# end up as a Prometheus label, so the long-retention metrics store stays
+# free of personal data by construction.
+metrics_generator:
+  registry:
+    external_labels:
+      source: cellar
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+  processor:
+    span_metrics:
+      dimensions:
+        - command.name
+        - command.success
+        - error.category
+        - error.type
+        - cellar.version
+        - os.type
+        - build.tool
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [span-metrics]
+      # Default is 0 (unlimited). With the dimension set above, realistic
+      # steady-state is 5–20k series — 15k catches a `cellar.version =
+      # $(uuid)` poisoning attempt before it reaches Prometheus.
+      max_active_series: 15000
+    # Pinned to Tempo 2.10.5 defaults. Restated explicitly so a future
+    # Tempo version cannot silently relax them — if upstream changes the
+    # default, the explicit value here keeps us at the known-good ceiling
+    # until someone consciously bumps it.
+    ingestion:
+      rate_limit_bytes: 15000000   # 15 MB/s sustained
+      burst_size_bytes: 20000000   # 20 MB burst
+      max_traces_per_user: 10000
+    global:
+      max_bytes_per_trace: 5000000 # 5 MB per-trace ceiling
