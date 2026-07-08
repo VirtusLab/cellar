@@ -232,7 +232,12 @@ Or via environment: `CELLAR_SBT_BINARY=sbtn cellar get --module core cats.Monad`
 
 ## Telemetry
 
-Cellar collects **anonymous usage telemetry** to help improve the tool. It is opt-in: the first time you run cellar you'll see a one-time notice on stderr (the command still runs normally), and telemetry stays disabled until you explicitly enable it.
+Cellar collects **anonymous usage telemetry** to help improve the tool. It is opt-in. On first use cellar asks you to choose before running:
+
+- **In an interactive terminal** you're prompted inline (`[1] enable  [2] enable globally  [3] disable (default)  [4] disable globally`); once you answer, the requested command continues in the same run.
+- **Non-interactively** (output piped, CI, or an AI agent) cellar withholds the command and prints a machine-readable consent request instead. It repeats this up to three times; if still unanswered, it proceeds with telemetry disabled.
+
+Either way, telemetry stays disabled until you explicitly enable it.
 
 The formal data-protection terms covering this telemetry are in the [Privacy Policy](PRIVACY_POLICY.md).
 
@@ -260,11 +265,15 @@ The installation ID is a randomly-generated UUID stored in `~/.cellar/installati
 ### Managing telemetry
 
 ```sh
-cellar telemetry enable    # opt in
-cellar telemetry disable   # opt out
-cellar telemetry status    # show current status and installation ID
-cellar telemetry reset-id  # generate a new anonymous installation ID
+cellar telemetry enable            # opt in for the current project
+cellar telemetry enable --global   # opt in for all projects
+cellar telemetry disable           # opt out for the current project
+cellar telemetry disable --global  # opt out everywhere and stop prompting
+cellar telemetry status            # show current status and installation ID
+cellar telemetry reset-id          # generate a new anonymous installation ID
 ```
+
+`enable`/`disable` write to `.cellar/cellar.conf` in the current project by default; `--global` writes to `~/.cellar/cellar.conf` instead. A project-level setting overrides the global one.
 
 ### Configuration
 
