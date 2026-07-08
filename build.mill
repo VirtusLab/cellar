@@ -40,7 +40,7 @@ object lib extends CommonScalaModule with SonatypeCentralPublishModule {
     mvn"ch.epfl.scala::tasty-query:1.7.0",
     mvn"org.scala-lang:scala3-tasty-inspector_3:3.8.1",
     mvn"com.github.pureconfig::pureconfig-core:0.17.10",
-    mvn"org.typelevel::otel4s-core-trace:0.13.1"
+    mvn"org.typelevel::otel4s-core-trace:0.13.2"
   )
 
 
@@ -78,8 +78,8 @@ object profilingRuntime extends CommonScalaModule with SonatypeCentralPublishMod
   def pomSettings    = cellarPom("Cellar profiling and tracing runtime (Pyroscope + OTLP)")
 
   def mvnDeps = Seq(
-    mvn"org.typelevel::otel4s-sdk-trace:0.13.1",
-    mvn"org.typelevel::otel4s-sdk-exporter:0.13.1",
+    mvn"org.typelevel::otel4s-sdk-trace:0.13.2",
+    mvn"org.typelevel::otel4s-sdk-exporter:0.13.2",
     mvn"io.pyroscope:agent:2.5.2"
   )
 
