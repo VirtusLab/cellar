@@ -27,6 +27,33 @@ The Maven publish waits for the native-binary and JAR builds to succeed before u
 
 No container images are built or published by this release flow.
 
+## Development snapshots
+
+For unstable, GitHub-only builds of in-progress work there is a separate [Snapshot workflow](.github/workflows/snapshot.yml), triggered manually:
+
+```sh
+gh workflow run snapshot.yml                    # snapshot the current default branch
+gh workflow run snapshot.yml --ref my-feature   # snapshot a specific branch
+```
+
+Unlike the release flow, it builds from the **dispatched ref** (not pinned to `main`), so feature branches can be snapshotted. It:
+
+- Builds the native binaries + assembly JAR, stamping the version as `0.1.0-SNAPSHOT-<short-sha>`.
+- Publishes them to a single rolling `snapshot` prerelease, **overwriting** the assets on every run.
+- Attaches a `checksums.txt`.
+
+What it deliberately does **not** do: publish to Maven Central, sign with cosign, rewrite `flake.nix`, commit to `main`, or push a version tag.
+
+Because the tag is rolling, there is always exactly one snapshot release — nothing accumulates, so no cleanup is needed. Asset names are version-less (`cellar-<os>-<arch>.tar.gz`, `cellar.jar`) so download URLs stay stable:
+
+```
+https://github.com/VirtusLab/cellar/releases/download/snapshot/cellar-linux-x86_64.tar.gz
+```
+
+The release is marked `prerelease` and `make_latest: false`, so it never displaces the real "Latest release". Snapshots are not resolved by `cs install cellar`, which reads Maven metadata.
+
+> **Note** — the `snapshot` tag itself is not re-pointed once it exists (`target_commitish` only applies at tag creation); the release body always prints the actual built commit SHA, and the assets are always the newest build.
+
 ## Supported platforms
 
 | Platform | Runner | Archive |
@@ -109,7 +136,7 @@ Install cosign ([instructions](https://docs.sigstore.dev/cosign/system_config/in
 ```sh
 cosign verify-blob \
   --bundle checksums.txt.bundle \
-  --certificate-identity-regexp "https://github.com/simple-scala-tooling/cellar/.github/workflows/release.yml@refs/tags/v" \
+  --certificate-identity-regexp "https://github.com/VirtusLab/cellar/.github/workflows/release.yml@refs/tags/v" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   checksums.txt
 ```

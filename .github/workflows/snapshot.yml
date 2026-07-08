@@ -1,0 +1,122 @@
+name: Snapshot
+
+# On-demand development snapshot. Builds the native binaries + JAR from the
+# dispatched ref and publishes them to a single rolling `snapshot` prerelease
+# whose assets are overwritten each run. No Maven publish, no tag/flake mutation
+# of `main`. Asset names are version-less so download URLs stay stable.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+          - os: ubuntu-24.04-arm
+            target: linux-aarch64
+          - os: macos-latest
+            target: macos-arm64
+          - os: macOS-15-intel
+            target: macos-x86_64
+
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # Static linking on Linux requires zlib headers
+      - name: Install native-image prerequisites (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y libz-dev
+
+      - name: Build native image
+        run: |
+          export CELLAR_VERSION="0.1.0-SNAPSHOT-$(git rev-parse --short HEAD)"
+          ./mill cli.nativeImage
+
+      - name: Package artifact
+        shell: bash
+        run: |
+          ARCHIVE="cellar-${{ matrix.target }}.tar.gz"
+          mkdir staging
+          cp out/cli/nativeImage.dest/native-executable staging/cellar
+          cp README.md staging/
+          tar -czf "${ARCHIVE}" -C staging .
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.ARCHIVE }}
+
+  jar:
+    name: Build JAR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build assembly JAR
+        run: |
+          export CELLAR_VERSION="0.1.0-SNAPSHOT-$(git rev-parse --short HEAD)"
+          ./mill cli.assembly
+
+      - name: Rename JAR
+        run: cp out/cli/assembly.dest/out.jar cellar.jar
+
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: jar
+          path: cellar.jar
+
+  release:
+    name: Publish rolling snapshot
+    needs: [build, jar]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          path: artifacts/
+          merge-multiple: true
+
+      - name: Generate SHA256 checksums
+        working-directory: artifacts
+        run: sha256sum *.tar.gz *.jar > checksums.txt
+
+      - name: Publish rolling snapshot release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        with:
+          tag_name: snapshot
+          target_commitish: ${{ github.sha }}
+          name: Development Snapshot
+          body: |
+            Rolling development build from `${{ github.sha }}` (`${{ github.ref_name }}`).
+
+            Unstable, overwritten on every snapshot run. Not published to Maven Central.
+          prerelease: true
+          make_latest: false
+          files: artifacts/*
