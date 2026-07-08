@@ -71,7 +71,7 @@ The Controller has appointed a Data Protection Officer (DPO) Mr. Mariusz Zajkiew
 
 ## Application settings
 
-Telemetry in cellar is opt-in. The first time the User runs the Application, a one-time notice is printed on standard error; the command runs normally and telemetry remains disabled until the User explicitly opts in. The User can change this setting at any time using the following commands:
+Telemetry in cellar is opt-in. On first use the Application asks the User to choose whether to enable telemetry before running. In an interactive terminal the User is prompted directly and the requested command proceeds once the User answers. In a non-interactive context (for example when output is piped or the Application is invoked by automation) the requested command is withheld and a machine-readable consent request is printed instead; the command remains withheld on every run until the User records a choice. Telemetry remains disabled until the User explicitly opts in. The User can change this setting at any time using the following commands:
 
 ```sh
 cellar telemetry enable     # opt in

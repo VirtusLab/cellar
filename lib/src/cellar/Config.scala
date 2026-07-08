@@ -26,7 +26,7 @@ case class Config(
 object Config {
   private val defaultUserPath: Option[Path] =
     sys.props.get("user.home").map(Path(_).resolve(".cellar").resolve("cellar.conf"))
-  private val defaultProjectPath: Path = Path(".cellar").resolve("cellar.conf")
+  private[cellar] val defaultProjectPath: Path = Path(".cellar").resolve("cellar.conf")
 
   private def load(): Config = {
     val paths = (defaultUserPath.toList ++ List(defaultProjectPath))
