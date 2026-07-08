@@ -10,6 +10,14 @@ distributor:
         http:
           endpoint: 0.0.0.0:4318
 
+# The install-counter batch job queries a 30-day tag-values window for the
+# rolling active-installs count; the default 168h search cap would reject it.
+# Raised to cover full trace retention (720h). The search API (port 3200) is
+# not publicly exposed, so this only widens the admin's own Grafana searches.
+query_frontend:
+  search:
+    max_duration: 744h
+
 storage:
   trace:
     backend: local

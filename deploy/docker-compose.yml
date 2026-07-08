@@ -47,6 +47,28 @@ services:
     networks:
       - cellar-network
 
+  # Receives the install-counter batch job's single gauge and holds it for
+  # Prometheus to scrape. Standard Prometheus pattern for a periodic job that
+  # has no long-lived HTTP surface of its own.
+  pushgateway:
+    image: prom/pushgateway:v1.11.0
+    restart: unless-stopped
+    networks:
+      - cellar-network
+
+  # Daily job: counts distinct installation.id over the trailing 30 days from
+  # Tempo and publishes cellar_active_installs_30d to Pushgateway. Aggregate
+  # only — no installation.id reaches Prometheus (see count.sh).
+  install-counter:
+    image: alpine:3.20
+    entrypoint: ["/bin/sh", "/count.sh"]
+    volumes:
+      - ./install-counter/count.sh:/count.sh:ro
+    depends_on: [tempo, pushgateway]
+    restart: unless-stopped
+    networks:
+      - cellar-network
+
   grafana:
     image: grafana/grafana:13.0.1
     volumes:
