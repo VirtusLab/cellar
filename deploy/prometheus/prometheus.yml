@@ -3,5 +3,15 @@ global:
   external_labels:
     source: cellar
 
-# No scrape jobs: Tempo's metrics_generator pushes to /api/v1/write
+# Tempo's metrics_generator pushes RED/duration series to /api/v1/write
 # (the remote-write receiver is enabled via the --web flag).
+#
+# The one scrape job is the install-counter batch job's Pushgateway: it
+# publishes cellar_active_installs_30d (a rolling 30-day distinct count of
+# installation.id, aggregate only — no pseudonymous label). honor_labels
+# keeps the job/instance the counter set instead of overwriting them.
+scrape_configs:
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets: ["pushgateway:9091"]
