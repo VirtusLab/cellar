@@ -48,4 +48,4 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
 
-      - run: nix flake show
+      - run: nix build

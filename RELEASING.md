@@ -19,11 +19,14 @@ This document describes how to cut a release, what artifacts are produced, and h
    - Publishes the `lib` and `cli` modules to Maven Central as `org.virtuslab:cellar-lib_3:<version>` and `org.virtuslab:cellar-cli_3:<version>`.
    - Generates a SHA256 checksum file.
    - Signs the checksum file using cosign keyless (OIDC).
-   - Updates `flake.nix` with the new version and SRI hashes, commits to `main`.
+   - Regenerates `scala.lock.json` from the freshly published Maven coordinates using `scn lock-coords` ([scala-cli-nix](https://github.com/scala-nix/scala-cli-nix)).
+   - Updates `version` in `flake.nix`, commits `flake.nix` and `scala.lock.json` to `main`.
    - Creates and pushes a `v<version>` git tag.
    - Publishes a GitHub Release with all artifacts attached.
 
 The Maven publish waits for the native-binary and JAR builds to succeed before uploading — a Sonatype release is immutable, so we must not publish a version whose corresponding GitHub Release assets (referenced by the coursier app descriptor) failed to build. If Sonatype then rejects the upload (e.g. duplicate version, namespace mismatch, signature failure), no GitHub Release is created and no tag is pushed.
+
+The `scala.lock.json` regeneration step retries up to 10 times with 30-second intervals to account for Maven Central propagation delay after publish.
 
 No container images are built or published by this release flow.
 
