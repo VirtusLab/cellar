@@ -63,11 +63,15 @@ To verify checksums and signatures, see [RELEASING.md](RELEASING.md).
 
 ### Development snapshots
 
-Unstable builds of the latest development code are published to a rolling [`snapshot`](https://github.com/VirtusLab/cellar/releases/tag/snapshot) prerelease. The download URLs are stable and always serve the newest build:
+Unstable builds of the latest development code are published as `snapshot-<sha>-<run>` [prereleases](https://github.com/VirtusLab/cellar/releases). Each run publishes a fresh, immutable prerelease and prunes the previous one, so there is always exactly one snapshot. Because immutable releases require a unique tag per build, download URLs are no longer static — resolve the newest snapshot with `gh`:
 
 ```sh
+# Latest snapshot tag (requires the GitHub CLI, `gh`)
+TAG=$(gh release list --repo VirtusLab/cellar --limit 100 --json tagName \
+  --jq 'map(.tagName | select(startswith("snapshot-"))) | first')
+
 # Linux x86_64 (also: linux-aarch64, macos-arm64, macos-x86_64)
-curl -fsSL https://github.com/VirtusLab/cellar/releases/download/snapshot/cellar-linux-x86_64.tar.gz | tar xz
+gh release download "$TAG" --repo VirtusLab/cellar --pattern 'cellar-linux-x86_64.tar.gz' --output - | tar xz
 sudo mv cellar /usr/local/bin/
 ```
 

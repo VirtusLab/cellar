@@ -39,20 +39,17 @@ gh workflow run snapshot.yml --ref my-feature   # snapshot a specific branch
 Unlike the release flow, it builds from the **dispatched ref** (not pinned to `main`), so feature branches can be snapshotted. It:
 
 - Builds the native binaries + assembly JAR, stamping the version as `0.1.0-SNAPSHOT-<short-sha>`.
-- Publishes them to a single rolling `snapshot` prerelease, **overwriting** the assets on every run.
+- Publishes them to a fresh `snapshot-<short-sha>-<run-number>` prerelease.
 - Attaches a `checksums.txt`.
+- Prunes any older `snapshot`/`snapshot-*` releases (and their tags), so exactly one snapshot survives.
 
 What it deliberately does **not** do: publish to Maven Central, sign with cosign, rewrite `flake.nix`, commit to `main`, or push a version tag.
 
-Because the tag is rolling, there is always exactly one snapshot release — nothing accumulates, so no cleanup is needed. Asset names are version-less (`cellar-<os>-<arch>.tar.gz`, `cellar.jar`) so download URLs stay stable:
-
-```
-https://github.com/VirtusLab/cellar/releases/download/snapshot/cellar-linux-x86_64.tar.gz
-```
+Each run uses a **unique tag** because [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases) are enabled on the repo: an immutable release cannot be mutated (so `target_commitish` and assets can't be overwritten on a reused tag), and a tag name that once belonged to an immutable release **can never be reused**. A single rolling `snapshot` tag is therefore impossible; `<run-number>` keeps the tag unique even across re-snapshots of the same commit. Deleting an immutable release and its tag *is* allowed, which is how pruning works.
 
 The release is marked `prerelease` and `make_latest: false`, so it never displaces the real "Latest release". Snapshots are not resolved by `cs install cellar`, which reads Maven metadata.
 
-> **Note** — the `snapshot` tag itself is not re-pointed once it exists (`target_commitish` only applies at tag creation); the release body always prints the actual built commit SHA, and the assets are always the newest build.
+Because tags are no longer static, download URLs change every run. Consumers resolve the newest snapshot via the GitHub API — see [README.md](README.md#development-snapshots).
 
 ## Supported platforms
 

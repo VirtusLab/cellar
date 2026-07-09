@@ -1,9 +1,14 @@
 name: Snapshot
 
 # On-demand development snapshot. Builds the native binaries + JAR from the
-# dispatched ref and publishes them to a single rolling `snapshot` prerelease
-# whose assets are overwritten each run. No Maven publish, no tag/flake mutation
-# of `main`. Asset names are version-less so download URLs stay stable.
+# dispatched ref and publishes them to a fresh, immutable `snapshot-<sha>-<run>`
+# prerelease each run, then prunes older snapshot releases so only the newest
+# survives. No Maven publish, no tag/flake mutation of `main`.
+#
+# Each run uses a unique tag: immutable releases forbid mutating an existing
+# release (target_commitish/assets) and forbid ever reusing a tag name that
+# belonged to an immutable release — so a single rolling `snapshot` tag is not
+# possible. Consumers resolve the newest build via the GitHub API (see README).
 on:
   workflow_dispatch:
 
@@ -107,16 +112,36 @@ jobs:
         working-directory: artifacts
         run: sha256sum *.tar.gz *.jar > checksums.txt
 
-      - name: Publish rolling snapshot release
+      - name: Compute snapshot tag
+        id: tag
+        # run_number keeps the tag unique even when the same commit is snapshotted
+        # twice — an immutable release burns its tag name permanently.
+        run: echo "tag=snapshot-$(git rev-parse --short HEAD)-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish snapshot release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
-          tag_name: snapshot
+          tag_name: ${{ steps.tag.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: Development Snapshot
+          name: Development Snapshot (${{ steps.tag.outputs.tag }})
           body: |
-            Rolling development build from `${{ github.sha }}` (`${{ github.ref_name }}`).
+            Unstable development build from `${{ github.sha }}` (`${{ github.ref_name }}`).
 
-            Unstable, overwritten on every snapshot run. Not published to Maven Central.
+            Superseded by the next snapshot run and not published to Maven Central.
           prerelease: true
           make_latest: false
           files: artifacts/*
+
+      - name: Prune older snapshots
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Deleting an immutable release (and its tag) is allowed; only tag *reuse*
+        # is blocked, which unique per-run tags avoid. Keeps just the newest snapshot.
+        run: |
+          KEEP="${{ steps.tag.outputs.tag }}"
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName \
+            --jq '.[] | select(.tagName == "snapshot" or (.tagName | startswith("snapshot-"))) | .tagName' \
+          | while read -r tag; do
+              [ "$tag" = "$KEEP" ] && continue
+              gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+            done
