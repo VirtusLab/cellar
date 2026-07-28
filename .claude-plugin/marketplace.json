@@ -10,15 +10,14 @@
     {
       "name": "cellar",
       "description": "Look up the public API of any JVM dependency (Scala 3, Scala 2, Java) from the terminal",
-      "source": {
-        "source": "github",
-        "repo": "VirtusLab/cellar"
-      },
+      "source": "./",
+      "version": "0.1.0",
+      "repository": "https://github.com/VirtusLab/cellar",
       "category": "development",
       "license": "MPL-2.0",
       "keywords": ["scala", "java", "jvm", "api", "documentation"],
       "author": {
-        "name": "rochala"
+        "name": "VirtusLab"
       },
       "homepage": "https://github.com/VirtusLab/cellar"
     }
