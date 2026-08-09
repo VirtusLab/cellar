@@ -150,11 +150,20 @@ object CellarApp extends ProfilingIOApp:
     Opts.option[Path]("java-home", "Use a specific JDK for JRE classpath").orNone
 
   private val extraReposOpt: Opts[IO[List[Repository]]] =
-    Opts.options[String]("repository", "Extra Maven repository URL (repeatable)", short = "r", metavar = "url")
-      .orEmpty
-      .mapValidated(_.traverse { raw =>
-        RepositoryUrl.parse(raw).leftMap(reason => s"Invalid --repository: $reason").toValidatedNel
-      })
+    Opts.options[String](
+      "repository",
+      "Extra Maven repository URL, appended to configured maven.repositories (repeatable)",
+      short = "r",
+      metavar = "url"
+    ).orEmpty
+      .mapValidated { commandLine =>
+        def validate(source: String)(raw: String) =
+          RepositoryUrl.parse(raw).leftMap(reason => s"Invalid $source: $reason").toValidatedNel
+        (
+          Config.global.maven.repositories.traverse(validate("maven.repositories entry")),
+          commandLine.traverse(validate("--repository"))
+        ).mapN(ExtraRepositories.effective)
+      }
       .map { repos =>
         if repos.isEmpty then IO.pure(Nil)
         else CoursierCredentials.load().map(creds => repos.map(CoursierCredentials.applyTo(_, creds)))
