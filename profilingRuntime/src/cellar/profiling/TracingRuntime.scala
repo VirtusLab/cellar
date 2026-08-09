@@ -6,7 +6,7 @@ import cats.mtl.Local
 import cats.syntax.all.*
 import org.http4s.{Header, Headers, Uri}
 import org.typelevel.ci.CIString
-import org.typelevel.otel4s.{Attribute, Attributes}
+import org.typelevel.otel4s.{AllowlistExporter, Attribute, Attributes, JavaNetHttpOtlpExporter, ProfilingSpanProcessor}
 import org.typelevel.otel4s.context.LocalProvider
 import org.typelevel.otel4s.sdk.TelemetryResource
 import org.typelevel.otel4s.sdk.context.Context

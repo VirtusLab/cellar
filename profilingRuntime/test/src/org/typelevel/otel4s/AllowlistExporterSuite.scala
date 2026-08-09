@@ -1,10 +1,9 @@
-package cellar.profiling
+package org.typelevel.otel4s
 
 import cats.Foldable
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
 import munit.CatsEffectSuite
-import org.typelevel.otel4s.{Attribute, Attributes}
 import org.typelevel.otel4s.sdk.TelemetryResource
 import org.typelevel.otel4s.sdk.common.InstrumentationScope
 import org.typelevel.otel4s.sdk.data.LimitedData
@@ -16,7 +15,7 @@ import scala.concurrent.duration.*
 
 class AllowlistExporterSuite extends CatsEffectSuite:
 
-  private final class CaptureExporter(ref: Ref[IO, List[SpanData]]) extends SpanExporter[IO]:
+  private final class CaptureExporter(ref: Ref[IO, List[SpanData]]) extends SpanExporter.Unsealed[IO]:
     val name: String                                              = "Capture"
     def exportSpans[G[_]: Foldable](spans: G[SpanData]): IO[Unit] =
       ref.update(spans.toList ::: _)

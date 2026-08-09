@@ -1,8 +1,7 @@
-package cellar.profiling
+package org.typelevel.otel4s
 
 import cats.Foldable
 import cats.effect.IO
-import org.typelevel.otel4s.{Attribute, AttributeType}
 import org.typelevel.otel4s.sdk.trace.data.{SpanData, StatusData}
 import org.typelevel.otel4s.sdk.trace.exporter.SpanExporter
 import org.typelevel.otel4s.trace.{SpanKind, StatusCode}
@@ -22,7 +21,7 @@ object JavaNetHttpOtlpExporter:
     new Impl(client, endpoint, installationId)
 
   private final class Impl(client: HttpClient, endpoint: String, installationId: Option[String])
-      extends SpanExporter[IO]:
+      extends SpanExporter.Unsealed[IO]:
 
     def name: String = "JavaNetHttpOtlpExporter"
 

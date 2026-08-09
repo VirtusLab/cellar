@@ -1,9 +1,8 @@
-package cellar.profiling
+package org.typelevel.otel4s
 
 import cats.Foldable
 import cats.effect.IO
 import cats.syntax.all.*
-import org.typelevel.otel4s.{Attribute, Attributes}
 import org.typelevel.otel4s.sdk.TelemetryResource
 import org.typelevel.otel4s.sdk.trace.data.SpanData
 import org.typelevel.otel4s.sdk.trace.exporter.SpanExporter
@@ -13,7 +12,7 @@ import org.typelevel.otel4s.sdk.trace.exporter.SpanExporter
   * span and its resource before forwarding.
   */
 final class AllowlistExporter(delegate: SpanExporter[IO], allowlist: Set[String])
-    extends SpanExporter[IO]:
+    extends SpanExporter.Unsealed[IO]:
 
   def name: String = s"AllowlistExporter(${delegate.name})"
 
