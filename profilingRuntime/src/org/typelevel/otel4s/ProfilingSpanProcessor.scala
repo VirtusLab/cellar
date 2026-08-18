@@ -1,20 +1,19 @@
-package cellar.profiling
+package org.typelevel.otel4s
 
 import cats.effect.IO
-import org.typelevel.otel4s.Attribute
 import org.typelevel.otel4s.sdk.trace.SpanRef
 import org.typelevel.otel4s.sdk.trace.data.SpanData
 import org.typelevel.otel4s.sdk.trace.processor.SpanProcessor
 import org.typelevel.otel4s.trace.SpanContext
 
-final class ProfilingSpanProcessor extends SpanProcessor[IO]:
+final class ProfilingSpanProcessor extends SpanProcessor.Unsealed[IO]:
   val name: String = "ProfilingSpanProcessor"
 
-  val onStart: SpanProcessor.OnStart[IO] = new SpanProcessor.OnStart[IO]:
-    def apply(parentContext: Option[SpanContext], span: SpanRef[IO]): IO[Unit] =
+  val onStart: SpanProcessor.OnStart[IO] = SpanProcessor.OnStart:
+    (_: Option[SpanContext], span: SpanRef[IO]) =>
       span.addAttributes(Seq(Attribute("pyroscope.profile.id", span.context.spanIdHex)))
 
-  val onEnd: SpanProcessor.OnEnd[IO] = new SpanProcessor.OnEnd[IO]:
-    def apply(span: SpanData): IO[Unit] = IO.unit
+  val onEnd: SpanProcessor.OnEnd[IO] = SpanProcessor.OnEnd:
+    (_: SpanData) => IO.unit
 
   def forceFlush: IO[Unit] = IO.unit
