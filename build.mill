@@ -10,7 +10,7 @@ import mill.javalib.SonatypeCentralPublishModule
 import com.goyeau.mill.scalafix.ScalafixModule
 
 trait CommonScalaModule extends ScalaModule with ScalafixModule {
-  def scalaVersion = "3.8.1"
+  def scalaVersion = "3.8.4"
   def javacOptions = Seq("--release", "17")
   def scalacOptions = Seq("-deprecation", "-feature", "-Wunused:all")
 }
