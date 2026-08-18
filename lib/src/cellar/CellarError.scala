@@ -64,6 +64,11 @@ object CellarError:
     override def getMessage: String =
       s"--module is not supported for ${toolName(tool)} projects."
 
+  final case class TestScopeNotSupported(tool: BuildToolKind) extends CellarError:
+    override def getMessage: String =
+      s"--test is not supported for ${toolName(tool)} projects: test code lives in a separate module. " +
+        "Query it directly, e.g. --module foo.test."
+
   final case class CompilationFailed(tool: BuildToolKind, stderr: String) extends CellarError:
     override def getMessage: String =
       s"Compilation failed:\n$stderr"

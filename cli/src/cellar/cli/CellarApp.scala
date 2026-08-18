@@ -169,6 +169,9 @@ object CellarApp extends ProfilingIOApp:
   private val noCacheOpt: Opts[Boolean] =
     Opts.flag("no-cache", "Skip classpath cache (re-extract from build tool)").orFalse
 
+  private val testScopeOpt: Opts[Boolean] =
+    Opts.flag("test", "Use the test-scope classpath (sbt/scala-cli)").orFalse
+
   private val hideInheritedOpt: Opts[Boolean] =
     Opts.flag("hide-inherited", "Show only members declared on the type itself").orFalse
 
@@ -182,29 +185,30 @@ object CellarApp extends ProfilingIOApp:
 
   private val getSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("get", "Fetch symbol info from the current project") {
-      (symbolArg, moduleOpt, memberLimitOpt, hideInheritedOpt, groupInheritedOpt, javaHomeOpt, noCacheOpt).mapN {
-        (fqn, module, limit, hideInherited, groupInherited, javaHome, noCache) =>
+      (symbolArg, moduleOpt, memberLimitOpt, hideInheritedOpt, groupInheritedOpt, javaHomeOpt, noCacheOpt, testScopeOpt).mapN {
+        (fqn, module, limit, hideInherited, groupInherited, javaHome, noCache, testScope) =>
           traced("get") {
-            ProjectGetHandler.run(fqn, module, javaHome, noCache, limit, hideInherited, groupInherited)
+            ProjectGetHandler.run(fqn, module, javaHome, noCache, limit, hideInherited, groupInherited, testScope = testScope)
           }
       }
     }
 
   private val listSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("list", "List symbols in a package or class from the current project") {
-      (symbolArg, moduleOpt, limitOpt, javaHomeOpt, noCacheOpt).mapN { (fqn, module, limit, javaHome, noCache) =>
-        traced("list") {
-          ProjectListHandler.run(fqn, module, limit, javaHome, noCache)
-        }
+      (symbolArg, moduleOpt, limitOpt, javaHomeOpt, noCacheOpt, testScopeOpt).mapN {
+        (fqn, module, limit, javaHome, noCache, testScope) =>
+          traced("list") {
+            ProjectListHandler.run(fqn, module, limit, javaHome, noCache, testScope = testScope)
+          }
       }
     }
 
   private val searchSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("search", "Substring search for symbol names in the current project") {
-      (Opts.argument[String]("query"), moduleOpt, limitOpt, javaHomeOpt, noCacheOpt).mapN {
-        (query, module, limit, javaHome, noCache) =>
+      (Opts.argument[String]("query"), moduleOpt, limitOpt, javaHomeOpt, noCacheOpt, testScopeOpt).mapN {
+        (query, module, limit, javaHome, noCache, testScope) =>
           traced("search") {
-            ProjectSearchHandler.run(query, module, limit, javaHome, noCache)
+            ProjectSearchHandler.run(query, module, limit, javaHome, noCache, testScope = testScope)
           }
       }
     }

@@ -17,9 +17,10 @@ object ProjectGetHandler:
       hideInherited: Boolean = false,
       groupInherited: Boolean = false,
       cwd: Option[Path] = None,
-      config: Config = Config.global
+      config: Config = Config.global,
+      testScope: Boolean = false
   )(using Console[IO], Tracer[IO]): IO[ExitCode] =
-    ProjectHandler.run(javaHome, cwd, module, noCache, config) { (ctx, classpath, _) =>
+    ProjectHandler.run(javaHome, cwd, module, noCache, config, testScope) { (ctx, classpath, _) =>
       given Context = ctx
       GetHandler.runCore(fqn, classpath, coord = None, limit, hideInherited, groupInherited)
     }

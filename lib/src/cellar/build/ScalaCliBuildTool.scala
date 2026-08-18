@@ -8,16 +8,18 @@ import fs2.io.file.Path
 class ScalaCliBuildTool(cwd: Path) extends BuildTool:
   def kind: BuildToolKind = BuildToolKind.ScalaCli
 
-  def compile(module: Option[String]): IO[Unit] =
+  def supportsTestScope: Boolean = true
+
+  def compile(module: Option[String], testScope: Boolean): IO[Unit] =
     rejectModule(module) >>
-      ProcessRunner.run("scala-cli", List("compile", "."), Some(cwd)).flatMap { result =>
+      ProcessRunner.run("scala-cli", List("compile") ::: testFlag(testScope) ::: List("."), Some(cwd)).flatMap { result =>
         if result.exitCode == 0 then IO.unit
         else IO.raiseError(CellarError.CompilationFailed(BuildToolKind.ScalaCli, result.stderr))
       }
 
-  def extractClasspath(module: Option[String]): IO[List[Path]] =
+  def extractClasspath(module: Option[String], testScope: Boolean): IO[List[Path]] =
     rejectModule(module) >>
-      ProcessRunner.run("scala-cli", List("compile", "--print-classpath", "."), Some(cwd)).flatMap { result =>
+      ProcessRunner.run("scala-cli", List("compile", "--print-classpath") ::: testFlag(testScope) ::: List("."), Some(cwd)).flatMap { result =>
         if result.exitCode != 0 then
           IO.raiseError(CellarError.CompilationFailed(BuildToolKind.ScalaCli, result.stderr))
         else
@@ -27,6 +29,9 @@ class ScalaCliBuildTool(cwd: Path) extends BuildTool:
       }
 
   def fingerprintFiles: IO[List[Path]] = IO.pure(Nil)
+
+  private def testFlag(testScope: Boolean): List[String] =
+    if testScope then List("--test") else Nil
 
   private def rejectModule(module: Option[String]): IO[Unit] =
     module match

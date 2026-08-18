@@ -10,7 +10,10 @@ import fs2.io.file.{Files, Path}
 class MillBuildTool(cwd: Path, config: MillConfig) extends BuildTool:
   def kind: BuildToolKind = BuildToolKind.Mill
 
-  def compile(module: Option[String]): IO[Unit] =
+  // Mill models test code as a separate module (e.g. `foo.test`), not a scope axis.
+  def supportsTestScope: Boolean = false
+
+  def compile(module: Option[String], testScope: Boolean): IO[Unit] =
     requireModule(module).flatMap { mod =>
       ProcessRunner.run(config.binary, List(s"$mod.compile"), Some(cwd)).flatMap { result =>
         if result.exitCode == 0 then IO.unit
@@ -18,7 +21,7 @@ class MillBuildTool(cwd: Path, config: MillConfig) extends BuildTool:
       }
     }
 
-  def extractClasspath(module: Option[String]): IO[List[Path]] =
+  def extractClasspath(module: Option[String], testScope: Boolean): IO[List[Path]] =
     requireModule(module).flatMap { mod =>
       for
         compileResult <- ProcessRunner.run(config.binary, List("show", s"$mod.compile"), Some(cwd))

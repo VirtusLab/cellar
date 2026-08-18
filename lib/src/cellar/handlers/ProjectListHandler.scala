@@ -15,9 +15,10 @@ object ProjectListHandler:
       javaHome: Option[Path] = None,
       noCache: Boolean = false,
       cwd: Option[Path] = None,
-      config: Config = Config.global
+      config: Config = Config.global,
+      testScope: Boolean = false
   )(using Console[IO], Tracer[IO]): IO[ExitCode] =
-    ProjectHandler.run(javaHome, cwd, module, noCache, config) { (ctx, _, _) =>
+    ProjectHandler.run(javaHome, cwd, module, noCache, config, testScope) { (ctx, _, _) =>
       given Context = ctx
       ListHandler.runCore(fqn, limit, coord = None)
     }

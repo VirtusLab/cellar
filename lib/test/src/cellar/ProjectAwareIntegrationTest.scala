@@ -166,7 +166,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
   // --- ScalaCliBuildTool tests ---
 
   test("ScalaCliBuildTool: rejects --module"):
-    build.ScalaCliBuildTool(Path(".")).extractClasspath(Some("foo")).attempt.map { result =>
+    build.ScalaCliBuildTool(Path(".")).extractClasspath(Some("foo"), testScope = false).attempt.map { result =>
       assert(result.isLeft)
       assert(result.left.exists(_.getMessage.contains("--module is not supported")))
     }
@@ -180,15 +180,22 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
 
   test("MillBuildTool: rejects missing --module"):
     build.MillBuildTool(Path("."), Config.global.mill)
-      .extractClasspath(None).attempt.map { result =>
+      .extractClasspath(None, testScope = false).attempt.map { result =>
         assert(result.isLeft)
         assert(result.left.exists(_.getMessage.contains("--module is required for Mill")))
+    }
+
+  test("MillBuildTool: rejects --test scope"):
+    build.MillBuildTool(Path("."), Config.global.mill)
+      .validateTestScope(testScope = true).attempt.map { result =>
+        assert(result.isLeft)
+        assert(result.left.exists(_.getMessage.contains("--test is not supported for Mill")))
     }
 
   // --- SbtBuildTool tests ---
 
   test("SbtBuildTool: rejects missing --module"):
-    build.SbtBuildTool(Path("."), Config.global.sbt).extractClasspath(None)
+    build.SbtBuildTool(Path("."), Config.global.sbt).extractClasspath(None, testScope = false)
       .attempt.map { result =>
         assert(result.isLeft)
         assert(result.left.exists(_.getMessage.contains("--module is required for sbt")))
@@ -330,6 +337,29 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         }
     }
 
+  test("E2E scala-cli: --test resolves symbol from test-only dependency"):
+    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
+    withTempDir { dir =>
+      val console = CapturingConsole()
+      given Console[IO] = console
+      IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
+        """//> using test.dep org.scalameta::munit:1.0.4
+          |
+          |package example
+          |
+          |class Wrapper:
+          |  def run: Unit = ()
+          |""".stripMargin
+      )) >>
+        safeRun(handlers.ProjectGetHandler.run("munit.FunSuite", module = None, cwd = Some(dir))).map { code =>
+          assertEquals(code, ExitCode.Error, "test-only dep must not be on the compile classpath")
+        } >>
+        handlers.ProjectGetHandler.run("munit.FunSuite", module = None, cwd = Some(dir), testScope = true).map { code =>
+          assertEquals(code, ExitCode.Success, s"Stderr: ${console.errBuf}")
+          assert(console.outBuf.toString.contains("FunSuite"), s"Output: ${console.outBuf}")
+        }
+    }
+
   test("E2E scala-cli: list lists members of project class"):
     isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
@@ -406,6 +436,26 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
     }
 
   // --- End-to-end Mill tests (requires mill on PATH) ---
+
+  // No `mill` needed: --test must be rejected before the build tool is invoked.
+  test("E2E Mill: --test is rejected without invoking the build tool"):
+    withTempDir { dir =>
+      val console = CapturingConsole()
+      given Console[IO] = console
+      IO.blocking(Files.writeString(dir.resolve("build.mill").toNioPath, "package build\n")) >>
+        safeRun(
+          handlers.ProjectGetHandler.run(
+            "example.Foo",
+            module = Some("app"),
+            cwd = Some(dir),
+            config = Config.global.copy(mill = MillConfig("nonexistent-mill-binary-xyz")),
+            testScope = true
+          )
+        ).map { code =>
+          assertEquals(code, ExitCode.Error)
+          assert(console.errBuf.toString.contains("--test is not supported for Mill"), s"Stderr: ${console.errBuf}")
+        }
+    }
 
   test("E2E Mill: get resolves project symbol"):
     isBinaryAvailable(millBinary).map(assume(_, s"$millBinary not found")) >>
