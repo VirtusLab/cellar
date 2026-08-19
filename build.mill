@@ -87,8 +87,8 @@ object profilingRuntime extends CellarPublishModule {
   def pomSettings    = cellarPom("Cellar profiling and tracing runtime (Pyroscope + OTLP)")
 
   def mvnDeps = Seq(
-    mvn"org.typelevel::otel4s-sdk-trace:0.19.0",
-    mvn"org.typelevel::otel4s-sdk-exporter:0.19.0",
+    mvn"org.typelevel::otel4s-sdk-trace:0.19.1",
+    mvn"org.typelevel::otel4s-sdk-exporter:0.19.1",
     mvn"io.pyroscope:agent:2.5.4"
   )
 
