@@ -5,7 +5,10 @@ import java.util.zip.ZipFile
 import scala.jdk.CollectionConverters.*
 import scala.quoted.*
 import scala.tasty.inspector.*
+import cats.effect.IO
+import cats.syntax.all.*
 import coursierapi.{Cache, Fetch}
+import org.typelevel.log4cats.Logger
 
 object DocstringExtractor:
   private def isStdlib(name: String): Boolean =
@@ -21,12 +24,12 @@ object DocstringExtractor:
     deps.foreach(fetch.addDependencies(_))
     fetch.fetch().asScala.toSeq.map(_.toPath)
 
-  def extract(jars: Seq[Path], coord: MavenCoordinate, fqn: String): Option[String] =
-    findPrimaryJar(jars, coord).flatMap { primaryJar =>
-      candidateTastyEntries(fqn).iterator
-        .flatMap(entry => extractAndInspect(primaryJar, entry, jars, fqn))
-        .nextOption()
-    }
+  def extract(jars: Seq[Path], coord: MavenCoordinate, fqn: String)(using logger: Logger[IO]): IO[Option[String]] =
+    findPrimaryJar(jars, coord) match
+      case None =>
+        logger.debug(s"no primary jar for ${coord.artifact} among ${jars.size} fetched jars").as(None)
+      case Some(primaryJar) =>
+        candidateTastyEntries(fqn).collectFirstSomeM(extractAndInspect(primaryJar, _, jars, fqn))
 
   /** Returns the .tasty zip entry names to try, most specific first. */
   private def candidateTastyEntries(fqn: String): List[String] =
@@ -35,31 +38,59 @@ object DocstringExtractor:
     if lastDot <= 0 then List(direct)
     else List(direct, fqn.substring(0, lastDot).replace('.', '/') + ".tasty")
 
-  private def extractAndInspect(jar: Path, tastyEntry: String, allJars: Seq[Path], fqn: String): Option[String] =
+  /** The outcome of one inspector run, kept so the (blocking, non-IO) inspector callback can report
+    * what happened without logging from inside the compiler run.
+    */
+  private case class InspectionOutcome(callbackFired: Boolean, classpathSize: Int, docstring: Option[String])
+
+  private def extractAndInspect(jar: Path, tastyEntry: String, allJars: Seq[Path], fqn: String)(using
+      logger: Logger[IO]
+  ): IO[Option[String]] =
+    IO.blocking(copyTastyEntry(jar, tastyEntry)).flatMap {
+      case None =>
+        logger.debug(s"$tastyEntry not present in ${jar.getFileName}").as(None)
+      case Some(tmp) =>
+        val run = IO.blocking {
+          var docstring: Option[String] = None
+          var fired                     = false
+          val cp = allJars.filterNot(p => isStdlib(p.getFileName.toString)) ++ compilerStdlibJars
+          TastyInspector.inspectAllTastyFiles(
+            List(tmp.toString),
+            Nil,
+            cp.map(_.toString).toList
+          )(new Inspector:
+            def inspect(using q: Quotes)(tastys: List[Tasty[q.type]]): Unit =
+              fired = true
+              docstring = lookupDocstring(fqn)(using q)
+          )
+          InspectionOutcome(fired, cp.size, docstring)
+        }
+        // `attempt` catches Throwable, not just Exception: a compiler that cannot start under
+        // native-image fails with an Error (NoClassDefFoundError and friends), which the previous
+        // `catch case _: Exception` let escape the diagnostic entirely.
+        val inspected = logger.debug(s"inspecting $tastyEntry for $fqn") *> run.attempt.flatMap {
+          case Left(t) =>
+            logger.warn(t)(s"TASTy inspection of $tastyEntry failed; no docstring for $fqn").as(None)
+          case Right(InspectionOutcome(false, cpSize, _)) =>
+            logger.warn(s"TASTy inspector never ran for $tastyEntry ($cpSize classpath entries)").as(None)
+          case Right(InspectionOutcome(true, cpSize, None)) =>
+            logger.debug(s"inspected $tastyEntry ($cpSize classpath entries), no docstring for $fqn").as(None)
+          case Right(InspectionOutcome(true, _, found)) =>
+            IO.pure(found)
+        }
+        inspected.guarantee(IO.blocking(Files.deleteIfExists(tmp)).void)
+    }
+
+  /** Copies `tastyEntry` out of `jar` into a temp file, or `None` if the jar has no such entry. */
+  private def copyTastyEntry(jar: Path, tastyEntry: String): Option[Path] =
     val zip = new ZipFile(jar.toFile)
     try
-      Option(zip.getEntry(tastyEntry)).flatMap { entry =>
+      Option(zip.getEntry(tastyEntry)).map { entry =>
         val tmp = Files.createTempFile("cellar-", ".tasty")
-        try
-          val in = zip.getInputStream(entry)
-          try Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING)
-          finally in.close()
-
-          var result: Option[String] = None
-          try
-            val cp = allJars.filterNot(p => isStdlib(p.getFileName.toString)) ++ compilerStdlibJars
-            TastyInspector.inspectAllTastyFiles(
-              List(tmp.toString),
-              Nil,
-              cp.map(_.toString).toList
-            )(new Inspector:
-              def inspect(using q: Quotes)(tastys: List[Tasty[q.type]]): Unit =
-                result = lookupDocstring(fqn)(using q)
-            )
-          catch case _: Exception => ()
-          result
-        finally
-          Files.deleteIfExists(tmp)
+        val in  = zip.getInputStream(entry)
+        try Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING)
+        finally in.close()
+        tmp
       }
     finally
       zip.close()

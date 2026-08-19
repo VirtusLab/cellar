@@ -178,6 +178,13 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 | `-l`, `--limit <N>` | `get`, `get-external` | Max members to display (no default) |
 | `--hide-inherited` | `get`, `get-external` | Show only members declared on the type itself |
 | `--group-inherited` | `get`, `get-external` | Group members by declaring type with section headers |
+| `-v`, `--verbose` | `get`, `get-external` | Log progress and warnings to stderr |
+| `--debug` | `get`, `get-external` | Log detailed diagnostics and stack traces to stderr |
+
+Diagnostics are written to stderr, never stdout, so `--verbose` and `--debug` are safe to use
+when piping output into a prompt. Set `CELLAR_LOG=verbose` or `CELLAR_LOG=debug` to get the same
+effect without a flag — useful for debugging an installed binary. An explicit flag wins over the
+environment variable.
 
 ## Configuration
 
