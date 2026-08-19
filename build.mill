@@ -7,6 +7,7 @@ import mill.scalalib.Assembly
 import mill.scalalib.publish._
 import mill.javalib.NativeImageModule
 import mill.javalib.SonatypeCentralPublishModule
+import mill.util.Jvm
 import com.goyeau.mill.scalafix.ScalafixModule
 
 trait CommonScalaModule extends ScalaModule with ScalafixModule {
@@ -19,6 +20,16 @@ def cellarVersion: T[String] = Task.Input {
   sys.env.getOrElse("CELLAR_VERSION", "0.1.0-SNAPSHOT").stripPrefix("v")
 }
 
+trait CellarPublishModule extends CommonScalaModule with SonatypeCentralPublishModule {
+  def publishVersion = cellarVersion()
+
+  override def docJar: T[PathRef] = Task {
+    val docs = Task.dest / "docs"
+    os.makeDir.all(docs)
+    PathRef(Jvm.createJar(Task.dest / "out.jar", Seq(docs)))
+  }
+}
+
 def cellarPom(desc: String) = PomSettings(
   description    = desc,
   organization   = "org.virtuslab",
@@ -28,8 +39,7 @@ def cellarPom(desc: String) = PomSettings(
   developers     = Seq(Developer("rochala", "Jakub Rochala", "https://github.com/rochala"))
 )
 
-object lib extends CommonScalaModule with SonatypeCentralPublishModule {
-  def publishVersion = cellarVersion()
+object lib extends CellarPublishModule {
   def artifactName   = "cellar-lib"
   def pomSettings    = cellarPom("Programmatic access to JVM dependency APIs (Scala 3, Scala 2, Java)")
 
@@ -72,8 +82,7 @@ object lib extends CommonScalaModule with SonatypeCentralPublishModule {
   }
 }
 
-object profilingRuntime extends CommonScalaModule with SonatypeCentralPublishModule {
-  def publishVersion = cellarVersion()
+object profilingRuntime extends CellarPublishModule {
   def artifactName   = "cellar-profiling-runtime"
   def pomSettings    = cellarPom("Cellar profiling and tracing runtime (Pyroscope + OTLP)")
 
@@ -91,11 +100,10 @@ object profilingRuntime extends CommonScalaModule with SonatypeCentralPublishMod
   }
 }
 
-object cli extends CommonScalaModule with NativeImageModule with SonatypeCentralPublishModule {
+object cli extends CellarPublishModule with NativeImageModule {
   def moduleDeps  = Seq(lib, profilingRuntime)
   def mainClass   = Some("cellar.cli.CellarApp")
 
-  def publishVersion = cellarVersion()
   def artifactName   = "cellar-cli"
   def pomSettings    = cellarPom("Cellar command-line interface — JVM dependency API explorer")
 
