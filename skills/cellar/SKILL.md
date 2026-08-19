@@ -104,7 +104,10 @@ def untilM[G, A](f: F[A]): (cond: => F[Boolean]): (G: Alternative[G]): F[G[A]]
 def whileM_[A](p: F[Boolean]): (body: => F[A]): F[Unit]
 def iterateUntil[A](f: F[A]): (p: A => Boolean): F[A]
 … (+ 7 more)
-**Companion members:** trait Ops[F, A], def apply[F](instance: Monad[F]): Monad[F], …
+**Companion members:**
+trait Ops[F, A]
+def apply[F](instance: Monad[F]): Monad[F]
+…
 ```
 
 Use `--hide-inherited` to get only own members. Without it, all inherited members are shown (can be large for deep hierarchies).
