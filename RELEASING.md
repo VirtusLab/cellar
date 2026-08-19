@@ -82,6 +82,8 @@ Two modules are published per release:
 
 `cellar-lib` is what coursier resolves for `cs install cellar` — the [coursier/apps](https://github.com/coursier/apps) descriptor reads `maven-metadata.xml` for `cellar-lib_3` to determine the latest version, then downloads the matching native binary from this repo's GitHub Release.
 
+The `-javadoc.jar` of every published module is **empty by design** (see `CellarPublishModule` in `build.mill`): Central requires the artifact to exist, but nobody consumes cellar as a library, and scaladoc generation has failed a release before by choking on a *dependency's* TASTy — a failure mode we can neither fix nor usefully gate on. Nothing builds scaladoc any more; `./mill <module>.scalaDocGenerated` still works if you ever want it locally.
+
 Both modules are independently usable as Scala 3 dependencies:
 
 ```scala
