@@ -6,8 +6,9 @@ import munit.CatsEffectSuite
 
 class JreClasspathTest extends CatsEffectSuite:
 
-  test("zero-arg jrtPath with JAVA_HOME set returns non-empty classpath"):
-    assume(sys.env.contains("JAVA_HOME"), "JAVA_HOME not set")
+  // No `assume` on JAVA_HOME: the point is that the zero-arg form works without it, by falling
+  // back to the JVM running the test.
+  test("zero-arg jrtPath returns non-empty classpath with or without JAVA_HOME"):
     JreClasspath.jrtPath().map { classpath =>
       assert(classpath.nonEmpty)
     }
