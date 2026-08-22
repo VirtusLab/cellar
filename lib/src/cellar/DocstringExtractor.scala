@@ -16,7 +16,11 @@ object DocstringExtractor:
 
   /** Fetches the scala stdlib jars matching the compiler's own version via coursier. */
   private lazy val compilerStdlibJars: Seq[Path] =
-    val scalaVersion = dotty.tools.dotc.config.Properties.versionNumberString
+    // The stdlib's own version, not `dotty.tools.dotc.config.Properties`: that reads
+    // `compiler.properties` out of the compiler jar, which native-image does not embed, so it
+    // yields "" and the fetch below asks for `scala3-library_3:` with no version at all.
+    // Requires the Scala 3 stdlib (3.8+), where `library.properties` carries a 3.x version.
+    val scalaVersion = scala.util.Properties.versionNumberString
     val deps = Seq(
       coursierapi.Dependency.of("org.scala-lang", "scala3-library_3", scalaVersion)
     )
