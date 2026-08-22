@@ -280,11 +280,11 @@ object CellarApp extends ProfilingIOApp:
 
   private val depsSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("deps", "Print the transitive dependency list") {
-      (coordArg, extraReposOpt).mapN { (rawCoord, extraRepos) =>
+      (coordArg, extraReposOpt, loggerOpt).mapN { (rawCoord, extraRepos, logger) =>
         traced("deps") {
           parseAndResolve(rawCoord, extraRepos).flatMap {
             case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-            case Right(coord) => DepsHandler.run(coord, extraRepositories = extraRepos)
+            case Right(coord) => DepsHandler.run(coord, extraRepositories = extraRepos, logger = logger)
           }
         }
       }
@@ -292,11 +292,11 @@ object CellarApp extends ProfilingIOApp:
 
   private val metaSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("meta", "Print POM metadata (name, description, license, SCM, developers)") {
-      (coordArg, extraReposOpt).mapN { (rawCoord, extraRepos) =>
+      (coordArg, extraReposOpt, loggerOpt).mapN { (rawCoord, extraRepos, logger) =>
         traced("meta") {
           parseAndResolve(rawCoord, extraRepos).flatMap {
             case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-            case Right(coord) => MetaHandler.run(coord, extraRepositories = extraRepos)
+            case Right(coord) => MetaHandler.run(coord, extraRepositories = extraRepos, logger = logger)
           }
         }
       }

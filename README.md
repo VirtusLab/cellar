@@ -178,13 +178,28 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 | `-l`, `--limit <N>` | `get`, `get-external` | Max members to display (no default) |
 | `--hide-inherited` | `get`, `get-external` | Show only members declared on the type itself |
 | `--group-inherited` | `get`, `get-external` | Group members by declaring type with section headers |
-| `-v`, `--verbose` | `get`, `get-external`, `get-source`, `list`, `list-external`, `search`, `search-external` | Log progress and warnings to stderr |
-| `--debug` | same as `--verbose` | Log detailed diagnostics and stack traces to stderr |
+| `-v`, `--verbose` | all except `telemetry` | Log progress and warnings to stderr |
+| `--debug` | all except `telemetry` | Log detailed diagnostics and stack traces to stderr |
 
 Diagnostics are written to stderr, never stdout, so `--verbose` and `--debug` are safe to use
 when piping output into a prompt. Set `CELLAR_LOG=verbose` or `CELLAR_LOG=debug` to get the same
 effect without a flag — useful for debugging an installed binary. An explicit flag wins over the
 environment variable.
+
+A failed coordinate resolution always reports the locations coursier consulted — no flag needed,
+since the usual question is whether it looked at your repository at all:
+
+```console
+$ cellar get-external com.example:nonexistent_3:1.2.3 foo.Bar
+Could not resolve 'com.example:nonexistent_3:1.2.3'. Check that the group ID, artifact ID, and version are correct.
+
+Tried:
+  not found: /home/you/.ivy2/local/com.example/nonexistent_3/1.2.3/ivys/ivy.xml
+  not found: https://repo1.maven.org/maven2/com/example/nonexistent_3/1.2.3/nonexistent_3-1.2.3.pom
+```
+
+On an interactive terminal, `--verbose` additionally shows coursier's download progress bars. They
+are suppressed when stderr is redirected, because they rely on ANSI cursor control.
 
 `--verbose` reports which lookup strategies were tried when a symbol cannot be resolved, which is
 usually enough to tell "not on the classpath" from "on the classpath but not reachable":
