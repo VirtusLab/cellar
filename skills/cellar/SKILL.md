@@ -35,6 +35,8 @@ Query the current project's code and all its dependencies. Cellar auto-detects t
 - `-l`, `--limit <N>`: max results for `list`/`search` (default: 50), max members for `get`
 - `--hide-inherited`: show only members declared on the type itself (`get` commands)
 - `--group-inherited`: group members by declaring type with section headers (`get` commands)
+- `-v`, `--verbose` / `--debug`: diagnostics to stderr — which lookup strategies were tried, the
+  resolved classpath, build-tool detection. Use when a symbol you expect is reported as not found.
 
 ## External commands (query arbitrary Maven coordinates)
 

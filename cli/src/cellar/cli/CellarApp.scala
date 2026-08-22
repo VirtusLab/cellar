@@ -209,20 +209,20 @@ object CellarApp extends ProfilingIOApp:
 
   private val listSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("list", "List symbols in a package or class from the current project") {
-      (symbolArg, moduleOpt, limitOpt, javaHomeOpt, noCacheOpt, testScopeOpt).mapN {
-        (fqn, module, limit, javaHome, noCache, testScope) =>
+      (symbolArg, moduleOpt, limitOpt, javaHomeOpt, noCacheOpt, testScopeOpt, loggerOpt).mapN {
+        (fqn, module, limit, javaHome, noCache, testScope, logger) =>
           traced("list") {
-            ProjectListHandler.run(fqn, module, limit, javaHome, noCache, testScope = testScope)
+            ProjectListHandler.run(fqn, module, limit, javaHome, noCache, testScope = testScope, logger = logger)
           }
       }
     }
 
   private val searchSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("search", "Substring search for symbol names in the current project") {
-      (Opts.argument[String]("query"), moduleOpt, limitOpt, javaHomeOpt, noCacheOpt, testScopeOpt).mapN {
-        (query, module, limit, javaHome, noCache, testScope) =>
+      (Opts.argument[String]("query"), moduleOpt, limitOpt, javaHomeOpt, noCacheOpt, testScopeOpt, loggerOpt).mapN {
+        (query, module, limit, javaHome, noCache, testScope, logger) =>
           traced("search") {
-            ProjectSearchHandler.run(query, module, limit, javaHome, noCache, testScope = testScope)
+            ProjectSearchHandler.run(query, module, limit, javaHome, noCache, testScope = testScope, logger = logger)
           }
       }
     }
@@ -243,11 +243,11 @@ object CellarApp extends ProfilingIOApp:
 
   private val getSourceSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("get-source", "Fetch the source code of a named symbol") {
-      (coordArg, symbolArg, javaHomeOpt, extraReposOpt).mapN { (rawCoord, fqn, javaHome, extraRepos) =>
+      (coordArg, symbolArg, javaHomeOpt, extraReposOpt, loggerOpt).mapN { (rawCoord, fqn, javaHome, extraRepos, logger) =>
         traced("get-source") {
           parseAndResolve(rawCoord, extraRepos).flatMap {
             case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-            case Right(coord) => GetSourceHandler.run(coord, fqn, javaHome, extraRepos)
+            case Right(coord) => GetSourceHandler.run(coord, fqn, javaHome, extraRepos, logger)
           }
         }
       }
@@ -255,11 +255,11 @@ object CellarApp extends ProfilingIOApp:
 
   private val listExternalSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("list-external", "List symbols from a Maven coordinate") {
-      (coordArg, symbolArg, limitOpt, javaHomeOpt, extraReposOpt).mapN { (rawCoord, fqn, limit, javaHome, extraRepos) =>
+      (coordArg, symbolArg, limitOpt, javaHomeOpt, extraReposOpt, loggerOpt).mapN { (rawCoord, fqn, limit, javaHome, extraRepos, logger) =>
         traced("list-external") {
           parseAndResolve(rawCoord, extraRepos).flatMap {
             case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-            case Right(coord) => ListHandler.run(coord, fqn, limit, javaHome, extraRepos)
+            case Right(coord) => ListHandler.run(coord, fqn, limit, javaHome, extraRepos, logger)
           }
         }
       }
@@ -267,12 +267,12 @@ object CellarApp extends ProfilingIOApp:
 
   private val searchExternalSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("search-external", "Substring search for symbol names from a Maven coordinate") {
-      (coordArg, Opts.argument[String]("query"), limitOpt, javaHomeOpt, extraReposOpt).mapN {
-        (rawCoord, query, limit, javaHome, extraRepos) =>
+      (coordArg, Opts.argument[String]("query"), limitOpt, javaHomeOpt, extraReposOpt, loggerOpt).mapN {
+        (rawCoord, query, limit, javaHome, extraRepos, logger) =>
           traced("search-external") {
             parseAndResolve(rawCoord, extraRepos).flatMap {
               case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-              case Right(coord) => SearchHandler.run(coord, query, limit, javaHome, extraRepos)
+              case Right(coord) => SearchHandler.run(coord, query, limit, javaHome, extraRepos, logger)
             }
           }
       }

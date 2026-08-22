@@ -22,6 +22,7 @@ object GetHandler:
       groupInherited: Boolean = false,
       logger: Logger[IO] = StderrLogger.off
   )(using Console[IO], Tracer[IO]): IO[ExitCode] =
+    given Logger[IO] = logger
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)

@@ -6,6 +6,7 @@ import cats.syntax.all.*
 import cellar.*
 import coursierapi.Repository
 import fs2.io.file.Path
+import org.typelevel.log4cats.Logger
 import org.typelevel.otel4s.trace.Tracer
 
 object ListHandler:
@@ -14,8 +15,10 @@ object ListHandler:
       fqn: String,
       limit: Int,
       javaHome: Option[Path] = None,
-      extraRepositories: Seq[Repository] = Seq.empty
+      extraRepositories: Seq[Repository] = Seq.empty,
+      logger: Logger[IO] = StderrLogger.off
   )(using Console[IO], Tracer[IO]): IO[ExitCode] =
+    given Logger[IO] = logger
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
