@@ -50,7 +50,7 @@ object lib extends CellarPublishModule {
     mvn"ch.epfl.scala::tasty-query:1.8.0",
     mvn"org.scala-lang:scala3-tasty-inspector_3:3.8.4",
     mvn"com.github.pureconfig::pureconfig-core:0.17.10",
-    mvn"org.typelevel::otel4s-core-trace:1.0.1"
+    mvn"org.typelevel::otel4s-core-trace:1.1.0"
   )
 
 
