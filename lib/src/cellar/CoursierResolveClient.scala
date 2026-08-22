@@ -1,7 +1,7 @@
 package cellar
 
 import cats.effect.IO
-import coursierapi.{Dependency, Fetch, Repository}
+import coursierapi.{Cache, Dependency, Fetch, Repository}
 import org.typelevel.log4cats.Logger
 import scala.jdk.CollectionConverters.*
 
@@ -16,7 +16,7 @@ object CoursierResolveClient:
     logger.debug(s"resolving dependency tree for ${coord.render}") *>
       IO.blocking {
         val dep   = coord.toCoursierDependency
-        val fetch = Fetch.create().addDependencies(dep).withCache(CoursierLogging.cache(logger))
+        val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())
         if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*)
         val result = fetch.fetchResult()
         val deps   = result.getDependencies.asScala.toSeq

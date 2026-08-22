@@ -1,7 +1,7 @@
 package cellar
 
 import cats.effect.IO
-import coursierapi.{Fetch, Repository}
+import coursierapi.{Cache, Fetch, Repository}
 import fs2.io.file.Path
 import org.typelevel.log4cats.Logger
 import org.typelevel.otel4s.trace.Tracer
@@ -24,7 +24,7 @@ object CoursierFetchClient:
         val dep   = coord.toCoursierDependency.withTransitive(false)
         val fetch = Fetch.create()
           .addDependencies(dep)
-          .withCache(CoursierLogging.cache(logger))
+          .withCache(Cache.create())
           .addClassifiers("sources")
           .withMainArtifacts(false)
         if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*)
@@ -38,7 +38,7 @@ object CoursierFetchClient:
     logAttempt(coord, "fetching POM for", extraRepositories) *>
       IO.blocking {
         val dep   = coord.toCoursierDependency.withTransitive(false)
-        val fetch = Fetch.create().addDependencies(dep).withCache(CoursierLogging.cache(logger))
+        val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())
         if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*)
         // Coursier always downloads the POM alongside the JAR in the cache; derive its path
         fetch.fetch().asScala.headOption.map(_.toPath)
@@ -62,7 +62,7 @@ object CoursierFetchClient:
       logAttempt(coord, "resolving", extraRepositories) *>
         IO.blocking {
           val dep   = coord.toCoursierDependency
-          val fetch = Fetch.create().addDependencies(dep).withCache(CoursierLogging.cache(logger))
+          val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())
           if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*)
           fetch.fetch().asScala.toSeq.map(file => Path.fromNioPath(file.toPath))
         }.handleErrorWith { case e: coursierapi.error.CoursierError =>

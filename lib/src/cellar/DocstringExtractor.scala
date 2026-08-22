@@ -50,25 +50,28 @@ object DocstringExtractor:
       case None =>
         logger.debug(s"$tastyEntry not present in ${jar.getFileName}").as(None)
       case Some(tmp) =>
-        val run = IO.blocking {
-          var docstring: Option[String] = None
-          var fired                     = false
-          val cp = allJars.filterNot(p => isStdlib(p.getFileName.toString)) ++ compilerStdlibJars
-          TastyInspector.inspectAllTastyFiles(
-            List(tmp.toString),
-            Nil,
-            cp.map(_.toString).toList
-          )(new Inspector:
-            def inspect(using q: Quotes)(tastys: List[Tasty[q.type]]): Unit =
-              fired = true
-              docstring = lookupDocstring(fqn)(using q)
-          )
-          InspectionOutcome(fired, cp.size, docstring)
+        // The failure this diagnostic exists for — a compiler that cannot start under native-image
+        // — arrives as a LinkageError, which is not NonFatal. cats-effect routes those to
+        // `onFatalFailure` and tears down the runtime without ever reaching `.attempt`, so the
+        // catch has to live inside the blocking thunk to keep the error reportable.
+        val run = IO.blocking[Either[Throwable, InspectionOutcome]] {
+          try
+            var docstring: Option[String] = None
+            var fired                     = false
+            val cp = allJars.filterNot(p => isStdlib(p.getFileName.toString)) ++ compilerStdlibJars
+            TastyInspector.inspectAllTastyFiles(
+              List(tmp.toString),
+              Nil,
+              cp.map(_.toString).toList
+            )(new Inspector:
+              def inspect(using q: Quotes)(tastys: List[Tasty[q.type]]): Unit =
+                fired = true
+                docstring = lookupDocstring(fqn)(using q)
+            )
+            Right(InspectionOutcome(fired, cp.size, docstring))
+          catch case t: Throwable => Left(t)
         }
-        // `attempt` catches Throwable, not just Exception: a compiler that cannot start under
-        // native-image fails with an Error (NoClassDefFoundError and friends), which the previous
-        // `catch case _: Exception` let escape the diagnostic entirely.
-        val inspected = logger.debug(s"inspecting $tastyEntry for $fqn") *> run.attempt.flatMap {
+        val inspected = logger.debug(s"inspecting $tastyEntry for $fqn") *> run.flatMap {
           case Left(t) =>
             logger.warn(t)(s"TASTy inspection of $tastyEntry failed; no docstring for $fqn").as(None)
           case Right(InspectionOutcome(false, cpSize, _)) =>
@@ -87,10 +90,17 @@ object DocstringExtractor:
     try
       Option(zip.getEntry(tastyEntry)).map { entry =>
         val tmp = Files.createTempFile("cellar-", ".tasty")
-        val in  = zip.getInputStream(entry)
-        try Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING)
-        finally in.close()
-        tmp
+        // Only the caller's `guarantee` deletes this, and it never runs if the copy throws
+        // (truncated entry, disk full), so clean up here rather than orphaning the temp file.
+        try
+          val in = zip.getInputStream(entry)
+          try Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING)
+          finally in.close()
+          tmp
+        catch
+          case t: Throwable =>
+            Files.deleteIfExists(tmp)
+            throw t
       }
     finally
       zip.close()

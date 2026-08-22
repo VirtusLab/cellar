@@ -198,11 +198,9 @@ Tried:
   not found: https://repo1.maven.org/maven2/com/example/nonexistent_3/1.2.3/nonexistent_3-1.2.3.pom
 ```
 
-On an interactive terminal, `--verbose` additionally shows coursier's download progress bars. They
-are suppressed when stderr is redirected, because they rely on ANSI cursor control.
-
-`--verbose` reports which lookup strategies were tried when a symbol cannot be resolved, which is
-usually enough to tell "not on the classpath" from "on the classpath but not reachable":
+On the `get`, `get-external` and `get-source` commands, `--verbose` also reports which lookup
+strategies were tried when a symbol cannot be resolved, which is usually enough to tell "not on the
+classpath" from "on the classpath but not reachable":
 
 ```console
 $ cellar get-external org.typelevel:cats-core_3:2.10.0 cats.DoesNotExist99 --verbose
@@ -218,7 +216,7 @@ $ cellar get-external org.typelevel:cats-core_3:2.10.0 cats.DoesNotExist99 --ver
 ```
 
 `--debug` adds the resolved classpath, build-tool detection and cache hits, per-entry scan
-failures, and stack traces.
+failures, and stack traces. These apply to every command, including `list` and `search`.
 
 ## Configuration
 

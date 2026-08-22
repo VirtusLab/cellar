@@ -1,7 +1,6 @@
 package cellar
 
 import cats.effect.IO
-import coursierapi.Cache
 import org.typelevel.log4cats.Logger
 
 enum LogLevel:
@@ -28,7 +27,7 @@ object LogLevel:
  * Deliberately not backed by slf4j: `slf4j-nop` is on the CLI classpath to silence coursier, and a
  * real slf4j backend would both un-silence it and add native-image weight.
  */
-final class StderrLogger(val level: LogLevel) extends Logger[IO]:
+final class StderrLogger(level: LogLevel) extends Logger[IO]:
   private def enabled(min: LogLevel): Boolean = level.ordinal >= min.ordinal
 
   private def emit(min: LogLevel, msg: => String, err: Option[Throwable]): IO[Unit] =
@@ -58,23 +57,3 @@ final class StderrLogger(val level: LogLevel) extends Logger[IO]:
 object StderrLogger:
   /** The silent default, so library code and tests need no wiring. */
   val off: Logger[IO] = new StderrLogger(LogLevel.Off)
-
-object CoursierLogging:
-  /**
-   * A coursier cache that reports download activity to stderr when diagnostics are on, so a slow or
-   * failing fetch shows which URLs are being tried.
-   *
-   * `coursierapi.Logger` exposes only the `nop()` and `progressBars()` factories — there are no
-   * overridable callbacks to route events into log4cats — so progress bars pointed at stderr are
-   * the only way to surface this through the interface API.
-   *
-   * Those bars emit ANSI cursor control unconditionally, which corrupts the stream when stderr is
-   * a pipe rather than a terminal, so they are attached only for an interactive run. Piped runs
-   * still get the URLs coursier lists in its failure message.
-   */
-  def cache(logger: Logger[IO]): Cache =
-    val base = Cache.create()
-    logger match
-      case s: StderrLogger if s.level != LogLevel.Off && System.console() != null =>
-        base.withLogger(coursierapi.Logger.progressBars(System.err))
-      case _ => base
