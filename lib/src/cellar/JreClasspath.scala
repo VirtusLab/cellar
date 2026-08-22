@@ -18,7 +18,10 @@ object JreClasspath:
   def jrtPath(): IO[Classpaths.Classpath] =
     if isNativeImage then loadBundledJre()
     else
-      sys.env.get("JAVA_HOME") match
+      // The JVM running cellar already knows its own home, so requiring the caller to export
+      // JAVA_HOME on top of that is a needless failure — it makes the whole tool depend on ambient
+      // shell state. An explicit JAVA_HOME still wins, as does --java-home above it.
+      sys.env.get("JAVA_HOME").orElse(sys.props.get("java.home")) match
         case Some(h) => jrtPath(fs2.io.file.Path(h))
         case None =>
           IO.raiseError(new RuntimeException(
