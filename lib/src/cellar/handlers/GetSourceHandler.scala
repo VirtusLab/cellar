@@ -5,6 +5,7 @@ import cats.effect.std.Console
 import cellar.*
 import coursierapi.Repository
 import fs2.io.file.Path
+import org.typelevel.log4cats.Logger
 import org.typelevel.otel4s.trace.Tracer
 import tastyquery.Contexts.Context
 import tastyquery.SourceLanguage
@@ -17,8 +18,10 @@ object GetSourceHandler:
       coord: MavenCoordinate,
       fqn: String,
       javaHome: Option[Path] = None,
-      extraRepositories: Seq[Repository] = Seq.empty
+      extraRepositories: Seq[Repository] = Seq.empty,
+      logger: Logger[IO] = StderrLogger.off
   )(using Console[IO], Tracer[IO]): IO[ExitCode] =
+    given Logger[IO] = logger
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)

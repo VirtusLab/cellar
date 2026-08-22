@@ -5,6 +5,7 @@ import cats.effect.std.Console
 import cellar.*
 import coursierapi.Repository
 import fs2.io.file.Path
+import org.typelevel.log4cats.Logger
 import org.typelevel.otel4s.trace.Tracer
 import tastyquery.Classpaths.Classpath
 import tastyquery.Contexts.Context
@@ -18,14 +19,16 @@ object GetHandler:
       extraRepositories: Seq[Repository] = Seq.empty,
       limit: Option[Int] = None,
       hideInherited: Boolean = false,
-      groupInherited: Boolean = false
+      groupInherited: Boolean = false,
+      logger: Logger[IO] = StderrLogger.off
   )(using Console[IO], Tracer[IO]): IO[ExitCode] =
+    given Logger[IO] = logger
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
         result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, classpath) =>
           given Context = ctx
-          runCore(fqn, classpath, Some(coord), limit, hideInherited, groupInherited)
+          runCore(fqn, classpath, Some(coord), limit, hideInherited, groupInherited, logger)
         }
       yield result
 
@@ -37,14 +40,16 @@ object GetHandler:
       coord: Option[MavenCoordinate],
       limit: Option[Int] = None,
       hideInherited: Boolean = false,
-      groupInherited: Boolean = false
+      groupInherited: Boolean = false,
+      logger: Logger[IO] = StderrLogger.off
   )(using Context, Console[IO], Tracer[IO]): IO[ExitCode] =
+    given Logger[IO] = logger
     SymbolResolver.resolve(fqn).flatMap {
       case LookupResult.Found(symbols) =>
         val jars = classpath.filter(_.toString.endsWith(".jar")).map(e => Path(e.toString)).toSeq
         for
           _         <- warnShadedDuplicate(fqn, classpath)
-          docstring <- coord.fold(IO.pure(Option.empty[String]))(c => IO.blocking(DocstringExtractor.extract(jars.map(_.toNioPath), c, fqn)))
+          docstring <- coord.fold(IO.pure(Option.empty[String]))(c => DocstringExtractor.extract(jars.map(_.toNioPath), c, fqn))
           formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols, docstring, limit, hideInherited, groupInherited))
           _         <- Console[IO].println(formatted)
           _         <- warnScala2(symbols)

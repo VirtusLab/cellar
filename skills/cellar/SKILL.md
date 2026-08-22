@@ -35,6 +35,9 @@ Query the current project's code and all its dependencies. Cellar auto-detects t
 - `-l`, `--limit <N>`: max results for `list`/`search` (default: 50), max members for `get`
 - `--hide-inherited`: show only members declared on the type itself (`get` commands)
 - `--group-inherited`: group members by declaring type with section headers (`get` commands)
+- `-v`, `--verbose` / `--debug`: diagnostics to stderr. Use when a symbol you expect is reported as
+  not found: `--verbose` on the `get` commands lists which lookup strategies were tried, and
+  `--debug` adds the resolved classpath and build-tool detection on any command.
 
 ## External commands (query arbitrary Maven coordinates)
 
@@ -104,7 +107,10 @@ def untilM[G, A](f: F[A]): (cond: => F[Boolean]): (G: Alternative[G]): F[G[A]]
 def whileM_[A](p: F[Boolean]): (body: => F[A]): F[Unit]
 def iterateUntil[A](f: F[A]): (p: A => Boolean): F[A]
 … (+ 7 more)
-**Companion members:** trait Ops[F, A], def apply[F](instance: Monad[F]): Monad[F], …
+**Companion members:**
+trait Ops[F, A]
+def apply[F](instance: Monad[F]): Monad[F]
+…
 ```
 
 Use `--hide-inherited` to get only own members. Without it, all inherited members are shown (can be large for deep hierarchies).

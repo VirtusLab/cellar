@@ -13,13 +13,27 @@ object CellarError:
   ) extends CellarError:
     override def getMessage: String =
       val base = s"Could not resolve '${coord.render}'."
-      if suggestions.isEmpty then
-        s"$base Check that the group ID, artifact ID, and version are correct."
-      else if suggestions.head.startsWith("Artifact exists.") then
-        s"$base\n\n${suggestions.head}"
-      else
-        val hint = suggestions.map(s => s"  $s").mkString("\n")
-        s"$base\n\nDid you mean?\n$hint"
+      val head =
+        if suggestions.isEmpty then
+          s"$base Check that the group ID, artifact ID, and version are correct."
+        else if suggestions.head.startsWith("Artifact exists.") then
+          s"$base\n\n${suggestions.head}"
+        else
+          val hint = suggestions.map(s => s"  $s").mkString("\n")
+          s"$base\n\nDid you mean?\n$hint"
+      triedLocations.fold(head)(tried => s"$head\n\nTried:\n$tried")
+
+    /** Coursier names every repository it consulted in its own message. That is the first thing
+      * anyone asks on a resolution failure ("is it even looking at my private repo?"), so it is
+      * part of the error rather than something you need to re-run with a flag to see. The leading
+      * line is dropped: it restates the coordinate we already printed.
+      */
+    private def triedLocations: Option[String] =
+      Option(cause.getMessage)
+        .map(_.linesIterator.drop(1).map(_.trim).filter(_.nonEmpty).map(l => s"  $l").toList)
+        .filter(_.nonEmpty)
+        .map(_.mkString("\n"))
+
     override def getCause: Throwable = cause
 
   final case class SymbolLookupFailed(fqn: String, cause: Throwable) extends CellarError:
