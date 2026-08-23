@@ -1,7 +1,15 @@
 package cellar
 
 import tastyquery.Contexts.Context
-import tastyquery.Symbols.{ClassSymbol, ClassTypeParamSymbol, Symbol, TermOrTypeSymbol, TermSymbol}
+import tastyquery.Symbols.{
+  ClassSymbol,
+  ClassTypeParamSymbol,
+  Symbol,
+  TermOrTypeSymbol,
+  TermSymbol,
+  TypeMemberDefinition,
+  TypeMemberSymbol
+}
 import tastyquery.Types.*
 
 enum DetectedLanguage:
@@ -117,7 +125,29 @@ object TypePrinter:
         if term.isModuleVal then s"$keyword ${term.name}"
         else s"$keyword ${term.name}${printTopLevelMethodic(term.declaredType)}"
 
+      case tm: TypeMemberSymbol =>
+        tm.typeDef match
+          case TypeMemberDefinition.OpaqueTypeAlias(_, alias) =>
+            s"opaque type ${tm.name} = ${printType(alias)}"
+          case TypeMemberDefinition.TypeAlias(alias) =>
+            s"type ${tm.name} = ${printType(alias)}"
+          case TypeMemberDefinition.AbstractType(bounds) =>
+            s"type ${tm.name}${printBoundsSuffix(bounds)}"
+
       case other => other.toString
+
+  /** ` >: L <: H`, omitting either half when it is the trivial bound. */
+  private def printBoundsSuffix(bounds: TypeBounds)(using Context): String =
+    bounds match
+      case b: AbstractTypeBounds =>
+        // compare the rendered form: `Type.toString` is a structural dump, never "Nothing"
+        val low  = printType(b.low)
+        val high = printType(b.high)
+        val lo   = if low == "Nothing" then "" else s" >: $low"
+        val hi   = if high == "Any" then "" else s" <: $high"
+        s"$lo$hi"
+      // TypeAlias is the other TypeBounds subtype; low == high == the aliased type
+      case b: TypeAlias => s" = ${printType(b.low)}"
 
   private def termKeyword(sym: TermSymbol): String =
     if sym.isGivenOrUsing then "given"

@@ -30,8 +30,9 @@ object NearMatchFinder:
               Nil
         )
         .filter(sym => PublicApiFilter.isPublic(sym) && sym.name.toString.toLowerCase == lowerName)
-        .map(_.displayFullName)
+        .map(GetFormatter.displayFqn)
         .filter(_ != fqn)
+        .distinct // class + module class collapse to the same user-facing FQN
         .take(10)
         .toList
       (matches, skipped.result())

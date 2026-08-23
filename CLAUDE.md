@@ -94,6 +94,16 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 Examples are testing match exhaustivity, typesystem etc.
 
+6. Always verify end-to-end output quality when fixing a bug
+
+A passing unit test on an intermediate data structure is not proof the
+user-visible output is correct. After any bug fix or feature touching
+rendered output, run the relevant `cellar` command against a real
+fixture or published artifact and read the printed Markdown yourself
+before declaring the task done. Internal assertions like "the resolver
+returned Found(symbol)" do not catch leaked synthetic names, broken
+signatures, or missing separators.
+
 ## Code Conventions
 
 - Use `fs2.io.file.Path` for file references, not `java.io.File` or `java.nio.file.Path`
