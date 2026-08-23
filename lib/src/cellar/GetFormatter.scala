@@ -44,6 +44,7 @@ object GetFormatter:
       formatSymbol(sym, if i == 0 then docstring else None, limit, hideInherited, groupInherited)
     }.mkString("\n\n---\n\n")
 
+
   private def cleanDocstring(raw: String): String =
     raw.stripPrefix("/**").stripSuffix("*/").trim
       .linesIterator

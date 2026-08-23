@@ -132,9 +132,13 @@ object TypePrinter:
           case TypeMemberDefinition.TypeAlias(alias) =>
             s"type ${tm.name} = ${printType(alias)}"
           case TypeMemberDefinition.AbstractType(bounds) =>
-            val lo = if bounds.low.toString == "Nothing" then "" else s" >: ${printType(bounds.low)}"
-            val hi = if bounds.high.toString == "Any" then "" else s" <: ${printType(bounds.high)}"
-            s"type ${tm.name}$lo$hi"
+            bounds match
+              case b: AbstractTypeBounds =>
+                val lo = if b.low.toString == "Nothing" then "" else s" >: ${printType(b.low)}"
+                val hi = if b.high.toString == "Any" then "" else s" <: ${printType(b.high)}"
+                s"type ${tm.name}$lo$hi"
+              // TypeAlias is the other TypeBounds subtype; low == high == the aliased type
+              case b: TypeAlias => s"type ${tm.name} = ${printType(b.low)}"
 
       case other => other.toString
 

@@ -59,7 +59,7 @@ object SearchHandler:
       else IO.unit
       limited.traverse_ { sym =>
         IO.blocking {
-          val fqn = sym.displayFullName
+          val fqn = GetFormatter.displayFqn(sym)
           val sig = LineFormatter.formatLine(sym)
           s"$fqn — $sig"
         }.flatMap(Console[IO].println)
