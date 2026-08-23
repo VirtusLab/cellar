@@ -31,7 +31,7 @@ class SbtBuildTool(cwd: Path, config: SbtConfig) extends BuildTool:
           val classpathLine = result.stdout.linesIterator
             .filter(_.nonEmpty)
             .filter(line => !line.startsWith("["))
-            .filter(_.contains(sys.props("file.separator")))
+            .filter(_.contains(java.io.File.separator))
             .toList
             .sortBy(-_.length)
             .headOption
