@@ -258,6 +258,29 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  private def withJavaCtx[A](body: Context => IO[A]): IO[A] =
+    TestFixtures.assumeFixturesAvailable()
+    for
+      jrePaths <- JreClasspath.jrtPath()
+      jars     <- CoursierFetchClient.fetchClasspath(
+                    TestFixtures.javaCoord, Seq(TestFixtures.localM2Repo))
+      result   <- ContextResource.make(jars, jrePaths).use { (ctx, _) => body(ctx) }
+    yield result
+
+  // A Java type parameter carries an implicit Nothing lower bound. Printing Nothing as
+  // "NothingType" both leaked the internal name and defeated the elision in printTypeParam,
+  // yielding `[E >: NothingType <: Comparable[E]]`.
+  test("printSymbolSignature elides the implicit Nothing lower bound on a Java type param"):
+    withJavaCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls = ctx.findStaticClass("cellar.fixture.java.CellarJavaClass")
+        val sig = TypePrinter.printSymbolSignature(cls)
+        assert(!sig.contains("NothingType"), s"leaked internal type name: $sig")
+        assert(sig.startsWith("class CellarJavaClass[T <: Comparable[T]]"), s"unexpected: $sig")
+      }
+    }
+
   private def sugarSig(fqn: String, method: String)(using ctx: Context): String =
     val cls = ctx.findStaticClass(fqn)
     TypePrinter.printSymbolSignature(cls.declarations.find(_.name.toString == method).get)

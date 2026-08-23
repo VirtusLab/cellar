@@ -74,6 +74,10 @@ object TypePrinter:
       case t: TypeLambda =>
         val params = t.paramNames.zip(t.paramTypeBounds).map(printTypeParam)
         s"[${params.mkString(", ")}] =>> ${printType(t.resultType)}"
+      // Without this, Nothing falls through to the class-name fallback below and prints as
+      // "NothingType" — which also defeats the unbounded-lower-bound elision in printTypeParam,
+      // since that compares against "Nothing".
+      case _: NothingType    => "Nothing"
       case _                 => tpe.getClass.getSimpleName
 
   def printMethodic(tpe: TypeOrMethodic)(using ctx: Context): String =
