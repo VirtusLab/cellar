@@ -411,52 +411,20 @@ Install cellar as a Claude Code plugin for auto-updates:
 
 Claude will automatically have access to the `/cellar:cellar` skill and know when to use it.
 
-### Manual setup
+### Without the plugin
 
-Alternatively, add the following to your project's `CLAUDE.md`:
+If you don't want the plugin, copy the skill into your project (or into
+`~/.claude/skills/` to make it available everywhere):
 
-````markdown
-## Cellar
+```sh
+mkdir -p .claude/skills/cellar
+curl -o .claude/skills/cellar/SKILL.md \
+  https://raw.githubusercontent.com/VirtusLab/cellar/main/skills/cellar/SKILL.md
+```
 
-When you need the API of a JVM dependency, use cellar. Always prefer cellar over hallucinating API signatures.
-
-### Telemetry notice
-
-On first run in a project, cellar emits a `{"status":"needs_input",...}` JSON object on stderr. When you see it, pause and ask the user the question before continuing.
-
-### Project-aware commands (run from project root)
-
-For querying the current project's code and dependencies (auto-detects build tool):
-
-    cellar get [--module <name>] <fqn>       # single symbol
-    cellar list [--module <name>] <package>  # explore a package
-    cellar search [--module <name>] <query>  # find by name
-
-- Mill/sbt projects: `--module` is required (e.g. `--module lib`, `--module core`)
-- scala-cli projects: `--module` is not supported (omit it)
-- `--test`: query the test-scope classpath (sbt/scala-cli; for Mill, use the test module directly, e.g. `--module foo.test`)
-- `--no-cache`: skip classpath cache, re-extract from build tool
-- `--java-home`: override JRE classpath
-
-### External commands (query arbitrary Maven coordinates)
-
-For querying any published artifact by explicit coordinate:
-
-    cellar get-external <coordinate> <fqn>       # single symbol
-    cellar list-external <coordinate> <package>  # explore a package
-    cellar search-external <coordinate> <query>  # find by name
-    cellar get-source <coordinate> <fqn>         # source code
-    cellar deps <coordinate>                     # dependency tree
-
-Coordinates must be explicit: `group:artifact_3:version` (use `latest` for newest version).
-
-### Workflow
-
-1. **Don't know the package?** → `cellar search <query>` or `cellar search-external <coordinate> <query>`
-2. **Know the package, not the type?** → `cellar list <package>` or `cellar list-external <coordinate> <package>`
-3. **Know the type?** → `cellar get <fqn>` or `cellar get-external <coordinate> <fqn>`
-4. **Need the source?** → `cellar get-source <coordinate> <fqn>`
-````
+[`skills/cellar/SKILL.md`](skills/cellar/SKILL.md) is the single source of truth
+for the agent-facing instructions — it stays in sync with the CLI, so prefer it
+over pasting a hand-written command list into `CLAUDE.md`.
 
 ## Building from source
 
