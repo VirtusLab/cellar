@@ -1,7 +1,6 @@
 package cellar
 
 import cats.effect.{ExitCode, IO}
-import cats.effect.std.Console
 import cellar.handlers.MetaHandler
 import munit.CatsEffectSuite
 
@@ -9,10 +8,9 @@ class MetaHandlerTest extends CatsEffectSuite:
 
   private def run(coord: MavenCoordinate): IO[(ExitCode, String)] =
     TestFixtures.assumeFixturesAvailable()
-    val console = CapturingConsole()
-    given Console[IO] = console
-    MetaHandler.run(coord, extraRepositories = Seq(TestFixtures.localM2Repo))
-      .map(code => (code, console.outBuf.toString))
+    CapturingConsole
+      .capture(MetaHandler.run(coord, extraRepositories = Seq(TestFixtures.localM2Repo)))
+      .map((code, out, _) => (code, out))
 
   test("meta: scala3 fixture exits 0"):
     run(TestFixtures.scala3Coord).map { (code, _) =>

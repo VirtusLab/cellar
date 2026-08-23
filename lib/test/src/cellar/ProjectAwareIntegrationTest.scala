@@ -301,28 +301,24 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
   test("E2E scala-cli: get resolves project symbol"):
     isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
-      val console = CapturingConsole()
-      given Console[IO] = console
-      IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
+      CapturingConsole.capture(IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
         """package example
           |
           |class MyClass:
           |  def hello: String = "world"
           |""".stripMargin
       )) >>
-        handlers.ProjectGetHandler.run("example.MyClass", module = None, cwd = Some(dir)).map { code =>
-          assertEquals(code, ExitCode.Success, s"Stderr: ${console.errBuf}")
-          assert(console.outBuf.toString.contains("MyClass"), s"Output: ${console.outBuf}")
-          assert(console.outBuf.toString.contains("hello"), s"Output: ${console.outBuf}")
+        handlers.ProjectGetHandler.run("example.MyClass", module = None, cwd = Some(dir))).map { (code, out, err) =>
+          assertEquals(code, ExitCode.Success, s"Stderr: $err")
+          assert(out.contains("MyClass"), s"Output: $out")
+          assert(out.contains("hello"), s"Output: $out")
         }
     }
 
   test("E2E scala-cli: get resolves symbol from dependency"):
     isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
-      val console = CapturingConsole()
-      given Console[IO] = console
-      IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
+      CapturingConsole.capture(IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
         """//> using dep org.typelevel::cats-core:2.10.0
           |
           |package example
@@ -331,18 +327,16 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
           |  def run: Unit = ()
           |""".stripMargin
       )) >>
-        handlers.ProjectGetHandler.run("cats.Monad", module = None, cwd = Some(dir)).map { code =>
+        handlers.ProjectGetHandler.run("cats.Monad", module = None, cwd = Some(dir))).map { (code, out, _) =>
           assertEquals(code, ExitCode.Success)
-          assert(console.outBuf.toString.contains("Monad"), s"Output: ${console.outBuf}")
+          assert(out.contains("Monad"), s"Output: $out")
         }
     }
 
   test("E2E scala-cli: --test resolves symbol from test-only dependency"):
     isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
-      val console = CapturingConsole()
-      given Console[IO] = console
-      IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
+      CapturingConsole.capture(IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
         """//> using test.dep org.scalameta::munit:1.0.4
           |
           |package example
@@ -354,18 +348,16 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         safeRun(handlers.ProjectGetHandler.run("munit.FunSuite", module = None, cwd = Some(dir))).map { code =>
           assertEquals(code, ExitCode.Error, "test-only dep must not be on the compile classpath")
         } >>
-        handlers.ProjectGetHandler.run("munit.FunSuite", module = None, cwd = Some(dir), testScope = true).map { code =>
-          assertEquals(code, ExitCode.Success, s"Stderr: ${console.errBuf}")
-          assert(console.outBuf.toString.contains("FunSuite"), s"Output: ${console.outBuf}")
+        handlers.ProjectGetHandler.run("munit.FunSuite", module = None, cwd = Some(dir), testScope = true)).map { (code, out, err) =>
+          assertEquals(code, ExitCode.Success, s"Stderr: $err")
+          assert(out.contains("FunSuite"), s"Output: $out")
         }
     }
 
   test("E2E scala-cli: list lists members of project class"):
     isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
-      val console = CapturingConsole()
-      given Console[IO] = console
-      IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
+      CapturingConsole.capture(IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
         """package example
           |
           |class MyClass:
@@ -373,9 +365,8 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
           |  def goodbye: Int = 42
           |""".stripMargin
       )) >>
-        handlers.ProjectListHandler.run("example.MyClass", module = None, limit = 50, cwd = Some(dir)).map { code =>
+        handlers.ProjectListHandler.run("example.MyClass", module = None, limit = 50, cwd = Some(dir))).map { (code, out, _) =>
           assertEquals(code, ExitCode.Success)
-          val out = console.outBuf.toString
           assert(out.contains("hello"), s"Output: $out")
           assert(out.contains("goodbye"), s"Output: $out")
         }
@@ -384,54 +375,48 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
   test("E2E scala-cli: search finds symbols across project"):
     isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
-      val console = CapturingConsole()
-      given Console[IO] = console
-      IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
+      CapturingConsole.capture(IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
         """package example
           |
           |class UniqueTestClassName123:
           |  def run: Unit = ()
           |""".stripMargin
       )) >>
-        handlers.ProjectSearchHandler.run("UniqueTestClassName123", module = None, limit = 50, cwd = Some(dir)).map { code =>
+        handlers.ProjectSearchHandler.run("UniqueTestClassName123", module = None, limit = 50, cwd = Some(dir))).map { (code, out, _) =>
           assertEquals(code, ExitCode.Success)
-          assert(console.outBuf.toString.contains("UniqueTestClassName123"), s"Output: ${console.outBuf}")
+          assert(out.contains("UniqueTestClassName123"), s"Output: $out")
         }
     }
 
   test("E2E scala-cli: --module produces error"):
     isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
-      val console = CapturingConsole()
-      given Console[IO] = console
-      IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
+      CapturingConsole.capture(IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
         """package example
           |class Foo
           |""".stripMargin
       )) >>
         handlers.ProjectGetHandler.run("example.Foo", module = Some("bar"), cwd = Some(dir))
-          .handleErrorWith { e => Console[IO].errorln(e.getMessage).as(ExitCode.Error) }
-          .map { code =>
+          .handleErrorWith { e => Console[IO].errorln(e.getMessage).as(ExitCode.Error) })
+          .map { (code, _, err) =>
             assertEquals(code, ExitCode.Error)
-            assert(console.errBuf.toString.contains("--module is not supported"), s"Stderr: ${console.errBuf}")
+            assert(err.contains("--module is not supported"), s"Stderr: $err")
           }
     }
 
   test("E2E scala-cli: compilation failure surfaces build tool error"):
     isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>
-      val console = CapturingConsole()
-      given Console[IO] = console
-      IO.blocking(Files.writeString(dir.resolve("Bad.scala").toNioPath,
+      CapturingConsole.capture(IO.blocking(Files.writeString(dir.resolve("Bad.scala").toNioPath,
         """package example
           |class Bad {
           |  val x: String = 42  // type error
           |}
           |""".stripMargin
       )) >>
-        safeRun(handlers.ProjectGetHandler.run("example.Bad", module = None, cwd = Some(dir))).map { code =>
+        safeRun(handlers.ProjectGetHandler.run("example.Bad", module = None, cwd = Some(dir)))).map { (code, _, err) =>
           assertEquals(code, ExitCode.Error)
-          assert(console.errBuf.toString.contains("Compilation failed"), s"Stderr: ${console.errBuf}")
+          assert(err.contains("Compilation failed"), s"Stderr: $err")
         }
     }
 
@@ -440,9 +425,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
   // No `mill` needed: --test must be rejected before the build tool is invoked.
   test("E2E Mill: --test is rejected without invoking the build tool"):
     withTempDir { dir =>
-      val console = CapturingConsole()
-      given Console[IO] = console
-      IO.blocking(Files.writeString(dir.resolve("build.mill").toNioPath, "package build\n")) >>
+      CapturingConsole.capture(IO.blocking(Files.writeString(dir.resolve("build.mill").toNioPath, "package build\n")) >>
         safeRun(
           handlers.ProjectGetHandler.run(
             "example.Foo",
@@ -451,18 +434,16 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
             config = Config.global.copy(mill = MillConfig("nonexistent-mill-binary-xyz")),
             testScope = true
           )
-        ).map { code =>
+        )).map { (code, _, err) =>
           assertEquals(code, ExitCode.Error)
-          assert(console.errBuf.toString.contains("--test is not supported for Mill"), s"Stderr: ${console.errBuf}")
+          assert(err.contains("--test is not supported for Mill"), s"Stderr: $err")
         }
     }
 
   test("E2E Mill: get resolves project symbol"):
     isBinaryAvailable(millBinary).map(assume(_, s"$millBinary not found")) >>
     withTempDir { dir =>
-      val console = CapturingConsole()
-      given Console[IO] = console
-      IO.blocking {
+      CapturingConsole.capture(IO.blocking {
         Files.writeString(dir.resolve("build.mill").toNioPath,
           """package build
             |import mill._, scalalib._
@@ -481,24 +462,22 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
             |""".stripMargin
         )
       } >>
-        handlers.ProjectGetHandler.run("example.MillClass", module = Some("app"), cwd = Some(dir), config = Config.global.copy(mill = MillConfig(millBinary))).map { code =>
-          assertEquals(code, ExitCode.Success, s"Stderr: ${console.errBuf}\nStdout: ${console.outBuf}")
-          assert(console.outBuf.toString.contains("MillClass"), s"Output: ${console.outBuf}")
-          assert(console.outBuf.toString.contains("greet"), s"Output: ${console.outBuf}")
+        handlers.ProjectGetHandler.run("example.MillClass", module = Some("app"), cwd = Some(dir), config = Config.global.copy(mill = MillConfig(millBinary)))).map { (code, out, err) =>
+          assertEquals(code, ExitCode.Success, s"Stderr: $err\nStdout: $out")
+          assert(out.contains("MillClass"), s"Output: $out")
+          assert(out.contains("greet"), s"Output: $out")
         }
     }
 
   test("E2E Mill: --module required"):
     isBinaryAvailable(millBinary).map(assume(_, s"$millBinary not found")) >>
     withTempDir { dir =>
-      val console = CapturingConsole()
-      given Console[IO] = console
-      IO.blocking(Files.writeString(dir.resolve("build.mill").toNioPath, "")) >>
+      CapturingConsole.capture(IO.blocking(Files.writeString(dir.resolve("build.mill").toNioPath, "")) >>
         handlers.ProjectGetHandler.run("example.Foo", module = None, cwd = Some(dir), config = Config.global.copy(mill = MillConfig(millBinary)))
-          .handleErrorWith { e => Console[IO].errorln(e.getMessage).as(ExitCode.Error) }
-          .map { code =>
+          .handleErrorWith { e => Console[IO].errorln(e.getMessage).as(ExitCode.Error) })
+          .map { (code, _, err) =>
             assertEquals(code, ExitCode.Error)
-            assert(console.errBuf.toString.contains("--module is required for Mill"), s"Stderr: ${console.errBuf}")
+            assert(err.contains("--module is required for Mill"), s"Stderr: $err")
           }
     }
 
@@ -507,9 +486,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
   test("E2E sbt: get resolves project symbol"):
     isOnPath("sbt").map(assume(_, "sbt not on PATH")) >>
     withTempDir { dir =>
-      val console = CapturingConsole()
-      given Console[IO] = console
-      IO.blocking {
+      CapturingConsole.capture(IO.blocking {
         Files.writeString(dir.resolve("build.sbt").toNioPath,
           """lazy val `cellar-test` = (project in file("."))
             |  .settings(scalaVersion := "3.8.1")
@@ -526,22 +503,20 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
             |""".stripMargin
         )
       } >>
-        handlers.ProjectGetHandler.run("example.SbtClass", module = Some("cellar-test"), cwd = Some(dir)).map { code =>
-          assertEquals(code, ExitCode.Success, s"Stderr: ${console.errBuf}")
-          assert(console.outBuf.toString.contains("SbtClass"), s"Output: ${console.outBuf}")
+        handlers.ProjectGetHandler.run("example.SbtClass", module = Some("cellar-test"), cwd = Some(dir))).map { (code, out, err) =>
+          assertEquals(code, ExitCode.Success, s"Stderr: $err")
+          assert(out.contains("SbtClass"), s"Output: $out")
         }
     }
 
   test("E2E sbt: --module required"):
     isOnPath("sbt").map(assume(_, "sbt not on PATH")) >>
     withTempDir { dir =>
-      val console = CapturingConsole()
-      given Console[IO] = console
-      IO.blocking(Files.writeString(dir.resolve("build.sbt").toNioPath, "")) >>
+      CapturingConsole.capture(IO.blocking(Files.writeString(dir.resolve("build.sbt").toNioPath, "")) >>
         handlers.ProjectGetHandler.run("example.Foo", module = None, cwd = Some(dir))
-          .handleErrorWith { e => Console[IO].errorln(e.getMessage).as(ExitCode.Error) }
-          .map { code =>
+          .handleErrorWith { e => Console[IO].errorln(e.getMessage).as(ExitCode.Error) })
+          .map { (code, _, err) =>
             assertEquals(code, ExitCode.Error)
-            assert(console.errBuf.toString.contains("--module is required for sbt"), s"Stderr: ${console.errBuf}")
+            assert(err.contains("--module is required for sbt"), s"Stderr: $err")
           }
     }
