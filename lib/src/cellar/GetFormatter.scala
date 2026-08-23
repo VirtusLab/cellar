@@ -52,7 +52,7 @@ object GetFormatter:
       .mkString("\n")
       .trim
 
-  private def renderFlags(sym: Symbol)(using Context): String =
+  private def renderFlags(sym: Symbol): String =
     val flags = sym match
       case cls: ClassSymbol =>
         List(
@@ -143,11 +143,11 @@ object GetFormatter:
       var remaining = limit.getOrElse(Int.MaxValue)
       for (header, members) <- all if remaining > 0 do
         val take = members.take(remaining)
-        sb.append(s"// $header\n")
-        sb.append(take.mkString("\n")).append('\n')
+        sb.append(s"// $header\n"): Unit
+        sb.append(take.mkString("\n")).append('\n'): Unit
         remaining -= take.length
       if needsTruncation then
-        sb.append(s"// … ${totalMembers - limit.get} more members\n")
+        sb.append(s"// … ${totalMembers - limit.get} more members\n"): Unit
       Some(sb.toString.trim)
 
   private def renderCompanion(sym: Symbol)(using ctx: Context): Option[String] =

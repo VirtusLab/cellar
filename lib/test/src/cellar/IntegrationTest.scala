@@ -14,6 +14,10 @@ class IntegrationTest extends CatsEffectSuite:
   private def safeRun(f: IO[ExitCode])(using Console[IO]): IO[ExitCode] =
     f.handleErrorWith(e => Console[IO].errorln(e.getMessage).as(ExitCode.Error))
 
+  // Must precede every `test(...)` below: those register bodies that capture `this`,
+  // and -Wsafe-init rejects capturing a suite whose fields are not yet assigned.
+  private val scalaLibCoord = MavenCoordinate("org.scala-lang", "scala-library", "3.8.1")
+
   // ─── get subcommand ──────────────────────────────────────────────────────
 
   test("get: Scala3 sealed ADT stdout contains **Known subtypes:**"):
@@ -137,8 +141,6 @@ class IntegrationTest extends CatsEffectSuite:
         assertEquals(code, ExitCode.Success)
         assert(console.outBuf.toString.nonEmpty)
       }
-
-  private val scalaLibCoord = MavenCoordinate("org.scala-lang", "scala-library", "3.8.1")
 
   test("get: nested type Quotes.reflectModule resolves"):
     val console = CapturingConsole()

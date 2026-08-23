@@ -5,14 +5,13 @@ import cats.effect.std.Console
 import cellar.*
 import coursierapi.Repository
 import org.typelevel.log4cats.Logger
-import org.typelevel.otel4s.trace.Tracer
 
 object DepsHandler:
   def run(
       coord: MavenCoordinate,
       extraRepositories: Seq[Repository] = Seq.empty,
       logger: Logger[IO] = StderrLogger.off
-  )(using Console[IO], Tracer[IO]): IO[ExitCode] =
+  )(using Console[IO]): IO[ExitCode] =
     given Logger[IO] = logger
     val program =
       for

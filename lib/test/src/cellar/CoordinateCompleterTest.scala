@@ -1,6 +1,5 @@
 package cellar
 
-import cats.effect.IO
 import munit.CatsEffectSuite
 
 class CoordinateCompleterTest extends CatsEffectSuite:

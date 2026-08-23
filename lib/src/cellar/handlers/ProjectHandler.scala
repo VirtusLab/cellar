@@ -1,7 +1,6 @@
 package cellar.handlers
 
 import cats.effect.{ExitCode, IO}
-import cats.effect.std.Console
 import cellar.*
 import fs2.io.file.Path
 import org.typelevel.log4cats.Logger
@@ -18,7 +17,6 @@ object ProjectHandler:
       config: Config = Config.global,
       testScope: Boolean = false
   )(body: (Context, Classpath, Classpath) => IO[ExitCode])(using
-      console: Console[IO],
       tracer: Tracer[IO],
       logger: Logger[IO] = StderrLogger.off
   ): IO[ExitCode] =

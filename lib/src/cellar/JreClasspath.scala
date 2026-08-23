@@ -2,7 +2,7 @@ package cellar
 
 import cats.effect.IO
 import java.net.{URI, URLClassLoader}
-import java.nio.file.{Files, FileSystems, Path}
+import java.nio.file.{Files, FileSystems}
 import java.util.zip.ZipInputStream
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
