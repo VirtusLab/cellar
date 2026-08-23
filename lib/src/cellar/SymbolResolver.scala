@@ -7,7 +7,7 @@ import org.typelevel.otel4s.trace.Tracer
 import tastyquery.Contexts.Context
 import tastyquery.Exceptions.MemberNotFoundException
 import tastyquery.Names.{termName, typeName}
-import tastyquery.Symbols.{ClassSymbol, Symbol, TermOrTypeSymbol}
+import tastyquery.Symbols.{ClassSymbol, Symbol, TermOrTypeSymbol, TermSymbol}
 
 sealed trait LookupResult
 object LookupResult:
@@ -116,7 +116,14 @@ object SymbolResolver:
       ).flatten
       val wrapped = packageWrapperMembers(fqn)
       if wrapped.nonEmpty then trace.add(s"package wrapper: ${wrapped.size} member(s)")
-      val all = (direct ++ wrapped).distinct
+      // findStaticModuleClass returns the `Foo$` class while findStaticTerm returns
+      // the `object Foo` val -- both denote the same object. Represent it by the
+      // class: only that carries the parents, flags, members and source span that
+      // the renderers and get-source need. `distinct` then drops the duplicate.
+      val all = (direct ++ wrapped).map {
+        case t: TermSymbol if t.isModuleVal => t.moduleClass.getOrElse(t)
+        case s                              => s
+      }.distinct
       if all.nonEmpty then Some(LookupResult.Found(all))
       else
         tq("findPackage")(ctx.findPackage(fqn)).map(_ => LookupResult.IsPackage)
@@ -323,7 +330,9 @@ object SymbolResolver:
         try klass.declarations
         catch case _: Exception => Nil
       decls.foreach { decl =>
-        if !seen.contains(decl) then
+        // A constructor is never inherited: list only the queried class's own.
+        val inheritedCtor = klass != cls && decl.name.toString == "<init>"
+        if !seen.contains(decl) && !inheritedCtor then
           val dominated = decl.overridingSymbol(cls).exists(_ != decl)
           if !dominated then
             seen += decl

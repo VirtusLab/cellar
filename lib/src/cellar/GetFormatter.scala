@@ -11,7 +11,7 @@ object GetFormatter:
       hideInherited: Boolean = false,
       groupInherited: Boolean = false
   )(using ctx: Context): String =
-    val fqn       = sym.displayFullName
+    val fqn       = displayFqn(sym)
     val signature = TypePrinter.printSymbolSignature(sym)
     val flags     = renderFlags(sym)
     val origin    = renderOrigin(sym)
@@ -80,8 +80,8 @@ object GetFormatter:
 
   private def renderOrigin(sym: Symbol): String =
     sym.owner match
-      case owner: ClassSymbol => owner.displayFullName
-      case _                  => sym.displayFullName
+      case owner: ClassSymbol => displayFqn(owner)
+      case _                  => displayFqn(sym)
 
   private def renderMembers(
       sym: Symbol,
@@ -166,5 +166,16 @@ object GetFormatter:
       case cls: ClassSymbol =>
         val children = cls.sealedChildren
         if children.isEmpty then None
-        else Some(children.map(_.displayFullName).mkString(", "))
+        else Some(children.map(displayFqn).mkString(", "))
       case _ => None
+
+  /** `displayFullName` uses the JVM module-class encoding: `Foo$` for an object,
+   *  and `Outer$.Inner` for anything nested inside one. Render both at source level.
+   *  The trailing marker is stripped only for an actual module class, so names that
+   *  genuinely end in `$` (a `$` member, a Scala 3 `Foo$package`) are left alone.
+   */
+  private def displayFqn(sym: Symbol): String =
+    val fqn = sym.displayFullName.replace("$.", ".")
+    sym match
+      case cls: ClassSymbol if cls.isModuleClass => fqn.stripSuffix("$")
+      case _                                     => fqn

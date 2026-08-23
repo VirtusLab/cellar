@@ -103,10 +103,14 @@ object TypePrinter:
     sym match
       case cls: ClassSymbol =>
         val kind       = if cls.isTrait then "trait" else if cls.isModuleClass then "object" else "class"
+        // A module class is named `Foo$` on the JVM; print the source-level name.
+        val name       = if cls.isModuleClass then cls.name.toString.stripSuffix("$") else cls.name.toString
         val typeParams = printClassTypeParams(cls.typeParams)
-        val parents    = cls.parents.map(printParent).filter(p => p != "Object" && p != "Any")
+        // `AnyRef` is how the universal parent prints for a Scala 2 / Java symbol,
+        // the same way `Object` is for a Scala 3 one -- neither carries information.
+        val parents    = cls.parents.map(printParent).filterNot(universalParents.contains)
         val extendsStr = if parents.isEmpty then "" else s" extends ${parents.mkString(" with ")}"
-        s"$kind ${cls.name}$typeParams$extendsStr"
+        s"$kind $name$typeParams$extendsStr"
 
       case term: TermSymbol =>
         val keyword = termKeyword(term)
@@ -191,6 +195,8 @@ object TypePrinter:
       case t: Type => printType(t)
 
   /** Render a class parent, parenthesising function-arrow sugar so it is valid in `extends` position. */
+  private val universalParents = Set("Object", "Any", "AnyRef")
+
   private def printParent(tpe: Type)(using ctx: Context): String =
     val rendered = printType(tpe)
     tpe match

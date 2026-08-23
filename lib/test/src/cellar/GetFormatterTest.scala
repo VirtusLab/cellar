@@ -183,6 +183,89 @@ class GetFormatterTest extends CatsEffectSuite:
       }
     }
 
+  // Scala 2 ADT: sealed trait with subtypes nested inside the companion object.
+  test("formatSymbol for Scala 2 sealed trait lists nested subtypes with clean names"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls    = ctx.findStaticClass("cellar.fixture.scala2.CellarADT")
+        val output = GetFormatter.formatSymbol(cls)
+        assert(output.contains("**Known subtypes:**"), s"Expected subtypes section in:\n$output")
+        // Names must use source-level dotted notation, not JVM $ encoding
+        assert(output.contains("CellarADT.CellarAA"), s"Expected clean CellarAA name in:\n$output")
+        assert(output.contains("CellarADT.CellarAB"), s"Expected clean CellarAB name in:\n$output")
+        assert(!output.contains("CellarADT$"), s"Expected no JVM-mangled names in:\n$output")
+      }
+    }
+
+  test("formatGetResult for Scala 2 sealed trait does not emit duplicate companion module class result"):
+    withScala2Ctx { ctx =>
+      given Context = ctx
+      SymbolResolver.resolve("cellar.fixture.scala2.CellarADT").map {
+        case LookupResult.Found(syms) =>
+          val output = GetFormatter.formatGetResult("cellar.fixture.scala2.CellarADT", syms)
+          // Should have trait + object, but not the raw CellarADT$ module class as a third block
+          val headingCount = output.linesIterator.count(_.startsWith("## cellar.fixture.scala2.CellarADT"))
+          assertEquals(headingCount, 2, s"Expected exactly 2 headings (trait + object), got $headingCount in:\n$output")
+        case other => fail(s"Expected Found, got $other")
+      }
+    }
+
+  test("formatSymbol for an object resolved via SymbolResolver shows its members"):
+    withCtx { ctx =>
+      given Context = ctx
+      // Celsius is an opaque type plus its companion object (apply, toFahrenheit, value).
+      // SymbolResolver represents the companion by its module class, so renderMembers
+      // sees a ClassSymbol and the members survive.
+      SymbolResolver.resolve("cellar.fixture.scala3.Celsius").map {
+        case LookupResult.Found(syms) =>
+          val output = GetFormatter.formatGetResult("cellar.fixture.scala3.Celsius", syms)
+          assert(output.contains("apply"), s"Expected 'apply' in standalone object output:\n$output")
+        case other => fail(s"Expected Found, got $other")
+      }
+    }
+
+  test("formatSymbol keeps Java constructors but drops an object's <init>"):
+    withJavaCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls    = ctx.findStaticClass("cellar.fixture.java.CellarJavaClass")
+        val output = GetFormatter.formatSymbol(cls)
+        // A Java type has no companion `apply`, so the constructors are the only
+        // listing that shows how it is built. CellarJavaClass declares exactly one,
+        // and a constructor is never inherited, so exactly one must be listed.
+        assertEquals(output.linesIterator.count(_.contains("<init>")), 1, s"Output:\n$output")
+      }
+    }
+
+  test("formatSymbol omits the universal parent from a Scala 2 signature"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        // `AnyRef` is how the universal parent prints for a Scala 2 symbol; a real
+        // parent must survive alongside it being dropped.
+        val trt = ctx.findStaticClass("cellar.fixture.scala2.CellarInstances")
+        val obj = ctx.findStaticModuleClass("cellar.fixture.scala2.CellarInstances")
+        assertEquals(TypePrinter.printSymbolSignature(trt), "trait CellarInstances")
+        assertEquals(TypePrinter.printSymbolSignature(obj), "object CellarInstances extends CellarInstances")
+      }
+    }
+
+  test("formatSymbol drops <init> for a trait and for an object"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        // A trait has no user-callable constructor, and the object that mixes it in
+        // must not inherit one into its member list either.
+        val trt = ctx.findStaticClass("cellar.fixture.scala2.CellarInstances")
+        val obj = ctx.findStaticModuleClass("cellar.fixture.scala2.CellarInstances")
+        val traitOut = GetFormatter.formatSymbol(trt)
+        val objOut   = GetFormatter.formatSymbol(obj)
+        assert(!traitOut.contains("<init>"), s"Trait output:\n$traitOut")
+        assert(!objOut.contains("<init>"), s"Object output:\n$objOut")
+      }
+    }
+
   test("formatSymbol --hide-inherited shows only declared members"):
     withCtx { ctx =>
       IO.blocking {
