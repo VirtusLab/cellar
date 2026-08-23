@@ -7,7 +7,7 @@ import cellar.*
 import cellar.handlers.{DepsHandler, GetHandler, GetSourceHandler, ListHandler, MetaHandler, ProjectGetHandler, ProjectListHandler, ProjectSearchHandler, SearchHandler}
 import cellar.profiling.{ProfilingIOApp, PyroscopeSetup, TracingRuntime}
 import com.monovore.decline.*
-import coursierapi.{MavenRepository, Repository}
+import coursierapi.Repository
 import fs2.io.file.{Files, Path}
 import org.typelevel.log4cats.Logger
 import org.typelevel.otel4s.trace.Tracer
@@ -152,7 +152,9 @@ object CellarApp extends ProfilingIOApp:
   private val extraReposOpt: Opts[List[Repository]] =
     Opts.options[String]("repository", "Extra Maven repository URL (repeatable)", short = "r", metavar = "url")
       .orEmpty
-      .map(_.map(MavenRepository.of(_)))
+      .mapValidated(_.traverse { raw =>
+        RepositoryUrl.parse(raw).leftMap(reason => s"Invalid --repository: $reason").toValidatedNel
+      })
 
   private val limitOpt: Opts[Int] =
     Opts
