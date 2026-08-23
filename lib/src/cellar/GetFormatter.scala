@@ -16,7 +16,7 @@ object GetFormatter:
     val flags     = renderFlags(sym)
     val origin    = renderOrigin(sym)
     val members   = renderMembers(sym, limit, hideInherited, groupInherited)
-    val companion = renderCompanion(sym)
+    val companion = renderCompanion(sym, limit, groupInherited && !hideInherited)
     val subtypes  = renderSubtypes(sym)
 
     val sb = new StringBuilder
@@ -151,14 +151,14 @@ object GetFormatter:
         sb.append(s"// … ${totalMembers - limit.get} more members\n"): Unit
       Some(sb.toString.trim)
 
-  private def renderCompanion(sym: Symbol)(using ctx: Context): Option[String] =
+  private def renderCompanion(sym: Symbol, limit: Option[Int], groupInherited: Boolean)(using
+      ctx: Context
+  ): Option[String] =
     sym match
       case cls: ClassSymbol =>
         cls.companionClass.flatMap { companion =>
-          val members = companion.declarations
-            .filter(m => PublicApiFilter.isPublic(m))
-            .map(formatMember)
-          if members.isEmpty then None else Some(members.mkString("\n"))
+          if groupInherited then renderGroupedMembers(companion, limit)
+          else renderFlatMembers(companion.declarations.filter(PublicApiFilter.isPublic).toList, limit)
         }
       case _ => None
 

@@ -323,6 +323,43 @@ class GetFormatterTest extends CatsEffectSuite:
       }
     }
 
+  test("formatSymbol --limit caps companion members too"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls     = ctx.findStaticClass("cellar.fixture.scala3.CellarWithCompanion")
+        val full    = GetFormatter.formatSymbol(cls)
+        val limited = GetFormatter.formatSymbol(cls, limit = Some(1))
+        val companionOf = (out: String) => out.split("""\*\*Companion members:\*\*""")(1).takeWhile(_ != '#')
+        assert(companionOf(full).linesIterator.count(_.startsWith("def ")) >= 1, s"Expected companion members in:\n$full")
+        assert(companionOf(limited).contains("more members"), s"Expected truncation note in companion section of:\n$limited")
+      }
+    }
+
+  test("formatSymbol --group-inherited labels companion members by declaring type"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls      = ctx.findStaticClass("cellar.fixture.scala3.CellarWithCompanion")
+        val grouped  = GetFormatter.formatSymbol(cls, groupInherited = true)
+        val flat     = GetFormatter.formatSymbol(cls)
+        val companionOf = (out: String) => out.split("""\*\*Companion members:\*\*""")(1).takeWhile(_ != '#')
+        assert(companionOf(grouped).contains("// Declared on"), s"Expected section header in companion of:\n$grouped")
+        assert(!companionOf(flat).contains("// Declared on"), s"Unexpected section header in companion of:\n$flat")
+      }
+    }
+
+  test("formatSymbol --hide-inherited wins over --group-inherited for companion members"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarWithCompanion")
+        val output = GetFormatter.formatSymbol(cls, hideInherited = true, groupInherited = true)
+        val companion = output.split("""\*\*Companion members:\*\*""")(1).takeWhile(_ != '#')
+        assert(!companion.contains("// Declared on"), s"Unexpected section header in companion of:\n$output")
+      }
+    }
+
   // Scala-3 top-level decls live inside a synthetic `<file>$package$` wrapper
   // class. The wrapper must not leak into the rendered Markdown heading,
   // origin line, or signature. Fixture: fixtureScala3/src/myapp/Hello.scala

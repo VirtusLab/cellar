@@ -175,9 +175,9 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 | `--java-home <path>` | all | Use a specific JDK for JRE classpath |
 | `-r`, `--repository <url>` | external commands | Extra Maven repository URL (repeatable) |
 | `-l`, `--limit <N>` | `list`, `list-external`, `search`, `search-external` | Max results (default: 50) |
-| `-l`, `--limit <N>` | `get`, `get-external` | Max members to display (no default) |
+| `-l`, `--limit <N>` | `get`, `get-external` | Max members to display per section, including companion members (no default) |
 | `--hide-inherited` | `get`, `get-external` | Show only members declared on the type itself |
-| `--group-inherited` | `get`, `get-external` | Group members by declaring type with section headers |
+| `--group-inherited` | `get`, `get-external` | Group members (and companion members) by declaring type with section headers |
 | `-v`, `--verbose` | all except `telemetry` | Log progress and warnings to stderr |
 | `--debug` | all except `telemetry` | Log detailed diagnostics and stack traces to stderr |
 
