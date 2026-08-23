@@ -132,15 +132,22 @@ object TypePrinter:
           case TypeMemberDefinition.TypeAlias(alias) =>
             s"type ${tm.name} = ${printType(alias)}"
           case TypeMemberDefinition.AbstractType(bounds) =>
-            bounds match
-              case b: AbstractTypeBounds =>
-                val lo = if b.low.toString == "Nothing" then "" else s" >: ${printType(b.low)}"
-                val hi = if b.high.toString == "Any" then "" else s" <: ${printType(b.high)}"
-                s"type ${tm.name}$lo$hi"
-              // TypeAlias is the other TypeBounds subtype; low == high == the aliased type
-              case b: TypeAlias => s"type ${tm.name} = ${printType(b.low)}"
+            s"type ${tm.name}${printBoundsSuffix(bounds)}"
 
       case other => other.toString
+
+  /** ` >: L <: H`, omitting either half when it is the trivial bound. */
+  private def printBoundsSuffix(bounds: TypeBounds)(using Context): String =
+    bounds match
+      case b: AbstractTypeBounds =>
+        // compare the rendered form: `Type.toString` is a structural dump, never "Nothing"
+        val low  = printType(b.low)
+        val high = printType(b.high)
+        val lo   = if low == "Nothing" then "" else s" >: $low"
+        val hi   = if high == "Any" then "" else s" <: $high"
+        s"$lo$hi"
+      // TypeAlias is the other TypeBounds subtype; low == high == the aliased type
+      case b: TypeAlias => s" = ${printType(b.low)}"
 
   private def termKeyword(sym: TermSymbol): String =
     if sym.isGivenOrUsing then "given"
