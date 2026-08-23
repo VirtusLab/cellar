@@ -2,9 +2,9 @@ package cellar.profiling
 
 import cats.effect.{IO, Resource}
 import io.pyroscope.http.Format
-import io.pyroscope.javaagent.{EventType, PyroscopeAgent}
 import io.pyroscope.javaagent.api.Logger
 import io.pyroscope.javaagent.config.Config
+import io.pyroscope.javaagent.{EventType, PyroscopeAgent}
 
 import java.time.Duration
 

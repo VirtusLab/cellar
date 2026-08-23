@@ -1,7 +1,7 @@
 package cellar.handlers
 
-import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
+import cats.effect.{ExitCode, IO}
 import cellar.*
 import coursierapi.Repository
 import fs2.io.file.Path
@@ -49,7 +49,7 @@ object GetHandler:
         val jars = classpath.filter(_.toString.endsWith(".jar")).map(e => Path(e.toString)).toSeq
         for
           _         <- warnShadedDuplicate(fqn, classpath)
-          docstring <- coord.fold(IO.pure(Option.empty[String]))(c => DocstringExtractor.extract(jars.map(_.toNioPath), c, fqn))
+          docstring <- coord.fold(IO.pure(Option.empty[String]))(c => DocstringExtractor.extract(jars, c, fqn))
           formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols, docstring, limit, hideInherited, groupInherited))
           _         <- Console[IO].println(formatted)
           _         <- warnScala2(symbols)

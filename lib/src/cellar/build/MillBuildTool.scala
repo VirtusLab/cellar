@@ -1,10 +1,9 @@
 package cellar.build
 
 import cats.effect.IO
-import cats.syntax.all._
-import cellar.{CellarError, MillConfig}
+import cats.syntax.all.*
 import cellar.process.ProcessRunner
-
+import cellar.{CellarError, MillConfig}
 import fs2.io.file.{Files, Path}
 
 class MillBuildTool(cwd: Path, config: MillConfig) extends BuildTool:

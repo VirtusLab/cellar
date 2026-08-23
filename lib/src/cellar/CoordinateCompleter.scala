@@ -2,6 +2,7 @@ package cellar
 
 import cats.effect.IO
 import coursierapi.{Complete, Module, Repository, Versions}
+
 import scala.jdk.CollectionConverters.*
 
 object CoordinateCompleter:

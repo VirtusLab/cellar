@@ -1,14 +1,15 @@
 package cellar
 
-import java.nio.file.{Files, Path, StandardCopyOption}
+import cats.effect.{IO, Resource}
+import cats.syntax.all.*
+import coursierapi.{Cache, Fetch}
+import fs2.io.file.{Files, Path}
+import org.typelevel.log4cats.Logger
+
 import java.util.zip.ZipFile
 import scala.jdk.CollectionConverters.*
 import scala.quoted.*
 import scala.tasty.inspector.*
-import cats.effect.IO
-import cats.syntax.all.*
-import coursierapi.{Cache, Fetch}
-import org.typelevel.log4cats.Logger
 
 object DocstringExtractor:
   private def isStdlib(name: String): Boolean =
@@ -26,7 +27,7 @@ object DocstringExtractor:
     )
     val fetch = Fetch.create().withCache(Cache.create())
     deps.foreach(fetch.addDependencies(_))
-    fetch.fetch().asScala.toSeq.map(_.toPath)
+    fetch.fetch().asScala.toSeq.map(file => Path.fromNioPath(file.toPath))
 
   def extract(jars: Seq[Path], coord: MavenCoordinate, fqn: String)(using logger: Logger[IO]): IO[Option[String]] =
     findPrimaryJar(jars, coord) match
@@ -50,64 +51,55 @@ object DocstringExtractor:
   private def extractAndInspect(jar: Path, tastyEntry: String, allJars: Seq[Path], fqn: String)(using
       logger: Logger[IO]
   ): IO[Option[String]] =
-    IO.blocking(copyTastyEntry(jar, tastyEntry)).flatMap {
-      case None =>
-        logger.debug(s"$tastyEntry not present in ${jar.getFileName}").as(None)
-      case Some(tmp) =>
-        // The failure this diagnostic exists for — a compiler that cannot start under native-image
-        // — arrives as a LinkageError, which is not NonFatal. cats-effect routes those to
-        // `onFatalFailure` and tears down the runtime without ever reaching `.attempt`, so the
-        // catch has to live inside the blocking thunk to keep the error reportable.
-        val run = IO.blocking[Either[Throwable, InspectionOutcome]] {
-          try
-            var docstring: Option[String] = None
-            var fired                     = false
-            val cp = allJars.filterNot(p => isStdlib(p.getFileName.toString)) ++ compilerStdlibJars
-            val _ = TastyInspector.inspectAllTastyFiles(
-              List(tmp.toString),
-              Nil,
-              cp.map(_.toString).toList
-            )(new Inspector:
-              def inspect(using q: Quotes)(tastys: List[Tasty[q.type]]): Unit =
-                fired = true
-                docstring = lookupDocstring(fqn)(using q)
-            )
-            Right(InspectionOutcome(fired, cp.size, docstring))
-          catch case t: Throwable => Left(t)
-        }
-        val inspected = logger.debug(s"inspecting $tastyEntry for $fqn") *> run.flatMap {
-          case Left(t) =>
-            logger.warn(t)(s"TASTy inspection of $tastyEntry failed; no docstring for $fqn").as(None)
-          case Right(InspectionOutcome(false, cpSize, _)) =>
-            logger.warn(s"TASTy inspector never ran for $tastyEntry ($cpSize classpath entries)").as(None)
-          case Right(InspectionOutcome(true, cpSize, None)) =>
-            logger.debug(s"inspected $tastyEntry ($cpSize classpath entries), no docstring for $fqn").as(None)
-          case Right(InspectionOutcome(true, _, found)) =>
-            IO.pure(found)
-        }
-        inspected.guarantee(IO.blocking(Files.deleteIfExists(tmp)).void)
+    Files[IO].tempFile(None, "cellar-", ".tasty", None).use { tmp =>
+      copyTastyEntry(jar, tastyEntry, tmp).flatMap {
+        case false =>
+          logger.debug(s"$tastyEntry not present in ${jar.fileName}").as(None)
+        case true =>
+          // The failure this diagnostic exists for — a compiler that cannot start under native-image
+          // — arrives as a LinkageError, which is not NonFatal. cats-effect routes those to
+          // `onFatalFailure` and tears down the runtime without ever reaching `.attempt`, so the
+          // catch has to live inside the blocking thunk to keep the error reportable.
+          val run = IO.blocking[Either[Throwable, InspectionOutcome]] {
+            try
+              var docstring: Option[String] = None
+              var fired                     = false
+              val cp = allJars.filterNot(p => isStdlib(p.fileName.toString)) ++ compilerStdlibJars
+              val _ = TastyInspector.inspectAllTastyFiles(
+                List(tmp.toString),
+                Nil,
+                cp.map(_.toString).toList
+              )(new Inspector:
+                def inspect(using q: Quotes)(tastys: List[Tasty[q.type]]): Unit =
+                  fired = true
+                  docstring = lookupDocstring(fqn)(using q)
+              )
+              Right(InspectionOutcome(fired, cp.size, docstring))
+            catch case t: Throwable => Left(t)
+          }
+          logger.debug(s"inspecting $tastyEntry for $fqn") *> run.flatMap {
+            case Left(t) =>
+              logger.warn(t)(s"TASTy inspection of $tastyEntry failed; no docstring for $fqn").as(None)
+            case Right(InspectionOutcome(false, cpSize, _)) =>
+              logger.warn(s"TASTy inspector never ran for $tastyEntry ($cpSize classpath entries)").as(None)
+            case Right(InspectionOutcome(true, cpSize, None)) =>
+              logger.debug(s"inspected $tastyEntry ($cpSize classpath entries), no docstring for $fqn").as(None)
+            case Right(InspectionOutcome(true, _, found)) =>
+              IO.pure(found)
+          }
+      }
     }
 
-  /** Copies `tastyEntry` out of `jar` into a temp file, or `None` if the jar has no such entry. */
-  private def copyTastyEntry(jar: Path, tastyEntry: String): Option[Path] =
-    val zip = new ZipFile(jar.toFile)
-    try
-      Option(zip.getEntry(tastyEntry)).map { entry =>
-        val tmp = Files.createTempFile("cellar-", ".tasty")
-        // Only the caller's `guarantee` deletes this, and it never runs if the copy throws
-        // (truncated entry, disk full), so clean up here rather than orphaning the temp file.
-        try
-          val in = zip.getInputStream(entry)
-          try Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING)
-          finally in.close()
-          tmp
-        catch
-          case t: Throwable =>
-            Files.deleteIfExists(tmp)
-            throw t
-      }
-    finally
-      zip.close()
+  /** Copies `tastyEntry` out of `jar` into `dest`; false if the jar has no such entry. */
+  private def copyTastyEntry(jar: Path, tastyEntry: String, dest: Path): IO[Boolean] =
+    Resource.fromAutoCloseable(IO.blocking(new ZipFile(jar.toNioPath.toFile))).use { zip =>
+      Option(zip.getEntry(tastyEntry)) match
+        case None => IO.pure(false)
+        case Some(entry) =>
+          fs2.io.readInputStream(IO.blocking(zip.getInputStream(entry)), 64 * 1024)
+            .through(Files[IO].writeAll(dest))
+            .compile.drain.as(true)
+    }
 
   private def lookupDocstring(fqn: String)(using q: Quotes): Option[String] =
     import q.reflect.*
@@ -141,4 +133,4 @@ object DocstringExtractor:
 
   private def findPrimaryJar(jars: Seq[Path], coord: MavenCoordinate): Option[Path] =
     val expectedName = s"${coord.artifact}-${coord.version}.jar"
-    jars.find(_.getFileName.toString == expectedName).orElse(jars.headOption)
+    jars.find(_.fileName.toString == expectedName).orElse(jars.headOption)

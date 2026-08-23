@@ -1,10 +1,9 @@
 package cellar.build
 
 import cats.effect.IO
-import cats.syntax.all._
-import cellar.{CellarError, SbtConfig}
+import cats.syntax.all.*
 import cellar.process.ProcessRunner
-
+import cellar.{CellarError, SbtConfig}
 import fs2.io.file.{Files, Path}
 
 class SbtBuildTool(cwd: Path, config: SbtConfig) extends BuildTool:

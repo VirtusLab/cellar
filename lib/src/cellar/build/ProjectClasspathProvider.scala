@@ -2,7 +2,6 @@ package cellar.build
 
 import cats.effect.{IO, Resource}
 import cellar.{Config, ContextResource, StderrLogger}
-
 import fs2.io.file.Path
 import org.typelevel.log4cats.Logger
 import org.typelevel.otel4s.Attribute

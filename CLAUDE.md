@@ -106,7 +106,7 @@ signatures, or missing separators.
 
 ## Code Conventions
 
-- Use `fs2.io.file.Path` for file references, not `java.io.File` or `java.nio.file.Path`
+- Use `fs2.io.file.Path` for file references, not `java.io.File` or `java.nio.file.Path` — enforced by scalafix (`./mill _.fix --check`); see the Linting section of `README.md`
 - Coursier error handling: match `coursierapi.error.CoursierError`, call `CoordinateCompleter.suggest` to attach suggestions to `CellarError.CoordinateNotFound`
 - Telemetry allowlists are enforced server-side and silently drop unknown data. The Privacy Policy is the legal disclosure of that allowlist and must not drift from it. When you:
   - **add a new span** (`Tracer[IO].span("...")` or `.spanBuilder("...")`): also add the name to `deploy/otel-collector-config.yml`'s `filter/span_names`, *and* to the allow-listed span names in `PRIVACY_POLICY.md`

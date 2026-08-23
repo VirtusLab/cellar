@@ -1,7 +1,7 @@
 package cellar.cli
 
-import cats.effect.{ExitCode, IO, Resource}
 import cats.effect.unsafe.IORuntimeConfig
+import cats.effect.{ExitCode, IO, Resource}
 import cats.syntax.all.*
 import cellar.*
 import cellar.handlers.{DepsHandler, GetHandler, GetSourceHandler, ListHandler, MetaHandler, ProjectGetHandler, ProjectListHandler, ProjectSearchHandler, SearchHandler}
@@ -138,7 +138,7 @@ object CellarApp extends ProfilingIOApp:
       case Right(action) =>
         action
 
-  private given Argument[Path] = Argument[java.nio.file.Path].map(Path.fromNioPath)
+  private given Argument[Path] = Argument.from("path")(Path(_).validNel)
 
   private val coordArg: Opts[String] =
     Opts.argument[String]("coordinate")
