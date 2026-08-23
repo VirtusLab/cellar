@@ -59,7 +59,7 @@ object TypePrinter:
                   case Some((lhs, op, rhs)) =>
                     s"${printTypeOrWildcard(lhs)} $op ${printTypeOrWildcard(rhs)}"
                   case None =>
-                    val args = t.args.map(printTypeOrWildcard).mkString(", ")
+                    val args = t.args.map(printTypeArgument).mkString(", ")
                     s"${printType(t.tycon)}[$args]"
 
       case t: ByNameType     => s"=> ${printType(t.resultType)}"
@@ -145,6 +145,48 @@ object TypePrinter:
             s"type ${tm.name}${printBoundsSuffix(bounds)}"
 
       case other => other.toString
+
+  /**
+   * Renders one type argument, contracting a compiler-generated eta-expansion back to the
+   * constructor it expanded.
+   *
+   * Passing `C` where `F[_]` is expected makes the compiler store `[X] =>> C[X]` in TASTy, so a
+   * Scala 3 artifact renders `NonEmptyCollection[A, List, [A] =>> NonEmptyList[A]]` where the
+   * Scala 2 build of the same class renders the `NonEmptyList` a reader would write.
+   *
+   * Deliberately limited to argument position, because position is the only signal there is. A
+   * hand-written `type F = [A] =>> C[A]` is a different declaration from `type F = C`, but the two
+   * are indistinguishable in the data: measured on a covariant class, the compiler-generated
+   * expansion reports an *invariant* parameter, exactly like a hand-written one, so comparing the
+   * lambda's variance against the constructor's does not separate them (and would refuse the very
+   * case this exists to fix). Reaching the variance at all needs reflection, and it would not help.
+   *
+   * So: in argument position the expansion is the compiler's doing, and contracting reads back as
+   * the source did; as the whole right-hand side of an alias it is the author's, and is left alone.
+   */
+  private def printTypeArgument(arg: TypeOrWildcard)(using ctx: Context): String =
+    arg match
+      case tl: TypeLambda => etaContracted(tl).getOrElse(printTypeOrWildcard(tl))
+      case other          => printTypeOrWildcard(other)
+
+  /**
+   * `C` for a lambda that just passes its parameters straight through to `C`, in order, with no
+   * bounds of their own. `[A <: AnyRef] =>> F[A]` says something the bare `F` does not, and
+   * `[A] =>> F[G[A]]` is not a plain constructor at all — neither contracts.
+   */
+  private def etaContracted(t: TypeLambda)(using ctx: Context): Option[String] =
+    val trivialBounds = t.paramTypeBounds.forall {
+      case b: AbstractTypeBounds => printType(b.low) == "Nothing" && printType(b.high) == "Any"
+      case _                     => false
+    }
+    t.resultType match
+      case app: AppliedType if trivialBounds && app.args.sizeIs == t.paramNames.size =>
+        val passesThrough = app.args.zipWithIndex.forall {
+          case (ref: TypeParamRef, i) => ref.binder == t && ref.paramNum == i
+          case _                      => false
+        }
+        Option.when(passesThrough)(printType(app.tycon))
+      case _ => None
 
   /** ` >: L <: H`, omitting either half when it is the trivial bound. */
   private def printBoundsSuffix(bounds: TypeBounds)(using Context): String =

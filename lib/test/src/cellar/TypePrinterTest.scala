@@ -167,6 +167,32 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  // TASTy stores a type constructor passed to `F[_]` as `[A] =>> C[A]`. Printing the expansion
+  // makes the Scala 3 rendering worse than the Scala 2 one for the same class, so contract it.
+  test("printSymbolSignature contracts an eta-expanded type constructor (Scala 3)"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls = ctx.findStaticClass("cellar.fixture.scala3.CellarSelfBox")
+        val sig = TypePrinter.printSymbolSignature(cls)
+        assert(!sig.contains("=>>"), s"eta-expansion not contracted: $sig")
+        assertEquals(sig, "class CellarSelfBox[A] extends CellarBox[CellarSelfBox]")
+      }
+    }
+
+  // The mirror of the test above: an author who writes the lambda out is making a different
+  // declaration from `type HandWrittenEta = List` (its parameter is invariant), so contracting
+  // here would print two distinct sources identically. Contraction is argument-position only.
+  test("printSymbolSignature keeps a hand-written eta-expansion in an alias"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls   = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded")
+        val alias = cls.declarations.find(_.name.toString == "HandWrittenEta").get
+        assertEquals(TypePrinter.printSymbolSignature(alias), "type HandWrittenEta = [A] =>> List[A]")
+      }
+    }
+
   test("printSymbolSignature renders a bounded standalone type lambda as a type argument (Scala 3)"):
     withCtx { ctx =>
       IO.blocking {
