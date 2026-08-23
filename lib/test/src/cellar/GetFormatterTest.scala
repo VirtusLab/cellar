@@ -348,14 +348,17 @@ class GetFormatterTest extends CatsEffectSuite:
       }
     }
 
-  test("formatGetResult for top-level opaque type renders 'opaque type X = ...'"):
+  test("formatGetResult for top-level opaque type hides the representation"):
     withCtx { ctx =>
       given Context = ctx
       SymbolResolver.resolve("myapp.Hello").map {
         case LookupResult.Found(syms) =>
           val output = GetFormatter.formatGetResult("myapp.Hello", syms)
           assert(!output.contains("$package$"), s"Expected no $$package$$ in:\n$output")
-          assert(output.contains("opaque type Hello = Int"), s"Expected opaque-type signature in:\n$output")
+          // `Hello` is abstract outside myapp: `val h: Hello = 5` does not compile,
+          // so the underlying Int must not be advertised as part of the API.
+          assert(output.contains("type Hello"), s"Expected opaque-type signature in:\n$output")
+          assert(!output.contains("= Int"), s"Opaque representation leaked in:\n$output")
           assert(!output.contains("symbol["), s"Unexpected raw symbol[] sentinel in:\n$output")
         case other => fail(s"Expected Found, got $other")
       }
