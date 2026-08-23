@@ -19,7 +19,7 @@ Cellar gives agents — and humans — a single shell command that returns exact
 | Format | Support |
 |---|---|
 | Scala 3 (TASTy) | Full — signatures, flags, companions, sealed hierarchies, givens, extensions, docstrings |
-| Scala 2 (pickles) | Best-effort — type information may be incomplete |
+| Scala 2 (pickles) | Full signatures, flags, members, companions — no docstrings (pickles carry none) |
 | Java (.class) | Good — signatures, members |
 
 ## Installation
