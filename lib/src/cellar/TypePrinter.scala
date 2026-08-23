@@ -28,6 +28,12 @@ object TypePrinter:
 
   def printType(tpe: Type)(using ctx: Context): String =
     tpe match
+      // `<FromJavaObject>` is the internal name for Java's Object as seen from Scala. It is a real
+      // TypeRef, not a fallback, so it would otherwise print verbatim, angle brackets and all.
+      // Matched by name rather than `isFromJavaObject`, which resolves the symbol and throws on
+      // primitive parameter types — that took out every signature containing an int or boolean.
+      case t: TypeRef if t.name.toString == "<FromJavaObject>" => "Object"
+
       case t: TypeRef =>
         val name = t.name.toString
         t.prefix match
