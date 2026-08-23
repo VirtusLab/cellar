@@ -19,6 +19,11 @@ Use cellar to look up the API of JVM dependencies instead of guessing or manuall
 Run `cellar --version` to verify cellar is on PATH. If not found, the user
 needs to install it: https://github.com/VirtusLab/cellar#installation
 
+On first run in a project, cellar withholds the command and emits a
+`{"status":"needs_input",...}` JSON object on stderr asking for a telemetry
+choice. When you see it, relay the question to the user and record their answer
+(e.g. `cellar telemetry disable`) before retrying.
+
 ## Project-aware commands (run from project root)
 
 Query the current project's code and all its dependencies. Cellar auto-detects the build tool (Mill, sbt, scala-cli).
