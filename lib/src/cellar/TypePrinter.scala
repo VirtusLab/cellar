@@ -77,7 +77,7 @@ object TypePrinter:
       // Without this, Nothing falls through to the class-name fallback below and prints as
       // "NothingType" — which also defeats the unbounded-lower-bound elision in printTypeParam,
       // since that compares against "Nothing".
-      case t: NothingType    => "Nothing"
+      case _: NothingType    => "Nothing"
       case _                 => tpe.getClass.getSimpleName
 
   def printMethodic(tpe: TypeOrMethodic)(using ctx: Context): String =
