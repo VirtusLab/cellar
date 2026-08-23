@@ -281,6 +281,18 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  // Java's Object reaches tasty-query as a TypeRef named `<FromJavaObject>`, which used to print
+  // verbatim in every Java signature that mentions Object.
+  test("printSymbolSignature renders Java's Object as Object"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val sig = sugarSig("java.lang.String", "equals")
+        assert(!sig.contains("FromJavaObject"), s"leaked internal type name: $sig")
+        assertEquals(sig, "def equals(x$0: Object): Boolean")
+      }
+    }
+
   private def sugarSig(fqn: String, method: String)(using ctx: Context): String =
     val cls = ctx.findStaticClass(fqn)
     TypePrinter.printSymbolSignature(cls.declarations.find(_.name.toString == method).get)
