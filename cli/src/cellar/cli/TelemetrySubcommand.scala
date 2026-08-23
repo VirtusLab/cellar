@@ -1,7 +1,7 @@
 package cellar.cli
 
-import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
+import cats.effect.{ExitCode, IO}
 import cellar.Config
 import com.monovore.decline.Opts
 import com.typesafe.config.{ConfigFactory, ConfigRenderOptions, ConfigValueFactory}
@@ -156,15 +156,13 @@ object TelemetrySubcommand:
   private[cli] def setEnabled(enabled: Boolean, global: Boolean): IO[Unit] =
     val target = if global then confFile else projectConfFile
     Files[IO].createDirectories(target.parent.get) *>
-      IO.blocking {
-        val nio    = target.toNioPath
-        val parsed =
-          if java.nio.file.Files.exists(nio) then ConfigFactory.parseFile(nio.toFile)
-          else ConfigFactory.empty()
-        val updated  = parsed.withValue("otel.enabled", ConfigValueFactory.fromAnyRef(enabled))
-        val rendered = updated.root().render(
-          ConfigRenderOptions.defaults().setOriginComments(false).setComments(false).setJson(false)
-        )
-        java.nio.file.Files.writeString(nio, rendered)
-        ()
-      }
+      Files[IO].readUtf8(target).compile.string
+        .recover { case _: java.nio.file.NoSuchFileException => "" }
+        .flatMap { existing =>
+          val updated  = ConfigFactory.parseString(existing)
+            .withValue("otel.enabled", ConfigValueFactory.fromAnyRef(enabled))
+          val rendered = updated.root().render(
+            ConfigRenderOptions.defaults().setOriginComments(false).setComments(false).setJson(false)
+          )
+          fs2.Stream.emit(rendered).through(Files[IO].writeUtf8(target)).compile.drain
+        }

@@ -1,7 +1,7 @@
 package cellar.build
 
 import cats.effect.IO
-import cats.syntax.all._
+import cats.syntax.all.*
 import fs2.io.file.{Files, Path}
 
 object ClasspathOutputParser:

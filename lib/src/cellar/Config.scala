@@ -29,10 +29,9 @@ object Config {
   private[cellar] val defaultProjectPath: Path = Path(".cellar").resolve("cellar.conf")
 
   private def load(): Config = {
-    val paths = (defaultUserPath.toList ++ List(defaultProjectPath))
-      .filter(p => java.nio.file.Files.exists(p.toNioPath))
+    val paths = defaultUserPath.toList ++ List(defaultProjectPath)
     paths
-      .foldLeft(ConfigSource.default)((cs, p) => ConfigSource.file(p.toNioPath).withFallback(cs))
+      .foldLeft(ConfigSource.default)((cs, p) => ConfigSource.file(p.toNioPath).optional.withFallback(cs))
       .loadOrThrow[Config]
   }
 

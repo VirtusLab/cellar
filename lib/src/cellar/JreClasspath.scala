@@ -1,14 +1,18 @@
+// The jrt filesystem is a java.nio FileSystem provider with no fs2 equivalent, and tasty-query's
+// ClasspathLoaders takes java.nio paths, so this file talks to java.nio directly.
+// scalafix:off DisableSyntax.javaNioFile
 package cellar
 
 import cats.effect.IO
-import java.net.{URI, URLClassLoader}
-import java.nio.file.{Files, FileSystems}
-import java.util.zip.ZipInputStream
-import scala.collection.mutable
-import scala.jdk.CollectionConverters.*
 import tastyquery.Classpaths
 import tastyquery.Classpaths.InMemory
 import tastyquery.jdk.ClasspathLoaders
+
+import java.net.{URI, URLClassLoader}
+import java.nio.file.{FileSystems, Files}
+import java.util.zip.ZipInputStream
+import scala.collection.mutable
+import scala.jdk.CollectionConverters.*
 
 object JreClasspath:
   // True when running as a GraalVM native image binary

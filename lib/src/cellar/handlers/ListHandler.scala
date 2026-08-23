@@ -1,7 +1,7 @@
 package cellar.handlers
 
-import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
+import cats.effect.{ExitCode, IO}
 import cats.syntax.all.*
 import cellar.*
 import coursierapi.Repository

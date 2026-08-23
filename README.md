@@ -482,6 +482,20 @@ java -jar out/cli/assembly.dest/out.jar get-external org.typelevel:cats-core_3:2
 ./mill lib.test
 ```
 
+### Linting
+
+Scalafix runs `OrganizeImports` and a `DisableSyntax` rule that bans `java.nio.file.{Files, Path, Paths}` and `java.io.File` in favour of `fs2.io.file`. Configuration lives in [`.scalafix.conf`](.scalafix.conf).
+
+```sh
+# Report violations (what CI runs)
+./mill _.fix --check
+
+# Rewrite imports in place and report the remaining violations
+./mill _.fix
+```
+
+Where JDK interop genuinely requires `java.nio` (`JreClasspath`, for instance), suppress the rule with `// scalafix:off DisableSyntax.javaNioFile` above the `package` clause and say why.
+
 ### Installing a local build with Nix
 
 ```sh

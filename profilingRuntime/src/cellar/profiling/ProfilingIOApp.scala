@@ -1,7 +1,7 @@
 package cellar.profiling
 
+import cats.effect.unsafe.{IORuntime, IORuntimeBuilder}
 import cats.effect.{IOLocal, SyncIO}
-import cats.effect.unsafe.{IORuntimeBuilder, IORuntime}
 import cats.syntax.all.*
 import org.typelevel.otel4s.sdk.context.Context
 

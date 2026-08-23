@@ -3,6 +3,7 @@ package cellar
 import cats.effect.IO
 import coursierapi.{Cache, Dependency, Fetch, Repository}
 import org.typelevel.log4cats.Logger
+
 import scala.jdk.CollectionConverters.*
 
 /** Resolved dependency list — a flat sorted sequence of all transitive dependencies. */

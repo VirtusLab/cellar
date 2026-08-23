@@ -2,7 +2,7 @@ package cellar
 
 import cats.effect.IO
 import coursierapi.{Cache, Fetch, Repository}
-import fs2.io.file.Path
+import fs2.io.file.{Files, Path}
 import org.typelevel.log4cats.Logger
 import org.typelevel.otel4s.trace.Tracer
 
@@ -40,12 +40,13 @@ object CoursierFetchClient:
         val dep   = coord.toCoursierDependency.withTransitive(false)
         val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())
         if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*): Unit
+        fetch.fetch().asScala.headOption.map(file => Path.fromNioPath(file.toPath))
+      }.flatMap {
         // Coursier always downloads the POM alongside the JAR in the cache; derive its path
-        fetch.fetch().asScala.headOption.map(_.toPath)
-          .flatMap { jarNio =>
-            val pomNio = jarNio.getParent.resolve(jarNio.getFileName.toString.stripSuffix(".jar") + ".pom")
-            Option.when(java.nio.file.Files.exists(pomNio))(Path.fromNioPath(pomNio))
-          }
+        case Some(jar) =>
+          val pom = jar.parent.get / (jar.fileName.toString.stripSuffix(".jar") + ".pom")
+          Files[IO].exists(pom).map(Option.when(_)(pom))
+        case None => IO.none
       }.handleErrorWith {
         case e: coursierapi.error.CoursierError =>
           CoordinateCompleter.suggest(coord, extraRepositories).flatMap { suggestions =>

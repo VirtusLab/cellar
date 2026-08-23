@@ -1,12 +1,11 @@
 package cellar.profiling
 
-import cats.effect.{ExitCode, IO, IOLocal, Resource}
 import cats.effect.std.Console
+import cats.effect.{ExitCode, IO, IOLocal, Resource}
 import cats.mtl.Local
 import cats.syntax.all.*
 import org.http4s.{Header, Headers, Uri}
 import org.typelevel.ci.CIString
-import org.typelevel.otel4s.{AllowlistExporter, Attribute, Attributes, JavaNetHttpOtlpExporter, ProfilingSpanProcessor}
 import org.typelevel.otel4s.context.LocalProvider
 import org.typelevel.otel4s.sdk.TelemetryResource
 import org.typelevel.otel4s.sdk.context.Context
@@ -17,6 +16,7 @@ import org.typelevel.otel4s.sdk.trace.SdkTracerProvider
 import org.typelevel.otel4s.sdk.trace.exporter.SpanExporter
 import org.typelevel.otel4s.sdk.trace.processor.{BatchSpanProcessor, SpanProcessor}
 import org.typelevel.otel4s.trace.{StatusCode, Tracer}
+import org.typelevel.otel4s.{AllowlistExporter, Attribute, Attributes, JavaNetHttpOtlpExporter, ProfilingSpanProcessor}
 
 import scala.concurrent.duration.*
 
