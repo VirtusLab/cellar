@@ -198,15 +198,32 @@ class GetFormatterTest extends CatsEffectSuite:
       }
     }
 
-  test("formatGetResult for Scala 2 sealed trait does not emit duplicate companion module class result"):
+  test("formatGetResult collapses a companion module into its class, keeping the companion members"):
     withScala2Ctx { ctx =>
       given Context = ctx
       SymbolResolver.resolve("cellar.fixture.scala2.CellarADT").map {
         case LookupResult.Found(syms) =>
           val output = GetFormatter.formatGetResult("cellar.fixture.scala2.CellarADT", syms)
-          // Should have trait + object, but not the raw CellarADT$ module class as a third block
+          // The trait section already prints the companion's members, so a separate section for
+          // the module class would repeat the whole API, mirrored.
           val headingCount = output.linesIterator.count(_.startsWith("## cellar.fixture.scala2.CellarADT"))
-          assertEquals(headingCount, 2, s"Expected exactly 2 headings (trait + object), got $headingCount in:\n$output")
+          assertEquals(headingCount, 1, s"Expected the companion collapsed into one heading in:\n$output")
+          // Collapsing must not lose them: they move under the trait's "Companion members".
+          assert(output.contains("CellarAA"), s"Expected companion member CellarAA in:\n$output")
+          assert(output.contains("CellarAB"), s"Expected companion member CellarAB in:\n$output")
+          assert(!output.contains("CellarADT$"), s"Expected no JVM-mangled names in:\n$output")
+        case other => fail(s"Expected Found, got $other")
+      }
+    }
+
+  test("formatGetResult keeps a module that has no companion class in the result"):
+    withCtx { ctx =>
+      given Context = ctx
+      // `cats.implicits`-style: an object with no same-named class must still render.
+      SymbolResolver.resolve("cellar.fixture.scala3.CellarTC").map {
+        case LookupResult.Found(syms) =>
+          val output = GetFormatter.formatGetResult("cellar.fixture.scala3.CellarTC", syms)
+          assert(output.contains("## cellar.fixture.scala3.CellarTC"), s"module dropped:\n$output")
         case other => fail(s"Expected Found, got $other")
       }
     }

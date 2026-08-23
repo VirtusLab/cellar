@@ -40,9 +40,27 @@ object GetFormatter:
       hideInherited: Boolean = false,
       groupInherited: Boolean = false
   )(using ctx: Context): String =
-    symbols.zipWithIndex.map { (sym, i) =>
+    dropRedundantCompanions(symbols).zipWithIndex.map { (sym, i) =>
       formatSymbol(sym, if i == 0 then docstring else None, limit, hideInherited, groupInherited)
     }.mkString("\n\n---\n\n")
+
+  /**
+   * Drops a module class whose own companion class is also being rendered.
+   *
+   * One FQN legitimately resolves to both — for a Java class, tasty-query synthesizes the module
+   * that holds the statics. Since every section also prints its companion's members, rendering both
+   * symbols emits the whole API twice, mirrored: the statics appear as the class's "Companion
+   * members" and again as the module's "Members". The class section alone carries both halves.
+   *
+   * Only companions of each other are collapsed; an FQN resolving to genuinely unrelated symbols
+   * still gets a section each.
+   */
+  private def dropRedundantCompanions(symbols: List[Symbol])(using ctx: Context): List[Symbol] =
+    val classes = symbols.collect { case c: ClassSymbol => c }.toSet
+    symbols.filterNot {
+      case c: ClassSymbol if c.isModuleClass => c.companionClass.exists(classes.contains)
+      case _                                 => false
+    }
 
 
   private def cleanDocstring(raw: String): String =
