@@ -173,7 +173,7 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 | `--no-cache` | project commands | Skip classpath cache, re-extract from build tool |
 | `--test` | project commands | Use the test-scope classpath (sbt/scala-cli; not supported for Mill) |
 | `--java-home <path>` | all | Use a specific JDK for JRE classpath |
-| `-r`, `--repository <url>` | external commands | Extra Maven repository URL (repeatable) |
+| `-r`, `--repository <url>` | external commands | Extra Maven repository URL (repeatable); must be an `http://`, `https://` or `file://` URL |
 | `-l`, `--limit <N>` | `list`, `list-external`, `search`, `search-external` | Max results (default: 50) |
 | `-l`, `--limit <N>` | `get`, `get-external` | Max members to display per section, including companion members (no default) |
 | `--hide-inherited` | `get`, `get-external` | Show only members declared on the type itself |
