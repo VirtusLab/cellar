@@ -63,7 +63,7 @@ object DocstringExtractor:
             var docstring: Option[String] = None
             var fired                     = false
             val cp = allJars.filterNot(p => isStdlib(p.getFileName.toString)) ++ compilerStdlibJars
-            TastyInspector.inspectAllTastyFiles(
+            val _ = TastyInspector.inspectAllTastyFiles(
               List(tmp.toString),
               Nil,
               cp.map(_.toString).toList

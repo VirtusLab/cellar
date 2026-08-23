@@ -18,7 +18,7 @@ object CoursierFetchClient:
   def fetchSourcesJar(
       coord: MavenCoordinate,
       extraRepositories: Seq[Repository] = Seq.empty
-  )(using tracer: Tracer[IO], logger: Logger[IO] = StderrLogger.off): IO[Option[Path]] =
+  )(using logger: Logger[IO] = StderrLogger.off): IO[Option[Path]] =
     logAttempt(coord, "fetching sources for", extraRepositories) *>
       IO.blocking {
         val dep   = coord.toCoursierDependency.withTransitive(false)
@@ -27,19 +27,19 @@ object CoursierFetchClient:
           .withCache(Cache.create())
           .addClassifiers("sources")
           .withMainArtifacts(false)
-        if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*)
+        if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*): Unit
         fetch.fetch().asScala.headOption.map(file => Path.fromNioPath(file.toPath))
       }.handleErrorWith(e => logger.debug(s"no sources jar for ${coord.render}: ${e.getMessage}").as(None))
 
   def fetchPom(
       coord: MavenCoordinate,
       extraRepositories: Seq[Repository] = Seq.empty
-  )(using tracer: Tracer[IO], logger: Logger[IO] = StderrLogger.off): IO[Option[Path]] =
+  )(using logger: Logger[IO] = StderrLogger.off): IO[Option[Path]] =
     logAttempt(coord, "fetching POM for", extraRepositories) *>
       IO.blocking {
         val dep   = coord.toCoursierDependency.withTransitive(false)
         val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())
-        if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*)
+        if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*): Unit
         // Coursier always downloads the POM alongside the JAR in the cache; derive its path
         fetch.fetch().asScala.headOption.map(_.toPath)
           .flatMap { jarNio =>
@@ -63,7 +63,7 @@ object CoursierFetchClient:
         IO.blocking {
           val dep   = coord.toCoursierDependency
           val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())
-          if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*)
+          if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*): Unit
           fetch.fetch().asScala.toSeq.map(file => Path.fromNioPath(file.toPath))
         }.handleErrorWith { case e: coursierapi.error.CoursierError =>
           CoordinateCompleter.suggest(coord, extraRepositories).flatMap { suggestions =>

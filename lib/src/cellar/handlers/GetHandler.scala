@@ -78,7 +78,7 @@ object GetHandler:
     }
 
   /** Warns to stderr if the target FQN exists in more than one JAR on the classpath. */
-  private def warnShadedDuplicate(fqn: String, classpath: Classpath)(using Console[IO], Tracer[IO]): IO[Unit] =
+  private def warnShadedDuplicate(fqn: String, classpath: Classpath)(using Console[IO]): IO[Unit] =
     IO.blocking(findShadedDuplicate(fqn, classpath)).flatMap {
       case Some(err) => Console[IO].errorln(s"Warning: ${err.getMessage}")
       case None      => IO.unit
@@ -109,7 +109,7 @@ object GetHandler:
     else None
 
   /** Warns to stderr when any resolved symbol is from a Scala 2 artifact. */
-  private def warnScala2(symbols: List[Symbol])(using Console[IO], Tracer[IO]): IO[Unit] =
+  private def warnScala2(symbols: List[Symbol])(using Console[IO]): IO[Unit] =
     val isScala2 = symbols.exists(s => TypePrinter.detectLanguage(s) == DetectedLanguage.Scala2)
     if isScala2 then
       Console[IO].errorln("Note: Scala 2 artifact — type information may be incomplete.")

@@ -19,7 +19,6 @@ class PublicApiFilterTest extends CatsEffectSuite:
   test("public method passes filter"):
     withScala3Ctx { ctx =>
       IO.blocking {
-        given Context = ctx
         val cls  = ctx.findStaticClass("cellar.fixture.scala3.CellarADT")
         // CellarADT is a public trait — should pass
         assert(PublicApiFilter.isPublic(cls))

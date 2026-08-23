@@ -9,7 +9,7 @@ class CapturingConsole extends Console[IO]:
   def readLineWithCharset(charset: java.nio.charset.Charset): IO[String] = IO.pure("")
   def print[A](a: A)(using fmt: cats.Show[A]): IO[Unit]                 = IO.unit
   def println[A](a: A)(using fmt: cats.Show[A]): IO[Unit] =
-    IO { outBuf.append(fmt.show(a)).append('\n'); () }
+    IO { outBuf.append(fmt.show(a)).append('\n'): Unit }
   def error[A](a: A)(using fmt: cats.Show[A]): IO[Unit] = IO.unit
   def errorln[A](a: A)(using fmt: cats.Show[A]): IO[Unit] =
-    IO { errBuf.append(fmt.show(a)).append('\n'); () }
+    IO { errBuf.append(fmt.show(a)).append('\n'): Unit }

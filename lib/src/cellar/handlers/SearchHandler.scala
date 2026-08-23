@@ -35,7 +35,7 @@ object SearchHandler:
       limit: Int,
       classpath: tastyquery.Classpaths.Classpath,
       jreClasspath: tastyquery.Classpaths.Classpath
-  )(using tastyquery.Contexts.Context, Console[IO], Tracer[IO]): IO[ExitCode] =
+  )(using tastyquery.Contexts.Context, Console[IO]): IO[ExitCode] =
     val lowerQuery = query.toLowerCase
     // A dotted query (e.g. `cats.FlatMap`) is FQN-style: match it against the
     // symbol's full name rather than its simple name, otherwise it can never

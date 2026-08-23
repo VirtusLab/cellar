@@ -14,7 +14,7 @@ final case class MavenCoordinate(group: String, artifact: String, version: Strin
     else IO.blocking {
       val module = Module.of(group, artifact, java.util.Collections.emptyMap())
       val versions = Versions.create().withModule(module)
-      if extraRepos.nonEmpty then versions.addRepositories(extraRepos*)
+      if extraRepos.nonEmpty then versions.addRepositories(extraRepos*): Unit
       val release = versions.versions().getMergedListings.getRelease
       if release != null && release.nonEmpty then copy(version = release)
       else throw CellarError.CoordinateNotFound(this, new RuntimeException(s"No versions found for '$group:$artifact'"))

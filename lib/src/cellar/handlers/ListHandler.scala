@@ -34,7 +34,7 @@ object ListHandler:
       fqn: String,
       limit: Int,
       coord: Option[MavenCoordinate]
-  )(using tastyquery.Contexts.Context, Console[IO], Tracer[IO]): IO[ExitCode] =
+  )(using tastyquery.Contexts.Context, Console[IO]): IO[ExitCode] =
     SymbolLister.resolve(fqn).flatMap {
       case ListResolveResult.NotFound =>
         val ctx = coord.fold(s"'$fqn' not found.")(c => s"'$fqn' not found in '${c.render}'.")

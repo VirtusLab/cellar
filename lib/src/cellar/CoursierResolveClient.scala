@@ -17,7 +17,7 @@ object CoursierResolveClient:
       IO.blocking {
         val dep   = coord.toCoursierDependency
         val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())
-        if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*)
+        if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*): Unit
         val result = fetch.fetchResult()
         val deps   = result.getDependencies.asScala.toSeq
           .sortBy(d => s"${d.getModule.getOrganization}:${d.getModule.getName}:${d.getVersion}")

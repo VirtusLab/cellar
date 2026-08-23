@@ -47,7 +47,7 @@ object ContextResource:
     catch
       case e: MatchError =>
         val bad = paths.find { p =>
-          try { ClasspathLoaders.read(List(p.toNioPath)); false }
+          try { ClasspathLoaders.read(List(p.toNioPath)): Unit; false }
           catch case _: MatchError => true
         }
         bad match
