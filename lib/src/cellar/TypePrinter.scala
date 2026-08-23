@@ -127,8 +127,11 @@ object TypePrinter:
 
       case tm: TypeMemberSymbol =>
         tm.typeDef match
-          case TypeMemberDefinition.OpaqueTypeAlias(_, alias) =>
-            s"opaque type ${tm.name} = ${printType(alias)}"
+          // Outside its defining scope an opaque type is abstract: the alias is
+          // deliberately not part of the API, and printing it invites callers to
+          // write code that does not compile. Only the declared bounds are usable.
+          case TypeMemberDefinition.OpaqueTypeAlias(bounds, _) =>
+            s"type ${tm.name}${printBoundsSuffix(bounds)}"
           case TypeMemberDefinition.TypeAlias(alias) =>
             s"type ${tm.name} = ${printType(alias)}"
           case TypeMemberDefinition.AbstractType(bounds) =>
