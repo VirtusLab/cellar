@@ -2,12 +2,16 @@
 name: cellar
 description: >
   Look up the public API of any JVM dependency (Scala 3, Scala 2, Java) from
-  the terminal — type signatures, members, docs, and source as Markdown, no
-  JAR unpacking needed. Use this skill whenever you need to call an unfamiliar
-  library method, explore a package's types, or check a dependency's API.
-  Prefer cellar over Metals MCP only for looking up external dependency APIs
-  (`cellar get-external` vs Metals `inspect`/`get-docs`) — cellar needs no
-  project import and queries any published Maven artifact.
+  the terminal — type signatures, members, docs, and source as Markdown. Use
+  this skill whenever you need to call an unfamiliar library method, explore a
+  package's types, check a dependency's API, or find out whether a given class
+  or method exists in a published artifact. Use it INSTEAD of inspecting jars
+  by hand: if you are about to run unzip, jar tf, jar xf, javap, zipgrep, or to
+  find/grep under ~/.cache/coursier, ~/.ivy2 or ~/.m2 in order to see what a
+  dependency contains, reach for cellar instead. Prefer cellar over Metals MCP
+  only for looking up external dependency APIs (`cellar get-external` vs Metals
+  `inspect`/`get-docs`) — cellar needs no project import and queries any
+  published Maven artifact.
 ---
 
 # Cellar
@@ -54,6 +58,34 @@ Query any published artifact by explicit coordinate (`group:artifact:version`):
 - For compiler plugins and other artifacts with full Scala version suffixes, use the full version: `group:artifact_3.3.8:version`
 - Use `latest` as the version to resolve the most recent release
 - `-r`, `--repository <url>`: extra Maven repository (repeatable)
+
+## Does this class/method exist here?
+
+This is an API question, not a file question — answer it with cellar, never by
+listing jar entries.
+
+```sh
+cellar get-external <coord> <fqn>       # exists? -> prints it; else a not-found message
+cellar search-external <coord> <name>   # don't know the package
+```
+
+Exit code is 0 for both hit and miss, so read the output, not `$?`. If a symbol
+you expect is missing, re-run with `--verbose` before concluding it is absent —
+and note that empty output on an artifact whose `list-external` works is a
+cellar bug worth reporting, not proof the symbol is gone.
+
+## When cellar is NOT the right tool
+
+Cellar exposes the public API surface. Fall back to `unzip`/`javap` only for
+questions outside it:
+
+- Non-class jar contents: `META-INF/services`, `reflect-config.json`,
+  `library.properties`, resource files, jar size, class counts.
+- Bytecode-level attributes: `LocalVariableTable`, `MethodParameters`,
+  constant pool, `javap -v`/`-c` output.
+- **Scala 2 source code.** `get-source` supports Scala 3 (TASTy) and Java only;
+  for Scala 2 sources fetch the `-sources` jar yourself.
+- Grepping a whole source file for a string, rather than reading one symbol.
 
 ## Workflow
 
