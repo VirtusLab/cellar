@@ -174,12 +174,17 @@ object cli extends CellarPublishModule with NativeImageModule {
 
   def jvmVersion = "graalvm-community:23.0.2"
 
+  // No `-H:+AllowJRTFileSystem`: with the jrt provider present, the image carries the *build*
+  // machine's `java.home` baked into `jdk.internal.jrtfs.SystemImage`, so opening `jrt:/` on any
+  // other machine throws `InternalError: NoSuchFileException .../lib/modules`. dotc's
+  // `JrtClassPath` only recovers from `ProviderNotFoundException`/`FileSystemNotFoundException`,
+  // so the docstring inspector died and dotc printed a crash report over cellar's stdout. Without
+  // the provider the lookup raises `ProviderNotFoundException`, which dotc handles. Nothing in the
+  // native binary needs jrt: `JreClasspath` reads the bundled `jre.bin` there instead.
   def nativeImageOptions = Seq(
     "--no-fallback",
     "--enable-url-protocols=http,https",
-    "-H:+ReportExceptionStackTraces",
-    "-H:+AllowJRTFileSystem",
-    "--add-opens=java.base/jdk.internal.jrtfs=ALL-UNNAMED"
+    "-H:+ReportExceptionStackTraces"
   )
 
   def mvnDeps = Seq(
