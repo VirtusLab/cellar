@@ -5,7 +5,7 @@ import coursierapi.Repository
 import fs2.io.file.Path
 import fs2.io.readInputStream
 
-import java.util.zip.ZipFile
+import java.util.zip.{ZipEntry, ZipFile}
 import scala.jdk.CollectionConverters.*
 
 object SourceFetcher:
@@ -34,8 +34,10 @@ object SourceFetcher:
     val normalizedSource = sourceFilePath.replace('\\', '/')
     Resource.fromAutoCloseable(IO.blocking(ZipFile(jar.toNioPath.toFile))).use { zip =>
       IO.blocking {
-        zip.entries().asScala
-          .find(e => !e.isDirectory && normalizedSource.endsWith(e.getName))
+        val entries = zip.entries().asScala.filter(!_.isDirectory).toVector
+        entries
+          .find(e => normalizedSource.endsWith(e.getName))
+          .orElse(findDeclaringFile(zip, entries, normalizedSource))
           .map(e => (e.getName, zip.getInputStream(e)))
       }.flatMap {
         case None =>
@@ -53,3 +55,22 @@ object SourceFetcher:
             }
       }
     }
+
+  /**
+   * Scala 2 sources frequently live in a file that isn't named after the type
+   * (`package.scala`, several types per file), so when the guessed path is missing,
+   * look for a sibling `.scala` file in the same directory that declares the name.
+   */
+  private def findDeclaringFile(zip: ZipFile, entries: Vector[ZipEntry], guessedPath: String): Option[ZipEntry] =
+    val slash = guessedPath.lastIndexOf('/')
+    val dir = guessedPath.substring(0, slash + 1)
+    val name = guessedPath.substring(slash + 1).stripSuffix(".scala")
+    if !guessedPath.endsWith(".scala") then None
+    else
+      val declaration = raw"""(?m)^\s*(?:\w+\s+)*(?:class|trait|object|type)\s+`?${java.util.regex.Pattern.quote(name)}`?(?![\w$$])""".r
+      entries
+        .filter(e => e.getName.endsWith(".scala") && e.getName.startsWith(dir) && !e.getName.drop(dir.length).contains('/'))
+        .find { e =>
+          val text = String(zip.getInputStream(e).readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+          declaration.findFirstIn(text).isDefined
+        }

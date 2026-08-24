@@ -69,10 +69,7 @@ cellar get-external <coord> <fqn>       # exists? -> prints it; else a not-found
 cellar search-external <coord> <name>   # don't know the package
 ```
 
-Exit code is 0 for both hit and miss, so read the output, not `$?`. If a symbol
-you expect is missing, re-run with `--verbose` before concluding it is absent —
-and note that empty output on an artifact whose `list-external` works is a
-cellar bug worth reporting, not proof the symbol is gone.
+A miss exits non-zero with a not-found message and near-match suggestions.
 
 ## When cellar is NOT the right tool
 
@@ -83,8 +80,6 @@ questions outside it:
   `library.properties`, resource files, jar size, class counts.
 - Bytecode-level attributes: `LocalVariableTable`, `MethodParameters`,
   constant pool, `javap -v`/`-c` output.
-- **Scala 2 source code.** `get-source` supports Scala 3 (TASTy) and Java only;
-  for Scala 2 sources fetch the `-sources` jar yourself.
 - Grepping a whole source file for a string, rather than reading one symbol.
 
 ## Workflow

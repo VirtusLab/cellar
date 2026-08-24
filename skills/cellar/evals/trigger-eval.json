@@ -1,0 +1,82 @@
+[
+ {
+  "query": "i need to know if mill 1.1.1 actually ships a BuildInfo trait somewhere in its javalib module, or if thats a contrib thing. cant find it in the docs",
+  "should_trigger": true
+ },
+ {
+  "query": "does io.get-coursier:interface:1.0.28 expose anything for passing credentials to a MavenRepository? im trying to hit a private nexus and the docs are useless",
+  "should_trigger": true
+ },
+ {
+  "query": "im getting NoClassDefFoundError: cats/effect/unsafe/UnsafeNonFatal at runtime. first thing - is that class actually present in cats-effect 3.7.0 or am i chasing a ghost",
+  "should_trigger": true
+ },
+ {
+  "query": "whats in the tastyquery.reader.classfiles package in ch.epfl.scala:tasty-query_3:1.8.0? i want to see the ClassfileReader entry points",
+  "should_trigger": true
+ },
+ {
+  "query": "does weaver 0.9.3 have a Comparison typeclass i can hand to expect.eql, or do i need to write the instance myself for my own case classes",
+  "should_trigger": true
+ },
+ {
+  "query": "unzip the guava 33.4.8 jar and tell me whether Strings.emptyToNull is actually there, i think im on an old version",
+  "should_trigger": true
+ },
+ {
+  "query": "list me everything in org.typelevel.otel4s.sdk.trace.exporter for otel4s-sdk-trace 0.19.1, i need to find the right SpanExporter interface to implement",
+  "should_trigger": true
+ },
+ {
+  "query": "whats the signature for building an optional flag with decline 2.6.2? something on Opts i think, cant remember if its Opts.option or Opts.flag",
+  "should_trigger": true
+ },
+ {
+  "query": "show me the actual source of tastyquery.Symbols.ClassSymbol from tasty-query 1.8.0, i want to see how declarations are stored",
+  "should_trigger": true
+ },
+ {
+  "query": "grep through ~/.cache/coursier and figure out which jar the SpanExporter class comes from and what methods it has",
+  "should_trigger": true
+ },
+ {
+  "query": "i want to know whether commons-lang3 3.17.0 ships LocalVariableTable debug info in its class files - im trying to recover parameter names for a doc generator and need to know if the bytecode has them",
+  "should_trigger": false
+ },
+ {
+  "query": "check if javaparser-core 3.28.2 bundles any META-INF/native-image or reflect-config.json - im putting it in a graalvm native image and want to know if ill need my own reflection config",
+  "should_trigger": false
+ },
+ {
+  "query": "pull up Pickler.scala from org.scala-lang:scala-compiler:2.13.16, i need to see whether it ever emits DocDef nodes when pickling",
+  "should_trigger": true
+ },
+ {
+  "query": "how big is the javaparser-core 3.28.2 jar on disk and roughly how many class files does it contain? trying to decide if its too heavy to vendor",
+  "should_trigger": false
+ },
+ {
+  "query": "find me a decent java or scala binding for tree-sitter on maven central - i dont know the group id, something with jtree-sitter maybe?",
+  "should_trigger": false
+ },
+ {
+  "query": "what versions of org.scala-lang:scala3-compiler_3 are actually published right now? i want to test against the last few releases",
+  "should_trigger": false
+ },
+ {
+  "query": "find all the places ContextResource gets constructed in this repo, i think theres a leak somewhere in the lib module",
+  "should_trigger": false
+ },
+ {
+  "query": "my mill build keeps resolving cats-effect 3.6.3 even though i asked for 3.7.0 somewhere - can you figure out which dep is dragging the old one in and pin it",
+  "should_trigger": false
+ },
+ {
+  "query": "ive got a ClassNotFoundException thrown from inside a custom URLClassLoader at runtime even though the jar is definitely on the classpath i pass in. help me debug the classloader setup",
+  "should_trigger": false
+ },
+ {
+  "query": "what does library.properties inside the scala-library 3.8.4 jar actually say? checking whether the version string in there matches the artifact version",
+  "should_trigger": false
+ }
+]

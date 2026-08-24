@@ -42,7 +42,7 @@ object GetSourceHandler:
               IO.blocking(combinedSourceRef(symbols.head)(using ctx)).flatMap {
                 case None =>
                   Console[IO].errorln(
-                    s"No source position for '$fqn'. Only Scala 3 (TASTy) and Java symbols are supported."
+                    s"No source position for '$fqn'."
                   ).as(ExitCode.Error)
                 case Some(ref) =>
                   SourceFetcher.fetch(coord, ref.filePath, ref.startLine, ref.endLine, extraRepositories).flatMap {
@@ -85,12 +85,19 @@ object GetSourceHandler:
     }.orElse {
       sym match
         case s: TermOrTypeSymbol if s.sourceLanguage == SourceLanguage.Java =>
-          Some((filePath = javaSourcePath(s), startLine = 0, endLine = Int.MaxValue, language = "java"))
+          Some((filePath = wholeFilePath(s, "java"), startLine = 0, endLine = Int.MaxValue, language = "java"))
+        case s: TermOrTypeSymbol if s.sourceLanguage == SourceLanguage.Scala2 =>
+          Some((filePath = wholeFilePath(s, "scala"), startLine = 0, endLine = Int.MaxValue, language = "scala"))
         case _ => None
     }
 
-  private def javaSourcePath(sym: TermOrTypeSymbol): String =
+  /**
+   * Scala 2 pickles and Java classfiles carry no positions, so the best we can do is the
+   * whole file, guessed from the top-level name. Scala 2 files often don't match their
+   * class name; SourceFetcher falls back to scanning the package directory for that case.
+   */
+  private def wholeFilePath(sym: TermOrTypeSymbol, ext: String): String =
     def topLevel(s: TermOrTypeSymbol): TermOrTypeSymbol = s.owner match
       case p: TermOrTypeSymbol if !p.isPackage => topLevel(p)
       case _                                   => s
-    topLevel(sym).displayFullName.replace('.', '/') + ".java"
+    topLevel(sym).displayFullName.stripSuffix("$").replace('.', '/') + "." + ext
