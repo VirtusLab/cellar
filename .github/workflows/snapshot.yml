@@ -92,9 +92,62 @@ jobs:
           name: jar
           path: cellar.jar
 
+      # The smoke job runs without a checkout, so the script must arrive as an
+      # artifact. Uploaded here rather than in `build` to avoid a name clash
+      # across the build matrix.
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: smoke-script
+          path: .github/scripts/native-smoke.sh
+
+  # Runs the packaged binary on a fresh runner that did not build it, exactly
+  # as a user would get it. No checkout: image-build-time state (baked jrt
+  # java.home, embedded resources) only breaks away from the build filesystem,
+  # so anything the job takes from the repo or the build runner would mask it.
+  smoke:
+    name: Smoke (${{ matrix.target }})
+    needs: [build, jar]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+          - os: ubuntu-24.04-arm
+            target: linux-aarch64
+          - os: macos-latest
+            target: macos-arm64
+          - os: macOS-15-intel
+            target: macos-x86_64
+
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download packaged binary
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: ${{ matrix.target }}
+
+      - name: Download smoke script
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: smoke-script
+
+      - name: Unpack
+        shell: bash
+        run: |
+          mkdir -p staging
+          tar -xzf "cellar-${{ matrix.target }}.tar.gz" -C staging
+
+      - name: Run the binary
+        shell: bash
+        run: bash native-smoke.sh "$PWD/staging/cellar"
+
   release:
     name: Publish rolling snapshot
-    needs: [build, jar]
+    needs: [build, jar, smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: write

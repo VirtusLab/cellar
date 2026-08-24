@@ -293,6 +293,125 @@ class IntegrationTest extends CatsEffectSuite:
         assert(out.contains("toFahrenheit"), s"Expected the object body in: $out")
       }
 
+  // ─── docstrings ──────────────────────────────────────────────────────────
+
+  private def assertNoCompilerCrash(console: CapturingConsole): Unit =
+    assert(
+      !console.outBuf.toString.contains("Exception while compiling"),
+      s"Compiler crash report leaked into stdout: ${console.outBuf}"
+    )
+
+  test("get: Scala3 sealed trait docstring reaches stdout"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetHandler
+      .run(
+        TestFixtures.scala3Coord,
+        "cellar.fixture.scala3.CellarADT",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        assert(
+          console.outBuf.toString.contains("Sealed ADT hierarchy for testing sealedChildren extraction."),
+          s"Output: ${console.outBuf}"
+        )
+        assertNoCompilerCrash(console)
+      }
+
+  test("get: Scala3 type class trait docstring reaches stdout"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetHandler
+      .run(
+        TestFixtures.scala3Coord,
+        "cellar.fixture.scala3.CellarTC",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        assert(
+          console.outBuf.toString.contains("Scala 3 type class with given instances."),
+          s"Output: ${console.outBuf}"
+        )
+        assertNoCompilerCrash(console)
+      }
+
+  test("get: trait with companion keeps its docstring after companion collapse"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetHandler
+      .run(
+        TestFixtures.scala3Coord,
+        "cellar.fixture.scala3.CellarWithCompanion",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        assert(
+          console.outBuf.toString.contains("Fixture for testing resolution of members declared on the companion."),
+          s"Output: ${console.outBuf}"
+        )
+        assertNoCompilerCrash(console)
+      }
+
+  test("get: method-level docstring reaches stdout"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetHandler
+      .run(
+        TestFixtures.scala3Coord,
+        "cellar.fixture.scala3.CellarTC.render",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        assert(
+          console.outBuf.toString.contains("Renders the value as a human-readable string."),
+          s"Output: ${console.outBuf}"
+        )
+        assertNoCompilerCrash(console)
+      }
+
+  test("get: undocumented symbol renders cleanly without docstring artifacts"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetHandler
+      .run(
+        TestFixtures.scala3Coord,
+        "cellar.fixture.scala3.CellarA",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        val out = console.outBuf.toString
+        assert(out.contains("## cellar.fixture.scala3.CellarA"), s"Output: $out")
+        assert(!out.contains("/**"), s"Raw docstring markers leaked: $out")
+        assertNoCompilerCrash(console)
+      }
+
+  test("get: Java class renders signature without compiler crash"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetHandler
+      .run(
+        TestFixtures.javaCoord,
+        "cellar.fixture.java.CellarJavaClass",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        val out = console.outBuf.toString
+        assert(out.contains("class CellarJavaClass"), s"Output: $out")
+        assertNoCompilerCrash(console)
+      }
+
   // ─── list subcommand ─────────────────────────────────────────────────────
 
   test("list: package scala3 fixture lists top-level types"):
