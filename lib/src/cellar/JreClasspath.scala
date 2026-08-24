@@ -16,7 +16,7 @@ import scala.jdk.CollectionConverters.*
 
 object JreClasspath:
   // True when running as a GraalVM native image binary
-  private val isNativeImage: Boolean =
+  private[cellar] val isNativeImage: Boolean =
     sys.props.get("org.graalvm.nativeimage.imagecode").contains("runtime")
 
   def jrtPath(): IO[Classpaths.Classpath] =

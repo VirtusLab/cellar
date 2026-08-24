@@ -34,7 +34,41 @@ object DocstringExtractor:
       case None =>
         logger.debug(s"no primary jar for ${coord.artifact} among ${jars.size} fetched jars").as(None)
       case Some(primaryJar) =>
-        candidateTastyEntries(fqn).collectFirstSomeM(extractAndInspect(primaryJar, _, jars, fqn))
+        bundledJre.use { jre =>
+          candidateTastyEntries(fqn).collectFirstSomeM(extractAndInspect(primaryJar, _, jars, fqn, jre))
+        }
+
+  /** The JDK classes dotc needs, for native-image only.
+    *
+    * There the compiler has no `jrt:/` to read `java.lang.*` from (see [[JreClasspath]]), and a
+    * TASTy run without them dies on `asTerm called on not-a-Term val <none>` while building
+    * `Definitions`. The image already carries the build JDK's classes as the `jre.bin` resource —
+    * itself a jar — so writing it out gives dotc an ordinary classpath entry.
+    *
+    * `memoizedAcquire` keeps that write off the artifacts that never reach the compiler — a Java
+    * jar has no `.tasty` entry to inspect — while still writing at most once per lookup, and a
+    * failure degrades to "no docstring" rather than failing the command around it.
+    */
+  private def bundledJre(using logger: Logger[IO]): Resource[IO, IO[Seq[Path]]] =
+    if !JreClasspath.isNativeImage then Resource.pure(IO.pure(Nil))
+    else
+      Files[IO].tempFile(None, "cellar-jre-", ".jar", None)
+        .evalMap(unpackBundledJre)
+        .handleErrorWith { (t: Throwable) =>
+          Resource.eval(logger.warn(t)("could not unpack the bundled JRE; no docstrings").as(Seq.empty[Path]))
+        }
+        .memoizedAcquire
+
+  private def unpackBundledJre(dest: Path)(using logger: Logger[IO]): IO[Seq[Path]] =
+    IO.blocking(Option(Thread.currentThread().getContextClassLoader).flatMap(cl => Option(cl.getResourceAsStream("jre.bin")))).flatMap {
+      case None =>
+        logger.warn("bundled JRE resource missing; no docstrings").as(Seq.empty[Path])
+      case Some(stream) =>
+        fs2.io.readInputStream(IO.pure(stream), 64 * 1024)
+          .through(Files[IO].writeAll(dest))
+          .compile.drain
+          .as(Seq(dest))
+    }
 
   /** Returns the .tasty zip entry names to try, most specific first. */
   private def candidateTastyEntries(fqn: String): List[String] =
@@ -48,7 +82,7 @@ object DocstringExtractor:
     */
   private case class InspectionOutcome(callbackFired: Boolean, classpathSize: Int, docstring: Option[String])
 
-  private def extractAndInspect(jar: Path, tastyEntry: String, allJars: Seq[Path], fqn: String)(using
+  private def extractAndInspect(jar: Path, tastyEntry: String, allJars: Seq[Path], fqn: String, jre: IO[Seq[Path]])(using
       logger: Logger[IO]
   ): IO[Option[String]] =
     Files[IO].tempFile(None, "cellar-", ".tasty", None).use { tmp =>
@@ -56,38 +90,47 @@ object DocstringExtractor:
         case false =>
           logger.debug(s"$tastyEntry not present in ${jar.fileName}").as(None)
         case true =>
-          // The failure this diagnostic exists for — a compiler that cannot start under native-image
-          // — arrives as a LinkageError, which is not NonFatal. cats-effect routes those to
-          // `onFatalFailure` and tears down the runtime without ever reaching `.attempt`, so the
-          // catch has to live inside the blocking thunk to keep the error reportable.
-          val run = IO.blocking[Either[Throwable, InspectionOutcome]] {
-            try
-              var docstring: Option[String] = None
-              var fired                     = false
-              val cp = allJars.filterNot(p => isStdlib(p.fileName.toString)) ++ compilerStdlibJars
-              val _ = TastyInspector.inspectAllTastyFiles(
-                List(tmp.toString),
-                Nil,
-                cp.map(_.toString).toList
-              )(new Inspector:
-                def inspect(using q: Quotes)(tastys: List[Tasty[q.type]]): Unit =
-                  fired = true
-                  docstring = lookupDocstring(fqn)(using q)
-              )
-              Right(InspectionOutcome(fired, cp.size, docstring))
-            catch case t: Throwable => Left(t)
-          }
-          logger.debug(s"inspecting $tastyEntry for $fqn") *> run.flatMap {
-            case Left(t) =>
-              logger.warn(t)(s"TASTy inspection of $tastyEntry failed; no docstring for $fqn").as(None)
-            case Right(InspectionOutcome(false, cpSize, _)) =>
-              logger.warn(s"TASTy inspector never ran for $tastyEntry ($cpSize classpath entries)").as(None)
-            case Right(InspectionOutcome(true, cpSize, None)) =>
-              logger.debug(s"inspected $tastyEntry ($cpSize classpath entries), no docstring for $fqn").as(None)
-            case Right(InspectionOutcome(true, _, found)) =>
-              IO.pure(found)
-          }
+          jre.flatMap(runInspector(tmp, tastyEntry, allJars, fqn, _))
       }
+    }
+
+  private def runInspector(tmp: Path, tastyEntry: String, allJars: Seq[Path], fqn: String, jreJars: Seq[Path])(using
+      logger: Logger[IO]
+  ): IO[Option[String]] =
+    // The failure this diagnostic exists for — a compiler that cannot start under native-image
+    // — arrives as a LinkageError, which is not NonFatal. cats-effect routes those to
+    // `onFatalFailure` and tears down the runtime without ever reaching `.attempt`, so the
+    // catch has to live inside the blocking thunk to keep the error reportable.
+    val run = IO.blocking[Either[Throwable, InspectionOutcome]] {
+      try
+        var docstring: Option[String] = None
+        var fired                     = false
+        val cp = allJars.filterNot(p => isStdlib(p.fileName.toString)) ++ compilerStdlibJars ++ jreJars
+        // `Driver.doCompile` reports a failed run with a bare `println`, so a compiler
+        // problem would otherwise land in the middle of the Markdown cellar writes to stdout.
+        val _ = Console.withOut(Console.err) {
+          TastyInspector.inspectAllTastyFiles(
+            List(tmp.toString),
+            Nil,
+            cp.map(_.toString).toList
+          )(new Inspector:
+            def inspect(using q: Quotes)(tastys: List[Tasty[q.type]]): Unit =
+              fired = true
+              docstring = lookupDocstring(fqn)(using q)
+          )
+        }
+        Right(InspectionOutcome(fired, cp.size, docstring))
+      catch case t: Throwable => Left(t)
+    }
+    logger.debug(s"inspecting $tastyEntry for $fqn") *> run.flatMap {
+      case Left(t) =>
+        logger.warn(t)(s"TASTy inspection of $tastyEntry failed; no docstring for $fqn").as(None)
+      case Right(InspectionOutcome(false, cpSize, _)) =>
+        logger.warn(s"TASTy inspector never ran for $tastyEntry ($cpSize classpath entries)").as(None)
+      case Right(InspectionOutcome(true, cpSize, None)) =>
+        logger.debug(s"inspected $tastyEntry ($cpSize classpath entries), no docstring for $fqn").as(None)
+      case Right(InspectionOutcome(true, _, found)) =>
+        IO.pure(found)
     }
 
   /** Copies `tastyEntry` out of `jar` into `dest`; false if the jar has no such entry. */
