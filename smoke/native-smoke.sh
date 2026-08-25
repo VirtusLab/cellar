@@ -50,8 +50,10 @@ run_expect_fail() {
   cat "$out"
 }
 
+# Expanded unquoted on purpose: an empty array under `set -u` is an unbound
+# variable on macOS's bash 3.2, and a file:// URL has no whitespace to protect.
 if [[ -n "$REPO_URL" ]]; then
-  REPO=(-r "$REPO_URL")
+  REPO_FLAGS="-r $REPO_URL"
   S3_COORD=cellar.test:cellar-fixture-scala3_3:0.1.0-SNAPSHOT
   S3_PKG=cellar.fixture.scala3
   S3_FQN=cellar.fixture.scala3.CellarADT
@@ -71,7 +73,7 @@ if [[ -n "$REPO_URL" ]]; then
   J_MEMBER=getDefault
   J_SEARCH=JavaEnum
 else
-  REPO=()
+  REPO_FLAGS=""
   S3_COORD=org.typelevel:cats-effect_3:3.6.1
   S3_PKG=cats.effect
   S3_FQN=cats.effect.IO
@@ -109,89 +111,89 @@ run telemetry.txt telemetry disable --global
 # ─── external: Scala 3 ────────────────────────────────────────────────────
 
 step "get-external Scala 3: $S3_FQN (docstring)"
-run s3-get.md get-external "${REPO[@]}" "$S3_COORD" "$S3_FQN"
+run s3-get.md get-external $REPO_FLAGS "$S3_COORD" "$S3_FQN"
 assert_contains s3-get.md "## $S3_FQN"
 assert_contains s3-get.md "$S3_DOC"
 assert_clean s3-get.md
 
 step "list-external Scala 3: $S3_PKG"
-run s3-list.md list-external "${REPO[@]}" "$S3_COORD" "$S3_PKG"
+run s3-list.md list-external $REPO_FLAGS "$S3_COORD" "$S3_PKG"
 assert_contains s3-list.md "${S3_FQN##*.}"
 assert_clean s3-list.md
 
 step "list-external Scala 3 members: $S3_FQN"
-run s3-members.md list-external "${REPO[@]}" "$S3_COORD" "$S3_FQN"
+run s3-members.md list-external $REPO_FLAGS "$S3_COORD" "$S3_FQN"
 assert_clean s3-members.md
 
 step "search-external Scala 3: $S3_SEARCH"
-run s3-search.md search-external "${REPO[@]}" "$S3_COORD" "$S3_SEARCH"
+run s3-search.md search-external $REPO_FLAGS "$S3_COORD" "$S3_SEARCH"
 assert_contains s3-search.md "$S3_SEARCH"
 assert_clean s3-search.md
 
 step "get-source Scala 3: $S3_FQN"
-run s3-source.md get-source "${REPO[@]}" "$S3_COORD" "$S3_FQN"
+run s3-source.md get-source $REPO_FLAGS "$S3_COORD" "$S3_FQN"
 assert_contains s3-source.md '```scala'
 assert_contains s3-source.md "${S3_FQN##*.}"
 assert_clean s3-source.md
 
 step "deps: $S3_COORD"
-run s3-deps.txt deps "${REPO[@]}" "$S3_COORD"
+run s3-deps.txt deps $REPO_FLAGS "$S3_COORD"
 assert_contains s3-deps.txt 'org.scala-lang:scala-library'
 
 step "meta: $S3_COORD"
-run s3-meta.txt meta "${REPO[@]}" "$S3_COORD"
+run s3-meta.txt meta $REPO_FLAGS "$S3_COORD"
 assert_contains s3-meta.txt "$S3_META"
 assert_contains s3-meta.txt 'License:'
 
 # ─── external: Scala 2 ────────────────────────────────────────────────────
 
 step "get-external Scala 2: $S2_FQN"
-run s2-get.md get-external "${REPO[@]}" "$S2_COORD" "$S2_FQN"
+run s2-get.md get-external $REPO_FLAGS "$S2_COORD" "$S2_FQN"
 assert_contains s2-get.md "$S2_SIG"
 assert_clean s2-get.md
 
 step "list-external Scala 2: $S2_PKG"
-run s2-list.md list-external "${REPO[@]}" "$S2_COORD" "$S2_PKG"
+run s2-list.md list-external $REPO_FLAGS "$S2_COORD" "$S2_PKG"
 assert_contains s2-list.md "${S2_FQN##*.}"
 assert_contains s2-list.md 'Scala 2'
 assert_clean s2-list.md
 
 step "search-external Scala 2: $S2_SEARCH"
-run s2-search.md search-external "${REPO[@]}" "$S2_COORD" "$S2_SEARCH"
+run s2-search.md search-external $REPO_FLAGS "$S2_COORD" "$S2_SEARCH"
 assert_contains s2-search.md "$S2_FQN"
 assert_clean s2-search.md
 
 step "get-source Scala 2 is rejected with a clear message"
-run_expect_fail s2-source.txt get-source "${REPO[@]}" "$S2_COORD" "$S2_FQN"
+run_expect_fail s2-source.txt get-source $REPO_FLAGS "$S2_COORD" "$S2_FQN"
 assert_contains s2-source.txt 'Only Scala 3 (TASTy) and Java symbols are supported'
 
 # ─── external: Java (bundled JRE path) ────────────────────────────────────
 
 step "get-external Java: $J_FQN"
-run j-get.md get-external "${REPO[@]}" "$J_COORD" "$J_FQN"
+run j-get.md get-external $REPO_FLAGS "$J_COORD" "$J_FQN"
 assert_contains j-get.md "$J_SIG"
 assert_contains j-get.md "$J_MEMBER"
 assert_clean j-get.md
 
 step "list-external Java: $J_PKG"
-run j-list.md list-external "${REPO[@]}" "$J_COORD" "$J_PKG"
+run j-list.md list-external $REPO_FLAGS "$J_COORD" "$J_PKG"
 assert_contains j-list.md "${J_FQN##*.}"
 assert_clean j-list.md
 
 step "search-external Java: $J_SEARCH"
-run j-search.md search-external "${REPO[@]}" "$J_COORD" "$J_SEARCH"
+run j-search.md search-external $REPO_FLAGS "$J_COORD" "$J_SEARCH"
 assert_contains j-search.md "$J_SEARCH"
 assert_clean j-search.md
 
 step "get-source Java: $J_FQN"
-run j-source.md get-source "${REPO[@]}" "$J_COORD" "$J_FQN"
+run j-source.md get-source $REPO_FLAGS "$J_COORD" "$J_FQN"
 assert_contains j-source.md '```java'
 assert_contains j-source.md "${J_FQN##*.}"
 
 # ─── external: error paths ────────────────────────────────────────────────
 
 step 'get-external unknown symbol exits non-zero'
-run_expect_fail err-symbol.txt get-external "${REPO[@]}" "$S3_COORD" "$S3_PKG.DoesNotExist99999"
+run_expect_fail err-symbol.txt get-external $REPO_FLAGS "$S3_COORD" "$S3_PKG.DoesNotExist99999"
 assert_contains err-symbol.txt 'not found'
 
 step 'get-external unknown coordinate exits non-zero'
