@@ -96,13 +96,77 @@ jobs:
           name: jar
           path: ${{ env.JAR }}
 
+      # The smoke job runs without a checkout, so the suite must arrive as an
+      # artifact. Uploaded here rather than in `build` to avoid a name clash
+      # across the build matrix.
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: smoke
+          path: smoke/
+          include-hidden-files: true
+
+  # Runs the packaged binary on a fresh runner that did not build it, exactly
+  # as a user would get it. No checkout: image-build-time state (baked jrt
+  # java.home, embedded resources) only breaks away from the build filesystem,
+  # so anything the job takes from the repo or the build runner would mask it.
+  smoke:
+    name: Smoke (${{ matrix.target }})
+    needs: [build, jar]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+          - os: ubuntu-24.04-arm
+            target: linux-aarch64
+          - os: macos-latest
+            target: macos-arm64
+          - os: macOS-15-intel
+            target: macos-x86_64
+
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+
+    steps:
+      # Build tools for the project-aware section; also puts a JVM on PATH,
+      # which they need. The script unsets JAVA_HOME for its own lookups.
+      - uses: VirtusLab/scala-cli-setup@main
+        with:
+          jvm: temurin:17
+          apps: sbt
+
+      - name: Download packaged binary
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: ${{ matrix.target }}
+
+      - name: Download smoke suite
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: smoke
+          path: smoke/
+
+      - name: Unpack
+        shell: bash
+        run: |
+          mkdir -p staging
+          tar -xzf "cellar-${{ inputs.version }}-${{ matrix.target }}.tar.gz" -C staging
+
+      - name: Run the binary
+        shell: bash
+        run: bash smoke/native-smoke.sh "$PWD/staging/cellar"
+
   publish-maven:
     name: Publish lib + profilingRuntime + cli to Maven Central
     runs-on: ubuntu-latest
     # Gate the upload on native-binary + JAR builds: a Sonatype release is
     # immutable, so we must not publish a version whose GitHub Release assets
-    # (referenced by the coursier descriptor's prebuiltBinaries) won't exist.
-    needs: [build, jar]
+    # (referenced by the coursier descriptor's prebuiltBinaries) won't exist —
+    # and on the smoke job, so a binary that cannot run on a machine other
+    # than its build runner is never published.
+    needs: [build, jar, smoke]
     # No-op unless `maven-central` env is configured in repo settings with the
     # SONATYPE_* / PGP_* secrets moved onto it (see RELEASING.md).
     environment: maven-central

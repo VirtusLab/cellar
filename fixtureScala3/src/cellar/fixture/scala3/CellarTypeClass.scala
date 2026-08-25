@@ -2,6 +2,7 @@ package cellar.fixture.scala3
 
 /** Scala 3 type class with given instances. */
 trait CellarTC[A]:
+  /** Renders the value as a human-readable string. */
   def render(a: A): String
 
 object CellarTC:
