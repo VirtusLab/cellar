@@ -80,16 +80,16 @@ jobs:
       - name: Publish fixtures to local m2
         run: ./mill publishFixtures
 
-      - name: Stage binary and smoke script
-        run: |
-          mkdir staging
-          cp out/cli/nativeImage.dest/native-executable staging/cellar
-          cp .github/scripts/native-smoke.sh staging/
-
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: native-binary
-          path: staging/
+          path: out/cli/nativeImage.dest/native-executable
+
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: smoke
+          path: .github/smoke/
+          include-hidden-files: true
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
@@ -103,15 +103,28 @@ jobs:
     name: Native smoke
     needs: native-build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: read
 
     steps:
-      - name: Download binary and smoke script
+      # Build tools for the project-aware section; also puts a JVM on PATH,
+      # which they need. The script unsets JAVA_HOME for its own lookups.
+      - uses: VirtusLab/scala-cli-setup@main
+        with:
+          jvm: temurin:17
+          apps: sbt
+
+      - name: Download binary
         uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: native-binary
+
+      - name: Download smoke suite
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: smoke
+          path: smoke/
 
       - name: Download fixture m2 repository
         uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
@@ -121,8 +134,8 @@ jobs:
 
       - name: Run the binary
         run: |
-          chmod +x cellar
-          bash native-smoke.sh ./cellar "file://$PWD/m2repo"
+          chmod +x native-executable
+          bash smoke/native-smoke.sh ./native-executable "file://$PWD/m2repo"
 
   nix:
     name: Validate flake
