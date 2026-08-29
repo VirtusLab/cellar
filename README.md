@@ -181,6 +181,11 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 | `-v`, `--verbose` | all except `telemetry` | Log progress and warnings to stderr |
 | `--debug` | all except `telemetry` | Log detailed diagnostics and stack traces to stderr |
 
+Private repositories: credentials from `~/.config/coursier/credentials.properties` (or
+`COURSIER_CONFIG_DIR`) and the `COURSIER_CREDENTIALS` environment variable are read the same way
+the coursier CLI, sbt and Mill read them, and applied to every `--repository` whose host matches.
+See the [coursier credentials docs](https://get-coursier.io/docs/other-credentials).
+
 Diagnostics are written to stderr, never stdout, so `--verbose` and `--debug` are safe to use
 when piping output into a prompt. Set `CELLAR_LOG=verbose` or `CELLAR_LOG=debug` to get the same
 effect without a flag — useful for debugging an installed binary. An explicit flag wins over the
