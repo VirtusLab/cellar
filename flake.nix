@@ -100,6 +100,21 @@
         }
       );
 
+      devShells = eachSystem (system:
+        let pkgs = nixpkgs.legacyPackages.${system};
+        in {
+          # sbt and scala-cli back the project-aware E2E tests, which skip when
+          # the corresponding build tool is missing from PATH.
+          default = pkgs.mkShell {
+            packages = [
+              pkgs.temurin-bin-17
+              pkgs.sbt
+              pkgs.scala-cli
+            ];
+          };
+        }
+      );
+
       overlays.default = final: prev: {
         cellar = self.packages.${final.system}.default;
       };
