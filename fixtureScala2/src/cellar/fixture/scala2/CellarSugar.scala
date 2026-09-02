@@ -17,4 +17,6 @@ trait CellarSugar {
   def triple[A, B, C](t: (A, B, C)): (A, B, C)
   def tupleArg[A, B](f: ((A, B)) => Boolean): Boolean
   def withImplicit[A](a: A)(implicit s: CellarShow[A]): A
+  def withDefault(a: Int, b: String = "b"): String
+  def curriedDefault(a: Int)(b: Int = a): Int
 }

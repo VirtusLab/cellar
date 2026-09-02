@@ -23,3 +23,5 @@ trait CellarSugar:
   def tupleArg[A, B](f: ((A, B)) => Boolean): Boolean
   def withImplicit[A](a: A)(implicit s: CellarShow[A]): A
   def withUsing[A](a: A)(using s: CellarShow[A]): A
+  def withDefault(a: Int, b: String = "b"): String
+  def curriedDefault(a: Int)(b: Int = a): Int
