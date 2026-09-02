@@ -4,6 +4,7 @@ import tastyquery.Contexts.Context
 import tastyquery.Symbols.{
   ClassSymbol,
   ClassTypeParamSymbol,
+  ParamSymbolsClause,
   Symbol,
   TermOrTypeSymbol,
   TermSymbol,
@@ -86,25 +87,32 @@ object TypePrinter:
       case _: NothingType    => "Nothing"
       case _                 => tpe.getClass.getSimpleName
 
-  def printMethodic(tpe: TypeOrMethodic)(using ctx: Context): String =
+  /** `paramSymss` runs alongside the type: the type alone has no notion of a default argument,
+   *  only the parameter symbol does, and a method's clauses line up one-to-one with them.
+   */
+  def printMethodic(tpe: TypeOrMethodic, paramSymss: List[ParamSymbolsClause] = Nil)(using ctx: Context): String =
     tpe match
       case t: MethodType =>
         val prefix =
           if t.isContextual then "using "
           else if t.isImplicit then "implicit "
           else ""
-        val params = t.paramNames.zip(t.paramTypes).map { (n, tp) =>
-          s"$n: ${printType(tp)}"
+        val defaults = paramSymss.headOption match
+          case Some(Left(syms)) => syms.map(_.isParamWithDefault)
+          case _                => Nil
+        val params = t.paramNames.zip(t.paramTypes).zipWithIndex.map { case ((n, tp), i) =>
+          val default = if defaults.lift(i).contains(true) then " = ..." else ""
+          s"$n: ${printType(tp)}$default"
         }
         val paramStr = s"($prefix${params.mkString(", ")})"
         val rest = t.resultType match
-          case _: MethodType | _: PolyType => printMethodic(t.resultType)
-          case r                           => s": ${printMethodic(r)}"
+          case _: MethodType | _: PolyType => printMethodic(t.resultType, paramSymss.drop(1))
+          case r                           => s": ${printMethodic(r, Nil)}"
         s"$paramStr$rest"
 
       case t: PolyType =>
         val typeParams = t.paramNames.zip(t.paramTypeBounds).map(printTypeParam)
-        s"[${typeParams.mkString(", ")}]${printMethodic(t.resultType)}"
+        s"[${typeParams.mkString(", ")}]${printMethodic(t.resultType, paramSymss.drop(1))}"
 
       case t: Type => printType(t)
 
@@ -133,7 +141,7 @@ object TypePrinter:
       case term: TermSymbol =>
         val keyword = termKeyword(term)
         if term.isModuleVal then s"$keyword ${term.name}"
-        else s"$keyword ${term.name}${printTopLevelMethodic(term.declaredType)}"
+        else s"$keyword ${term.name}${printTopLevelMethodic(term.declaredType, term.paramSymss)}"
 
       case tm: TypeMemberSymbol =>
         tm.typeDef match
@@ -166,13 +174,13 @@ object TypePrinter:
     else if sym.isModuleVal then "object"
     else "val"
 
-  private def printTopLevelMethodic(tpe: TypeOrMethodic)(using ctx: Context): String =
+  private def printTopLevelMethodic(tpe: TypeOrMethodic, paramSymss: List[ParamSymbolsClause])(using ctx: Context): String =
     tpe match
       case t: Type => s": ${printType(t)}"
       case t: PolyType =>
         val typeParams = t.paramNames.zip(t.paramTypeBounds).map(printTypeParam)
-        s"[${typeParams.mkString(", ")}]${printTopLevelMethodic(t.resultType)}"
-      case t: MethodType => printMethodic(t)
+        s"[${typeParams.mkString(", ")}]${printTopLevelMethodic(t.resultType, paramSymss.drop(1))}"
+      case t: MethodType => printMethodic(t, paramSymss)
 
   private def printClassTypeParams(params: List[ClassTypeParamSymbol])(using ctx: Context): String =
     if params.isEmpty then ""
