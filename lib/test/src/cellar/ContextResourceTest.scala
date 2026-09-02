@@ -35,9 +35,13 @@ class ContextResourceTest extends CatsEffectSuite:
     JreClasspath.jrtPath().flatMap { jrePaths =>
       ContextResource
         .makeFromCoord(TestFixtures.scala3Coord, jrePaths, Seq(TestFixtures.localM2Repo))
-        .use { (ctx, _) =>
+        .use { (ctx, _, sourceJars) =>
           IO.blocking(ctx.findStaticClass("cellar.fixture.scala3.CellarA")).map { cls =>
             assertEquals(cls.name.toString, "CellarA")
+            val sources = sourceJars.forSymbol(cls)
+            assert(sources.exists(_.fileName.toString.endsWith("-sources.jar")), s"sources jar for CellarA: $sources")
+            val option = ctx.findStaticClass("scala.Option")
+            assert(sourceJars.forSymbol(option).exists(_.fileName.toString.startsWith("scala-library")), "transitive dependency sources")
           }
         }
     }
