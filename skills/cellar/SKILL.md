@@ -53,7 +53,8 @@ Query any published artifact by explicit coordinate (`group:artifact:version`):
 - For sbt plugins, use the full Scala and sbt suffix: `group:artifact_2.12_1.0:version` (e.g. `org.scala-native:sbt-scala-native_2.12_1.0:latest`)
 - For compiler plugins and other artifacts with full Scala version suffixes, use the full version: `group:artifact_3.3.8:version`
 - Use `latest` as the version to resolve the most recent release
-- `-r`, `--repository <url>`: extra Maven repository (repeatable)
+- `-r`, `--repository <url>`: extra Maven repository (repeatable), appended to the repositories
+  configured under `maven.repositories` in `~/.cellar/cellar.conf` or `.cellar/cellar.conf`
 
 ## Workflow
 

@@ -173,7 +173,7 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 | `--no-cache` | project commands | Skip classpath cache, re-extract from build tool |
 | `--test` | project commands | Use the test-scope classpath (sbt/scala-cli; not supported for Mill) |
 | `--java-home <path>` | all | Use a specific JDK for JRE classpath |
-| `-r`, `--repository <url>` | external commands | Extra Maven repository URL (repeatable); must be an `http://`, `https://` or `file://` URL |
+| `-r`, `--repository <url>` | external commands | Extra Maven repository URL (repeatable), appended to the configured `maven.repositories`; must be an `http://`, `https://` or `file://` URL |
 | `-l`, `--limit <N>` | `list`, `list-external`, `search`, `search-external` | Max results (default: 50) |
 | `-l`, `--limit <N>` | `get`, `get-external` | Max members to display per section, including companion members (no default) |
 | `--hide-inherited` | `get`, `get-external` | Show only members declared on the type itself |
@@ -234,6 +234,12 @@ Cellar loads configuration from HOCON files and environment variables. Files are
 ### Default config
 
 ```hocon
+maven {
+  # Extra Maven repository URLs for external commands, added to Coursier's
+  # defaults (Maven Central, Ivy local)
+  repositories = []
+}
+
 mill {
   # Binary to invoke when extracting Mill classpaths
   binary = "./mill"           # env: CELLAR_MILL_BINARY
@@ -282,6 +288,22 @@ Use a custom Mill wrapper:
 ```hocon
 mill { binary = "./millw" }
 ```
+
+Always resolve external coordinates through an internal repository, so `-r` is no longer needed:
+
+```hocon
+maven {
+  repositories = [
+    "https://artifactory.company.com/maven",
+    "https://artifactory.company.com/maven-snapshots"
+  ]
+}
+```
+
+Maven Central and Ivy local stay available, and CLI `-r` values are appended to the configured list.
+Lists replace rather than merge, so a project-level `maven.repositories` overrides the user-level
+list and `repositories = []` clears it for that project. Configuration holds URLs only —
+credentials come from coursier, as described above.
 
 Or via environment: `CELLAR_SBT_BINARY=sbtn cellar get --module core cats.Monad`
 

@@ -15,7 +15,11 @@ case class ProfilingConfig(enabled: Boolean, pyroscopeEndpoint: String) derives 
 
 case class OtelConfig(enabled: Boolean, endpoint: String) derives ConfigReader
 
+/** Extra Maven repository URLs added to Coursier's defaults for every external command. */
+case class MavenConfig(repositories: List[String]) derives ConfigReader
+
 case class Config(
+    maven: MavenConfig,
     mill: MillConfig,
     sbt: SbtConfig,
     starvationChecks: StarvationChecksConfig,
@@ -28,12 +32,15 @@ object Config {
     sys.props.get("user.home").map(Path(_).resolve(".cellar").resolve("cellar.conf"))
   private[cellar] val defaultProjectPath: Path = Path(".cellar").resolve("cellar.conf")
 
-  private def load(): Config = {
-    val paths = defaultUserPath.toList ++ List(defaultProjectPath)
+  /** Loads with explicit file locations so tests never touch the real user configuration. */
+  private[cellar] def loadFrom(userPath: Option[Path], projectPath: Option[Path]): Config = {
+    val paths = userPath.toList ++ projectPath.toList
     paths
       .foldLeft(ConfigSource.default)((cs, p) => ConfigSource.file(p.toNioPath).optional.withFallback(cs))
       .loadOrThrow[Config]
   }
+
+  private def load(): Config = loadFrom(defaultUserPath, Some(defaultProjectPath))
 
   lazy val global: Config = load()
 
