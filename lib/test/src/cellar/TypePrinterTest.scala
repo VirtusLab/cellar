@@ -289,7 +289,30 @@ class TypePrinterTest extends CatsEffectSuite:
         given Context = ctx
         val sig = sugarSig("java.lang.String", "equals")
         assert(!sig.contains("FromJavaObject"), s"leaked internal type name: $sig")
-        assertEquals(sig, "def equals(x$0: Object): Boolean")
+        assertEquals(sig, "def equals(anObject: Object): Boolean")
+      }
+    }
+
+  test("printSymbolSignature names Java parameters from LocalVariableTable when MethodParameters is absent"):
+    withJavaCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val fqn = "cellar.fixture.java.CellarJavaClass"
+        val cls = ctx.findStaticClass(fqn)
+        val formats = cls.declarations.filter(_.name.toString == "format").map(TypePrinter.printSymbolSignature).sorted
+        assertEquals(
+          formats,
+          List(
+            "def format(value: Int): String",
+            "def format(value: Int, verbose: Boolean): String",
+            "def format(value: String): String"
+          )
+        )
+        assertEquals(sugarSig(fqn, "repeat"), "def repeat(value: T, times: Int): List[T]")
+        assertEquals(sugarSig(fqn, "<init>"), "def <init>[T <: Comparable[T]](defaultValue: T): Unit")
+        val module = ctx.findStaticModuleClass(fqn)
+        val of     = module.declarations.find(_.name.toString == "of").get
+        assertEquals(TypePrinter.printSymbolSignature(of), "def of[E <: Comparable[E]](value: E): CellarJavaClass[E]")
       }
     }
 

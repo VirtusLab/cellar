@@ -63,6 +63,7 @@ object lib extends CellarPublishModule {
     mvn"co.fs2::fs2-io:3.13.0",
     mvn"io.get-coursier:interface:1.0.28",
     mvn"ch.epfl.scala::tasty-query:1.8.0",
+    mvn"org.ow2.asm:asm:9.7.1",
     mvn"org.scala-lang:scala3-tasty-inspector_3:3.8.4",
     mvn"com.github.pureconfig::pureconfig-core:0.17.10",
     mvn"org.typelevel::log4cats-core:2.7.1",
@@ -224,7 +225,9 @@ def fixturePom(desc: String) = PomSettings(
 )
 
 object fixtureJava extends JavaModule with PublishModule {
-  def javacOptions = Seq("--release", "17")
+  // `-g` emits LocalVariableTable, the parameter-name source for Java jars built without
+  // `-parameters` (Maven's default `<debug>true</debug>` passes it too)
+  def javacOptions = Seq("--release", "17", "-g")
   def publishVersion = "0.1.0-SNAPSHOT"
   def artifactName   = "cellar-fixture-java"
   def pomSettings    = fixturePom("Cellar Java test fixture")

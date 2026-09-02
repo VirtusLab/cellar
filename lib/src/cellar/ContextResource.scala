@@ -33,6 +33,7 @@ object ContextResource:
                           )
           classpath    = jreClasspath ++ jarClasspath
           ctx          <- IO.blocking(Context.initialize(classpath))
+          _             = JavaParamNames.register(ctx, classpath)
         yield (ctx, classpath)
       }
     }
