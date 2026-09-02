@@ -22,7 +22,7 @@ object SearchHandler:
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
-        result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, classpath) =>
+        result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, classpath, _) =>
           given tastyquery.Contexts.Context = ctx
           runCore(query, limit, classpath, jreClasspath)
         }

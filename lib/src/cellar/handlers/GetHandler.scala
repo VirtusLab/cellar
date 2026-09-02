@@ -26,7 +26,7 @@ object GetHandler:
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
-        result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, classpath) =>
+        result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, classpath, _) =>
           given Context = ctx
           runCore(fqn, classpath, Some(coord), limit, hideInherited, groupInherited, logger)
         }

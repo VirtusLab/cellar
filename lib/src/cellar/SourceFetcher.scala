@@ -1,7 +1,6 @@
 package cellar
 
 import cats.effect.{IO, Resource}
-import coursierapi.Repository
 import fs2.io.file.Path
 import fs2.io.readInputStream
 
@@ -12,20 +11,6 @@ object SourceFetcher:
   case class SourceResult(entryPath: String, startLine: Int, endLine: Int, lines: IndexedSeq[String])
 
   def fetch(
-      coord: MavenCoordinate,
-      sourceFilePath: String,
-      startLine: Int,
-      endLine: Int,
-      extraRepositories: Seq[Repository] = Seq.empty
-  ): IO[Either[String, SourceResult]] =
-    CoursierFetchClient.fetchSourcesJar(coord, extraRepositories).flatMap {
-      case None =>
-        IO.pure(Left(s"No sources JAR published for '${coord.render}'."))
-      case Some(jar) =>
-        extractLines(jar, sourceFilePath, startLine, endLine)
-    }
-
-  private def extractLines(
       jar: Path,
       sourceFilePath: String,
       startLine: Int,

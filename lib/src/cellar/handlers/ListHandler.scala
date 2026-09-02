@@ -22,7 +22,7 @@ object ListHandler:
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
-        result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, _) =>
+        result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, _, _) =>
           given tastyquery.Contexts.Context = ctx
           runCore(fqn, limit, Some(coord))
         }

@@ -2,6 +2,7 @@ package cellar
 
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
+import cellar.CoursierFetchClient.ResolvedClasspath
 import coursierapi.Repository
 import fs2.io.file.Path
 import org.typelevel.log4cats.Logger
@@ -15,6 +16,13 @@ object ContextResource:
       tracer: Tracer[IO],
       logger: Logger[IO] = StderrLogger.off
   ): Resource[IO, (Context, Classpath)] =
+    makeWithSources(ResolvedClasspath(jars, Map.empty), jreClasspath).map((ctx, cp, _) => (ctx, cp))
+
+  def makeWithSources(resolved: ResolvedClasspath, jreClasspath: Classpath)(using
+      tracer: Tracer[IO],
+      logger: Logger[IO] = StderrLogger.off
+  ): Resource[IO, (Context, Classpath, SourceJars)] =
+    val jars = resolved.jars
     Resource.eval {
       tracer.span("tasty.context.init").surround {
         for
@@ -27,13 +35,17 @@ object ContextResource:
                               e
                             )
                           }
-          (jarClasspath, dropped) = loaded
+          (kept, jarClasspath, dropped) = loaded
           _            <- dropped.traverse_(p =>
                             logger.warn(s"dropped unreadable classpath entry (tasty-query MatchError): $p")
                           )
           classpath    = jreClasspath ++ jarClasspath
           ctx          <- IO.blocking(Context.initialize(classpath))
-        yield (ctx, classpath)
+          sourceJars   <- IO(SourceJars.pair(kept, jarClasspath, resolved.sourcesJars)).flatTap {
+                            case Some(_) => IO.unit
+                            case None    => logger.warn("classpath entries do not line up with jars; sources unavailable")
+                          }
+        yield (ctx, classpath, sourceJars.getOrElse(SourceJars.empty))
       }
     }
 
@@ -42,8 +54,8 @@ object ContextResource:
     * alongside the classpath so the caller can report them — dropping an entry silently can turn a
     * present symbol into a "not found".
     */
-  private def readClasspathRobust(paths: List[Path], dropped: List[Path] = Nil): (Classpath, List[Path]) =
-    try (ClasspathLoaders.read(paths.map(_.toNioPath)), dropped)
+  private def readClasspathRobust(paths: List[Path], dropped: List[Path] = Nil): (List[Path], Classpath, List[Path]) =
+    try (paths, ClasspathLoaders.read(paths.map(_.toNioPath)), dropped)
     catch
       case e: MatchError =>
         val bad = paths.find { p =>
@@ -61,18 +73,18 @@ object ContextResource:
   )(using
       tracer: Tracer[IO],
       logger: Logger[IO] = StderrLogger.off
-  ): Resource[IO, (Context, Classpath)] =
-    Resource.eval(CoursierFetchClient.fetchClasspath(coord, extraRepositories)).flatMap { jars =>
-      make(jars, jreClasspath).evalMap { (ctx, classpath) =>
+  ): Resource[IO, (Context, Classpath, SourceJars)] =
+    Resource.eval(CoursierFetchClient.fetchClasspathWithSources(coord, extraRepositories)).flatMap { resolved =>
+      makeWithSources(resolved, jreClasspath).evalMap { (ctx, classpath, sourceJars) =>
         IO.blocking {
-          if jars.nonEmpty then
+          if resolved.jars.nonEmpty then
             val jarEntries = classpath.filter(_.toString.endsWith(".jar"))
             val hasSymbols = jarEntries.exists { entry =>
               try ctx.findSymbolsByClasspathEntry(entry).nonEmpty
               catch case _: Exception => false
             }
             if !hasSymbols then throw CellarError.EmptyArtifact(coord)
-          (ctx, classpath)
+          (ctx, classpath, sourceJars)
         }
       }
     }

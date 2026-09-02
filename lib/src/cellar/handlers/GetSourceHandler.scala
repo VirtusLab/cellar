@@ -25,7 +25,7 @@ object GetSourceHandler:
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
-        result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, classpath) =>
+        result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, classpath, sourceJars) =>
           given Context = ctx
           SymbolResolver.resolve(fqn).flatMap {
             case LookupResult.IsPackage =>
@@ -39,13 +39,16 @@ object GetSourceHandler:
             case LookupResult.LookupFailed(cause) =>
               IO.raiseError(CellarError.SymbolLookupFailed(fqn, cause))
             case LookupResult.Found(symbols) =>
-              IO.blocking(combinedSourceRef(symbols.head)(using ctx)).flatMap {
-                case None =>
+              val sym = symbols.head
+              IO.blocking((combinedSourceRef(sym)(using ctx), sourceJars.forSymbol(sym))).flatMap {
+                case (None, _) =>
                   Console[IO].errorln(
                     s"No source position for '$fqn'. Only Scala 3 (TASTy) and Java symbols are supported."
                   ).as(ExitCode.Error)
-                case Some(ref) =>
-                  SourceFetcher.fetch(coord, ref.filePath, ref.startLine, ref.endLine, extraRepositories).flatMap {
+                case (Some(_), None) =>
+                  Console[IO].errorln(s"No sources JAR published for the artifact defining '$fqn'.").as(ExitCode.Error)
+                case (Some(ref), Some(jar)) =>
+                  SourceFetcher.fetch(jar, ref.filePath, ref.startLine, ref.endLine).flatMap {
                     case Left(err) =>
                       Console[IO].errorln(err).as(ExitCode.Error)
                     case Right(result) =>
