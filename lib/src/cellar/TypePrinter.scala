@@ -90,7 +90,11 @@ object TypePrinter:
   /** `paramSymss` runs alongside the type: the type alone has no notion of a default argument,
    *  only the parameter symbol does, and a method's clauses line up one-to-one with them.
    */
-  def printMethodic(tpe: TypeOrMethodic, paramSymss: List[ParamSymbolsClause] = Nil)(using ctx: Context): String =
+  def printMethodic(
+      tpe: TypeOrMethodic,
+      paramSymss: List[ParamSymbolsClause] = Nil,
+      javaNames: Option[List[String]] = None
+  )(using ctx: Context): String =
     tpe match
       case t: MethodType =>
         val prefix =
@@ -100,19 +104,20 @@ object TypePrinter:
         val defaults = paramSymss.headOption match
           case Some(Left(syms)) => syms.map(_.isParamWithDefault)
           case _                => Nil
-        val params = t.paramNames.zip(t.paramTypes).zipWithIndex.map { case ((n, tp), i) =>
+        val names = javaNames.filter(_.length == t.paramNames.length).getOrElse(t.paramNames.map(_.toString))
+        val params = names.zip(t.paramTypes).zipWithIndex.map { case ((n, tp), i) =>
           val default = if defaults.lift(i).contains(true) then " = ..." else ""
           s"$n: ${printType(tp)}$default"
         }
         val paramStr = s"($prefix${params.mkString(", ")})"
         val rest = t.resultType match
-          case _: MethodType | _: PolyType => printMethodic(t.resultType, paramSymss.drop(1))
-          case r                           => s": ${printMethodic(r, Nil)}"
+          case _: MethodType | _: PolyType => printMethodic(t.resultType, paramSymss.drop(1), None)
+          case r                           => s": ${printMethodic(r, Nil, None)}"
         s"$paramStr$rest"
 
       case t: PolyType =>
         val typeParams = t.paramNames.zip(t.paramTypeBounds).map(printTypeParam)
-        s"[${typeParams.mkString(", ")}]${printMethodic(t.resultType, paramSymss.drop(1))}"
+        s"[${typeParams.mkString(", ")}]${printMethodic(t.resultType, paramSymss.drop(1), javaNames)}"
 
       case t: Type => printType(t)
 
@@ -141,7 +146,11 @@ object TypePrinter:
       case term: TermSymbol =>
         val keyword = termKeyword(term)
         if term.isModuleVal then s"$keyword ${term.name}"
-        else s"$keyword ${term.name}${printTopLevelMethodic(term.declaredType, term.paramSymss)}"
+        else
+          val javaNames =
+            if detectLanguage(term) == DetectedLanguage.Java && term.isMethod then JavaParamNames.namesFor(term)
+            else None
+          s"$keyword ${term.name}${printTopLevelMethodic(term.declaredType, term.paramSymss, javaNames)}"
 
       case tm: TypeMemberSymbol =>
         tm.typeDef match
@@ -174,13 +183,17 @@ object TypePrinter:
     else if sym.isModuleVal then "object"
     else "val"
 
-  private def printTopLevelMethodic(tpe: TypeOrMethodic, paramSymss: List[ParamSymbolsClause])(using ctx: Context): String =
+  private def printTopLevelMethodic(
+      tpe: TypeOrMethodic,
+      paramSymss: List[ParamSymbolsClause],
+      javaNames: Option[List[String]]
+  )(using ctx: Context): String =
     tpe match
       case t: Type => s": ${printType(t)}"
       case t: PolyType =>
         val typeParams = t.paramNames.zip(t.paramTypeBounds).map(printTypeParam)
-        s"[${typeParams.mkString(", ")}]${printTopLevelMethodic(t.resultType, paramSymss.drop(1))}"
-      case t: MethodType => printMethodic(t, paramSymss)
+        s"[${typeParams.mkString(", ")}]${printTopLevelMethodic(t.resultType, paramSymss.drop(1), javaNames)}"
+      case t: MethodType => printMethodic(t, paramSymss, javaNames)
 
   private def printClassTypeParams(params: List[ClassTypeParamSymbol])(using ctx: Context): String =
     if params.isEmpty then ""
