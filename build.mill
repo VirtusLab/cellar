@@ -193,7 +193,7 @@ object cli extends CellarPublishModule with NativeImageModule {
   def mvnDeps = Seq(
     mvn"com.monovore::decline:2.6.2",
     mvn"com.monovore::decline-effect:2.6.2",
-    mvn"org.slf4j:slf4j-nop:2.0.18"
+    mvn"org.slf4j:slf4j-nop:2.0.19"
   )
   def assemblyRules = Seq(
     Assembly.Rule.Append("META-INF/services/.*"),
