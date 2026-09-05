@@ -16,7 +16,7 @@ class IntegrationTest extends CatsEffectSuite:
 
   // Must precede every `test(...)` below: those register bodies that capture `this`,
   // and -Wsafe-init rejects capturing a suite whose fields are not yet assigned.
-  private val scalaLibCoord = MavenCoordinate("org.scala-lang", "scala-library", "3.8.1")
+  private val scalaLibCoord = MavenCoordinate("org.scala-lang", "scala-library", "3.8.4")
 
   // ─── get subcommand ──────────────────────────────────────────────────────
 
