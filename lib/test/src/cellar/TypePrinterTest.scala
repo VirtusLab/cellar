@@ -394,6 +394,26 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature marks parameters that have a default (Scala 3)"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val fqn = "cellar.fixture.scala3.CellarSugar"
+        assertEquals(sugarSig(fqn, "withDefault"), "def withDefault(a: Int, b: String = ...): String")
+        assertEquals(sugarSig(fqn, "curriedDefault"), "def curriedDefault(a: Int)(b: Int = ...): Int")
+      }
+    }
+
+  test("printSymbolSignature marks parameters that have a default (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val fqn = "cellar.fixture.scala2.CellarSugar"
+        assertEquals(sugarSig(fqn, "withDefault"), "def withDefault(a: Int, b: String = ...): String")
+        assertEquals(sugarSig(fqn, "curriedDefault"), "def curriedDefault(a: Int)(b: Int = ...): Int")
+      }
+    }
+
   test("printSymbolSignature renders function types as arrow sugar (Scala 2)"):
     withScala2Ctx { ctx =>
       IO.blocking {

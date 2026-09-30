@@ -255,6 +255,34 @@ class GetFormatterTest extends CatsEffectSuite:
       }
     }
 
+  test("formatSymbol lists a method with defaults once, without its default getters (Scala 3)"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarSugar")
+        val output = GetFormatter.formatSymbol(cls)
+        val lines  = output.linesIterator.filter(_.contains("withDefault")).toList
+        assertEquals(lines, List("def withDefault(a: Int, b: String = ...): String"), s"Output:\n$output")
+        assert(!output.contains("$default$"), s"Output:\n$output")
+      }
+    }
+
+  test("formatSymbol lists a method with defaults once, without its default getters (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls    = ctx.findStaticClass("cellar.fixture.scala2.CellarSugar")
+        val output = GetFormatter.formatSymbol(cls)
+        val lines  = output.linesIterator.filter(_.contains("withDefault")).toList
+        assertEquals(
+          lines,
+          List("def withDefault(a: Int, b: String = ...): String // [Scala 2 — limited type information]"),
+          s"Output:\n$output"
+        )
+        assert(!output.contains("$default$"), s"Output:\n$output")
+      }
+    }
+
   test("formatSymbol omits the universal parent from a Scala 2 signature"):
     withScala2Ctx { ctx =>
       IO.blocking {

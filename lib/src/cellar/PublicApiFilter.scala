@@ -14,8 +14,14 @@ object PublicApiFilter:
   private def isSyntheticSym(sym: Symbol): Boolean =
     sym match
       case s: (ClassSymbol | TermSymbol | TypeSymbol) =>
-        s.isSynthetic || s.name.toString.startsWith("$") || isUncallableConstructor(s)
+        s.isSynthetic || s.name.toString.startsWith("$") || isDefaultGetter(s) || isUncallableConstructor(s)
       case _ => false
+
+  /** Scala 2 pickles flag default getters synthetic; TASTy does not, so they surface by name.
+   *  The default is already shown as `= ...` on the parameter itself.
+   */
+  private def isDefaultGetter(sym: Symbol): Boolean =
+    sym.name.toString.contains("$default$")
 
   /** Only a concrete class has a user-callable constructor; for an object or a
    *  trait `<init>` is pure noise. Class constructors are kept: for a Java type
