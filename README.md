@@ -142,7 +142,7 @@ cellar deps <coordinate>
 |---|---|
 | `get` | Symbol info from the current project (signature, flags, members, docs) |
 | `get-external` | Symbol info from a Maven coordinate |
-| `get-source` | Source code from a published `-sources.jar` |
+| `get-source` | Source code from the `-sources.jar` of the artifact defining the symbol, including transitive dependencies |
 | `list` | List public symbols in a package/class from the current project |
 | `list-external` | List public symbols from a Maven coordinate |
 | `search` | Case-insensitive substring search in the current project |
