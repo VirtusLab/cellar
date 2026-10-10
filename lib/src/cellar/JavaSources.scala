@@ -1,23 +1,27 @@
 package cellar
 
-import com.sun.source.tree.*
-import com.sun.source.util.{JavacTask, TreePath, TreePathScanner, Trees}
+import com.github.javaparser.ParserConfiguration.LanguageLevel
+import com.github.javaparser.ast.`type`.{ArrayType, ClassOrInterfaceType, PrimitiveType, Type, TypeParameter}
+import com.github.javaparser.ast.body.{ConstructorDeclaration, MethodDeclaration, Parameter, TypeDeclaration}
+import com.github.javaparser.ast.nodeTypes.{NodeWithJavadoc, NodeWithTypeParameters}
+import com.github.javaparser.{JavaParser, ParserConfiguration}
 import fs2.io.file.Path
 import tastyquery.Contexts.Context
 import tastyquery.Symbols.{ClassSymbol, Symbol, TermSymbol}
 
-import java.net.URI
 import java.util.zip.ZipFile
 import java.util.{Collections, WeakHashMap}
-import javax.tools.{SimpleJavaFileObject, ToolProvider}
 import scala.collection.concurrent.TrieMap
 import scala.jdk.CollectionConverters.*
+import scala.jdk.OptionConverters.*
 import scala.util.Using
+import scala.util.control.NonFatal
 
 /** Parameter names and Javadoc read from the `-sources.jar`, for Java members whose classfile
   * carries neither: abstract and interface methods have no `LocalVariableTable`, and jars built
-  * without `-g` (sbt's default) have none at all. The source is only parsed, never attributed,
-  * so a member is matched by name plus the simple names of its erased parameter types.
+  * without `-g` (sbt's default) have none at all. The source is only parsed, never resolved
+  * (javac itself cannot run inside the native image), so a member is matched by name plus the
+  * simple names of its erased parameter types.
   */
 object JavaSources:
   private final case class Member(paramNames: List[String], doc: Option[String])
@@ -79,64 +83,53 @@ object JavaSources:
           parse(binary.take(binary.lastIndexOf('.') + 1), text)
         }
       }
-    catch case _: Exception => None
+    catch case NonFatal(_) => None
 
   private def parse(pkgPrefix: String, text: String): Parsed =
-    val compiler = ToolProvider.getSystemJavaCompiler
-    val file = new SimpleJavaFileObject(URI.create("string:///Source.java"), javax.tools.JavaFileObject.Kind.SOURCE):
-      override def getCharContent(ignoreEncodingErrors: Boolean): CharSequence = text
-    val task  = compiler.getTask(null, null, null, null, null, List(file).asJava).asInstanceOf[JavacTask]
-    val trees = Trees.instance(task)
-    val units = task.parse().asScala
+    val config = ParserConfiguration().setLanguageLevel(LanguageLevel.BLEEDING_EDGE)
+    val unit   = JavaParser(config).parse(text).getResult.get
 
     val classDocs = Map.newBuilder[String, String]
     val members   = Map.newBuilder[(String, String, List[String]), Member]
-    val scanner = new TreePathScanner[Unit, (String, Map[String, String])]:
-      override def visitClass(cls: ClassTree, scope: (String, Map[String, String])): Unit =
-        val (outer, bounds) = scope
-        val binary          = if outer.isEmpty then s"$pkgPrefix${cls.getSimpleName}" else s"$outer$$${cls.getSimpleName}"
-        doc(trees).foreach(classDocs += binary -> _)
-        super.visitClass(cls, (binary, bounds ++ typeVarBounds(cls.getTypeParameters.asScala.toList)))
 
-      override def visitMethod(method: MethodTree, scope: (String, Map[String, String])): Unit =
-        val (binary, bounds) = scope
-        val own    = bounds ++ typeVarBounds(method.getTypeParameters.asScala.toList)
-        val params = method.getParameters.asScala.toList
-        val key    = (binary, method.getName.toString, params.map(p => erase(p.getType, own)))
-        members += key -> Member(params.map(_.getName.toString), doc(trees))
+    def doc(node: NodeWithJavadoc[?]): Option[String] =
+      node.getJavadocComment.map(_.getContent).toScala
 
-      // Local and anonymous classes are not API, and their members would shadow the enclosing
-      // class's under the same binary name.
-      // javac keeps one space after each stripped `*`, which would otherwise indent every line but the first
-      private def doc(trees: Trees): Option[String] =
-        Option(trees.getDocComment(getCurrentPath)).map(_.replaceAll("(?m)^ ", ""))
+    // Members of local and anonymous classes are not reached: only type declarations nested
+    // directly in a type are walked, and `<init>` is what tasty-query names a constructor.
+    def visit(decl: TypeDeclaration[?], binary: String, bounds: Map[String, String]): Unit =
+      doc(decl).foreach(classDocs += binary -> _)
+      val own = bounds ++ typeVarBounds(decl)
+      decl.getMembers.asScala.foreach {
+        case m: MethodDeclaration      => add(binary, m.getNameAsString, m.getParameters.asScala.toList, own ++ typeVarBounds(m), doc(m))
+        case c: ConstructorDeclaration => add(binary, "<init>", c.getParameters.asScala.toList, own ++ typeVarBounds(c), doc(c))
+        case t: TypeDeclaration[?]     => visit(t, s"$binary$$${t.getNameAsString}", own)
+        case _                         => ()
+      }
 
-      override def visitBlock(block: BlockTree, scope: (String, Map[String, String])): Unit = ()
+    def add(binary: String, name: String, params: List[Parameter], bounds: Map[String, String], doc: Option[String]): Unit =
+      val erased = params.map(p => erase(p.getType, bounds) + (if p.isVarArgs then "[]" else ""))
+      members += (binary, name, erased) -> Member(params.map(_.getNameAsString), doc)
 
-    units.foreach(unit => scanner.scan(new TreePath(unit), ("", Map.empty)))
+    unit.getTypes.asScala.foreach(t => visit(t, s"$pkgPrefix${t.getNameAsString}", Map.empty))
     Parsed(classDocs.result(), members.result())
 
-  private def typeVarBounds(params: List[TypeParameterTree]): Map[String, String] =
-    params.map { p =>
-      p.getName.toString -> p.getBounds.asScala.headOption.map(eraseRaw).getOrElse("Object")
+  // Enums and annotations declare no type parameters, and are not `NodeWithTypeParameters`.
+  private def typeVarBounds(node: Any): Map[String, String] =
+    val params = node match
+      case d: NodeWithTypeParameters[?] => d.getTypeParameters.asScala.toList
+      case _                            => Nil
+    params.map { (p: TypeParameter) =>
+      p.getNameAsString -> p.getTypeBound.asScala.headOption.map(_.getNameAsString).getOrElse("Object")
     }.toMap
 
   /** Simple name of a parameter's erasure as written in source, `T extends Foo<T>` → `Foo`. */
-  private def erase(tpe: Tree, bounds: Map[String, String]): String =
+  private def erase(tpe: Type, bounds: Map[String, String]): String =
     tpe match
-      case t: IdentifierTree => bounds.getOrElse(t.getName.toString, t.getName.toString)
-      case t: ArrayTypeTree  => s"${erase(t.getType, bounds)}[]"
-      case _                 => eraseRaw(tpe)
-
-  private def eraseRaw(tpe: Tree): String =
-    tpe match
-      case t: PrimitiveTypeTree     => t.getPrimitiveTypeKind.name.toLowerCase
-      case t: ArrayTypeTree         => s"${eraseRaw(t.getType)}[]"
-      case t: ParameterizedTypeTree => eraseRaw(t.getType)
-      case t: AnnotatedTypeTree     => eraseRaw(t.getUnderlyingType)
-      case t: MemberSelectTree      => t.getIdentifier.toString
-      case t: IdentifierTree        => t.getName.toString
-      case other                    => other.toString
+      case t: PrimitiveType        => t.asString
+      case t: ArrayType            => s"${erase(t.getComponentType, bounds)}[]"
+      case t: ClassOrInterfaceType => bounds.getOrElse(t.getNameAsString, t.getNameAsString)
+      case other                   => other.asString
 
   private def simpleName(erased: String): String =
     val suffix = erased.takeRight(erased.length - erased.replace("[]", "").length)
