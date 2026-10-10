@@ -63,7 +63,7 @@ object lib extends CellarPublishModule {
     mvn"co.fs2::fs2-io:3.13.0",
     mvn"io.get-coursier:interface:1.0.29-M4",
     mvn"ch.epfl.scala::tasty-query:1.9.0",
-    mvn"org.ow2.asm:asm:9.9",
+    mvn"org.ow2.asm:asm:9.11",
     mvn"org.scala-lang:scala3-tasty-inspector_3:3.9.0",
     mvn"com.github.pureconfig::pureconfig-core:0.17.10",
     mvn"org.typelevel::log4cats-core:2.8.0",
