@@ -12,7 +12,7 @@ import scala.quoted.*
 import scala.tasty.inspector.*
 
 object DocstringExtractor:
-  private def isStdlib(name: String): Boolean =
+  private[cellar] def isStdlib(name: String): Boolean =
     name.startsWith("scala3-library") || name.startsWith("scala-library")
 
   /** Fetches the scala stdlib jars matching the compiler's own version via coursier. */

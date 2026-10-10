@@ -412,6 +412,21 @@ class IntegrationTest extends CatsEffectSuite:
         assertNoCompilerCrash(console)
       }
 
+  test("get: JDK class overriding inherited methods resolves on a Java-only classpath"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    safeRun(
+      handlers.GetHandler.run(
+        TestFixtures.javaCoord,
+        "java.util.ArrayList",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+    ).map { code =>
+      assertEquals(code, ExitCode.Success, s"stderr: ${console.errBuf}")
+      assert(console.outBuf.toString.contains("def toArray(): Array[Object]"), s"Output: ${console.outBuf}")
+    }
+
   // ─── list subcommand ─────────────────────────────────────────────────────
 
   test("list: package scala3 fixture lists top-level types"):
