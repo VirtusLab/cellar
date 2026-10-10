@@ -86,7 +86,9 @@ object JavaSources:
     catch case NonFatal(_) => None
 
   private def parse(pkgPrefix: String, text: String): Parsed =
-    val config = ParserConfiguration().setLanguageLevel(LanguageLevel.BLEEDING_EDGE)
+    // Language-level validation reads AST fields reflectively, which the native image strips;
+    // RAW only parses, and the grammar itself already accepts every Java version.
+    val config = ParserConfiguration().setLanguageLevel(LanguageLevel.RAW)
     val unit   = JavaParser(config).parse(text).getResult.get
 
     val classDocs = Map.newBuilder[String, String]
