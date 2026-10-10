@@ -142,6 +142,23 @@ class IntegrationTest extends CatsEffectSuite:
         assert(console.outBuf.toString.nonEmpty)
       }
 
+  test("get: Java member shows its Javadoc and source parameter names"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetHandler
+      .run(
+        TestFixtures.javaCoord,
+        "cellar.fixture.java.CellarJavaInterface.repeat",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        val out = console.outBuf.toString
+        assert(out.contains("def repeat(value: T, times: Int): List[T]"), out)
+        assert(out.contains("Repeats {@code value} the given number of times."), out)
+      }
+
   test("get: nested type Quotes.reflectModule resolves"):
     val console = CapturingConsole()
     given Console[IO] = console

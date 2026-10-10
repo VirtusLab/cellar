@@ -46,6 +46,7 @@ object ContextResource:
                             case Some(_) => IO.unit
                             case None    => logger.warn("classpath entries do not line up with jars; sources unavailable")
                           }
+          _             = JavaSources.register(ctx, sourceJars.getOrElse(SourceJars.empty))
         yield (ctx, classpath, sourceJars.getOrElse(SourceJars.empty))
       }
     }
