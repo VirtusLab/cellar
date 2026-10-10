@@ -7,6 +7,10 @@ import java.util.List;
  */
 public interface CellarJavaInterface<T extends Comparable<T>> {
     T identity(T value);
+
+    /**
+     * Repeats {@code value} the given number of times.
+     */
     List<T> repeat(T value, int times);
     default String describe() {
         return getClass().getSimpleName();

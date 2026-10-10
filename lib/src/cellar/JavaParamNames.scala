@@ -42,7 +42,7 @@ object JavaParamNames:
   /** Java statics are declared on tasty-query's synthetic module class, but they live in the
     * same classfile as the instance members, so the `$` module suffix is dropped.
     */
-  private def binaryName(cls: ClassSymbol): Option[String] =
+  private[cellar] def binaryName(cls: ClassSymbol): Option[String] =
     val name = if cls.isModuleClass then cls.name.toString.stripSuffix("$") else cls.name.toString
     cls.owner match
       case pkg: PackageSymbol => Some(s"${pkg.fullName}.$name")
@@ -105,7 +105,7 @@ object JavaParamNames:
     * Done structurally, without resolving symbols: tasty-query's own erasure throws on some Java
     * generic arrays, and a failure here must only cost the names, never the signature.
     */
-  private def erasedParams(method: TermSymbol, owner: ClassSymbol): Option[List[String]] =
+  private[cellar] def erasedParams(method: TermSymbol, owner: ClassSymbol): Option[List[String]] =
     def clauses(tpe: TypeOrMethodic): List[Type] =
       tpe match
         case t: MethodType => t.paramTypes ++ clauses(t.resultType)

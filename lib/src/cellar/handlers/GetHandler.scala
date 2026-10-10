@@ -50,6 +50,8 @@ object GetHandler:
         for
           _         <- warnShadedDuplicate(fqn, classpath)
           docstring <- coord.fold(IO.pure(Option.empty[String]))(c => DocstringExtractor.extract(jars, c, fqn))
+                         .map(_.orElse(symbols.headOption.flatMap(javaDoc)))
+                         .map(_.orElse(symbols.headOption.flatMap(javaDoc)))
           formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols, docstring, limit, hideInherited, groupInherited))
           _         <- Console[IO].println(formatted)
           _         <- warnScala2(symbols)
@@ -114,3 +116,6 @@ object GetHandler:
     if isScala2 then
       Console[IO].errorln("Note: Scala 2 artifact — type information may be incomplete.")
     else IO.unit
+
+  private def javaDoc(sym: Symbol)(using Context): Option[String] =
+    Option.when(TypePrinter.detectLanguage(sym) == DetectedLanguage.Java)(JavaSources.docFor(sym)).flatten
