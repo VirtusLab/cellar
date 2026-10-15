@@ -54,8 +54,9 @@ object ContextResource:
           sourceJars   <- IO(SourceJars.pair(kept, jarClasspath, full.sourcesJars)).flatTap {
                             case Some(_) => IO.unit
                             case None    => logger.warn("classpath entries do not line up with jars; sources unavailable")
-                          }
-        yield (ctx, classpath, sourceJars.getOrElse(SourceJars.empty))
+                          }.map(_.getOrElse(SourceJars.empty))
+          _             = JavaSources.register(ctx, sourceJars)
+        yield (ctx, classpath, sourceJars)
       }
     }
 

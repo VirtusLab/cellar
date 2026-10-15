@@ -293,6 +293,13 @@ class TypePrinterTest extends CatsEffectSuite:
       result   <- ContextResource.make(jars, jrePaths).use { (ctx, _) => body(ctx) }
     yield result
 
+  private def withJavaSourcesCtx[A](body: Context => IO[A]): IO[A] =
+    TestFixtures.assumeFixturesAvailable()
+    JreClasspath.jrtPath().flatMap { jrePaths =>
+      ContextResource.makeFromCoord(TestFixtures.javaCoord, jrePaths, Seq(TestFixtures.localM2Repo))
+        .use { (ctx, _, _) => body(ctx) }
+    }
+
   // A Java type parameter carries an implicit Nothing lower bound. Printing Nothing as
   // "NothingType" both leaked the internal name and defeated the elision in printTypeParam,
   // yielding `[E >: NothingType <: Comparable[E]]`.
@@ -349,6 +356,16 @@ class TypePrinterTest extends CatsEffectSuite:
         val sig = ctx.findStaticClass("java.util.AbstractMap.SimpleEntry").declarations
           .filter(_.name.toString == "<init>").map(TypePrinter.printSymbolSignature)
         assert(sig.contains("def <init>[K <: Object, V <: Object](entry: Map.Entry[? <: K, ? <: V]): Unit"), sig)
+      }
+    }
+
+  test("printSymbolSignature names abstract Java parameters from the sources jar"):
+    withJavaSourcesCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val fqn = "cellar.fixture.java.CellarJavaInterface"
+        assertEquals(sugarSig(fqn, "identity"), "def identity(value: T): T")
+        assertEquals(sugarSig(fqn, "repeat"), "def repeat(value: T, times: Int): List[T]")
       }
     }
 

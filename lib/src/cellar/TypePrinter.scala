@@ -148,7 +148,7 @@ object TypePrinter:
         if term.isModuleVal then s"$keyword ${term.name}"
         else
           val javaNames =
-            if detectLanguage(term) == DetectedLanguage.Java && term.isMethod then JavaParamNames.namesFor(term)
+            if detectLanguage(term) == DetectedLanguage.Java && term.isMethod then JavaParamNames.namesFor(term).orElse(JavaSources.paramNames(term))
             else None
           s"$keyword ${term.name}${printTopLevelMethodic(term.declaredType, term.paramSymss, javaNames)}"
 
