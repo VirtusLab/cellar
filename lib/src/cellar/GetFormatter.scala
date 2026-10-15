@@ -1,7 +1,7 @@
 package cellar
 
 import tastyquery.Contexts.Context
-import tastyquery.Symbols.{ClassSymbol, Symbol, TermOrTypeSymbol, TermSymbol, TypeSymbol}
+import tastyquery.Symbols.{ClassSymbol, Symbol, TermOrTypeSymbol}
 
 object GetFormatter:
   def formatSymbol(
@@ -13,7 +13,6 @@ object GetFormatter:
   )(using ctx: Context): String =
     val fqn       = displayFqn(sym)
     val signature = TypePrinter.printSymbolSignature(sym)
-    val flags     = renderFlags(sym)
     val origin    = renderOrigin(sym)
     val members   = renderMembers(sym, limit, hideInherited, groupInherited)
     val companion = renderCompanion(sym, limit, groupInherited && !hideInherited)
@@ -25,7 +24,6 @@ object GetFormatter:
     docstring.map(cleanDocstring).filter(_.nonEmpty).foreach { doc =>
       sb.append(s"$doc\n\n")
     }
-    if flags.nonEmpty then sb.append(s"**Flags:** $flags\n")
     sb.append(s"**Origin:** $origin\n")
     members.foreach(m => sb.append(s"**Members:**\n```scala\n$m\n```\n"))
     companion.foreach(c => sb.append(s"**Companion members:**\n```scala\n$c\n```\n"))
@@ -70,32 +68,6 @@ object GetFormatter:
       .filter(_.nonEmpty)
       .mkString("\n")
       .trim
-
-  private def renderFlags(sym: Symbol): String =
-    val flags = sym match
-      case cls: ClassSymbol =>
-        List(
-          if cls.isAbstractClass then Some("abstract") else None,
-          if cls.isTrait then None else None, // trait is implied by kind keyword
-          cls.openLevel match
-            case ol if ol.productPrefix == "Sealed" => Some("sealed")
-            case ol if ol.productPrefix == "Final"  => Some("final")
-            case ol if ol.productPrefix == "Open"   => Some("open")
-            case _                                  => None
-          ,
-          if cls.isCaseClass then Some("case") else None
-        ).flatten
-      case term: TermSymbol =>
-        List(
-          if term.isAbstractMember then Some("abstract") else None,
-          if term.isFinalMember then Some("final") else None,
-          if term.isInline then Some("inline") else None,
-          if term.isGivenOrUsing then Some("given") else None,
-          if term.isImplicit then Some("implicit") else None
-        ).flatten
-      case _: TypeSymbol => Nil
-      case _             => Nil
-    flags.mkString(", ")
 
   private def renderOrigin(sym: Symbol): String =
     sym.owner match
