@@ -95,4 +95,5 @@ object GetSourceHandler:
     def topLevel(s: TermOrTypeSymbol): TermOrTypeSymbol = s.owner match
       case p: TermOrTypeSymbol if !p.isPackage => topLevel(p)
       case _                                   => s
-    topLevel(sym).displayFullName.replace('.', '/') + ".java"
+    // Java statics hang off a synthetic module class `Foo$`; the source file is still `Foo.java`.
+    topLevel(sym).displayFullName.stripSuffix("$").replace('.', '/') + ".java"

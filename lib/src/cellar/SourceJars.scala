@@ -21,10 +21,11 @@ final class SourceJars private (byEntry: List[(ClasspathEntry, Path)]):
       pkg <- top.owner match
                case p: PackageSymbol => Some(SourceJars.packageName(p))
                case _                => None
+      // Java statics live on a synthetic module class `Foo$` that has no classfile of its own.
+      binaries = List(SourceJars.encode(top.name.toString)).flatMap(n => List(n, n.stripSuffix("$"))).distinct
       jar <- byEntry.collectFirst {
                case (entry, jar) if entry.listAllPackages().exists { data =>
-                     data.dotSeparatedName == pkg &&
-                     data.getClassDataByBinaryName(SourceJars.encode(top.name.toString)).isDefined
+                     data.dotSeparatedName == pkg && binaries.exists(data.getClassDataByBinaryName(_).isDefined)
                    } => jar
              }
     yield jar

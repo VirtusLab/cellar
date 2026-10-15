@@ -328,6 +328,23 @@ class IntegrationTest extends CatsEffectSuite:
         assert(out.contains("getDefault"), s"Expected source body in: $out")
       }
 
+  test("get-source: Java static method returns its class's source"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetSourceHandler
+      .run(
+        TestFixtures.javaCoord,
+        "cellar.fixture.java.CellarJavaClass.staticHelper",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success, console.errBuf.toString)
+        val out = console.outBuf.toString
+        assert(out.contains("// cellar/fixture/java/CellarJavaClass.java"), out)
+        assert(out.contains("public static int staticHelper"), out)
+      }
+
   test("get-source: trait with same-file companion returns both"):
     TestFixtures.assumeFixturesAvailable()
     val console = CapturingConsole()
