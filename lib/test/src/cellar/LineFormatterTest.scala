@@ -16,13 +16,13 @@ class LineFormatterTest extends CatsEffectSuite:
       result   <- ContextResource.make(jars, jrePaths).use { (ctx, _) => body(ctx) }
     yield result
 
-  test("formatLine for trait starts with 'trait'"):
+  test("formatLine for a sealed trait starts with 'sealed trait'"):
     withCtx { ctx =>
       IO.blocking {
         given Context = ctx
         val cls  = ctx.findStaticClass("cellar.fixture.scala3.CellarADT")
         val line = LineFormatter.formatLine(cls)
-        assert(line.startsWith("trait"), s"Expected 'trait' prefix in: $line")
+        assert(line.startsWith("sealed trait"), s"Expected 'sealed trait' prefix in: $line")
       }
     }
 
@@ -36,7 +36,7 @@ class LineFormatterTest extends CatsEffectSuite:
       }
     }
 
-  test("formatLine for method symbol starts with 'def'"):
+  test("formatLine for an abstract method starts with 'abstract def'"):
     withCtx { ctx =>
       IO.blocking {
         given Context = ctx
@@ -45,7 +45,7 @@ class LineFormatterTest extends CatsEffectSuite:
         val renderSym = members.find(_.name.toString == "render")
         renderSym.foreach { sym =>
           val line = LineFormatter.formatLine(sym)
-          assert(line.startsWith("def"), s"Expected 'def' prefix: $line")
+          assert(line.startsWith("abstract def"), s"Expected 'abstract def' prefix: $line")
         }
       }
     }

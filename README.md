@@ -407,12 +407,11 @@ profiling {
     Monad.
     Allows composition of dependent effectful functions.
 
-    **Flags:** abstract
     **Origin:** cats.Monad
     **Members:**
     ```scala
-    def pure[A](x: A): F[A]
-    def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B]
+    abstract def pure[A](x: A): F[A]
+    abstract def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B]
     def flatten[A](ffa: F[F[A]]): F[A]
     def untilM[G[_], A](f: F[A])(cond: => F[Boolean])(implicit G: Alternative[G]): F[G[A]]
     def compose[G[_]](implicit evidence$1: Applicative[G]): Applicative[[α] =>> F[G[α]]]
