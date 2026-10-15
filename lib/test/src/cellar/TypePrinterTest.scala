@@ -106,6 +106,105 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature prefixes class and object modifiers (Scala 3)"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val sig = (fqn: String) => TypePrinter.printSymbolSignature(ctx.findStaticClass(fqn))
+        assert(sig("cellar.fixture.scala3.CellarADT").startsWith("sealed trait CellarADT"))
+        assert(sig("cellar.fixture.scala3.CellarA").startsWith("final case class CellarA "))
+        assertEquals(TypePrinter.printSymbolSignature(ctx.findStaticTerm("cellar.fixture.scala3.CellarB")), "case object CellarB")
+      }
+    }
+
+  test("printSymbolSignature prefixes class, object and implicit modifiers (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val adt = ctx.findStaticModuleClass("cellar.fixture.scala2.CellarADT").declarations
+        val sigs = adt.filter(d => d.name.toString.startsWith("CellarA")).map(TypePrinter.printSymbolSignature)
+        assert(sigs.contains("case object CellarAA"), sigs.mkString("\n"))
+        assert(sigs.exists(_.startsWith("final case class CellarAB ")), sigs.mkString("\n"))
+        val instances = ctx.findStaticClass("cellar.fixture.scala2.CellarInstances")
+        val intInstance = instances.declarations.find(_.name.toString == "intInstance").get
+        assertEquals(TypePrinter.printSymbolSignature(intInstance), "implicit val intInstance: CellarTypeClass[Int]")
+      }
+    }
+
+  test("printSymbolSignature renders lazy vals and vars (Scala 3)"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val decls = ctx.findStaticClass("cellar.fixture.scala3.CellarModifiers").declarations
+        val sig   = (name: String) => TypePrinter.printSymbolSignature(decls.find(_.name.toString == name).get)
+        assertEquals(sig("lazyValue"), "lazy val lazyValue: Int")
+        assertEquals(sig("mutable"), "var mutable: Int")
+      }
+    }
+
+  test("printSymbolSignature renders lazy vals, vars and implicit objects (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val decls = ctx.findStaticClass("cellar.fixture.scala2.CellarModifiers").declarations
+        val sigs  = decls.map(TypePrinter.printSymbolSignature)
+        assert(sigs.contains("lazy val lazyValue: Int"), sigs.mkString("\n"))
+        assert(sigs.contains("var mutable: Int"), sigs.mkString("\n"))
+        assert(sigs.contains("implicit object ImplicitObject"), sigs.mkString("\n"))
+      }
+    }
+
+  test("printSymbolSignature does not mark the statics object of a Java abstract class abstract"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val module = ctx.findStaticModuleClass("java.util.AbstractList")
+        assertEquals(TypePrinter.printSymbolSignature(module), "object AbstractList")
+      }
+    }
+
+  test("printSymbolSignature renders an enum and its cases as declared (Scala 3)"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        assertEquals(TypePrinter.printSymbolSignature(ctx.findStaticClass("cellar.fixture.scala3.CellarShape")), "enum CellarShape")
+        val cases = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarShape").declarations
+        val sig   = (name: String) => TypePrinter.printSymbolSignature(cases.find(_.name.toString == name).get)
+        assertEquals(sig("Circle"), "case Circle extends CellarShape")
+        assertEquals(sig("Polygon"), "case Polygon extends CellarShape")
+      }
+    }
+
+  test("printSymbolSignature does not mark a constructor abstract (Scala 3)"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val polygon = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarShape").declarations
+          .collectFirst { case c: tastyquery.Symbols.ClassSymbol if c.name.toString == "Polygon" => c }.get
+        val ctor = polygon.declarations.find(_.name.toString == "<init>").get
+        assertEquals(TypePrinter.printSymbolSignature(ctor), "def <init>(sides: Int): Unit")
+      }
+    }
+
+  test("printSymbolSignature renders a Java enum as enum"):
+    withJavaCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls = ctx.findStaticClass("cellar.fixture.java.CellarJavaEnum")
+        assertEquals(TypePrinter.printSymbolSignature(cls), "enum CellarJavaEnum")
+      }
+    }
+
+  test("printSymbolSignature prefixes abstract and final modifiers (Java)"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val sig = (fqn: String) => TypePrinter.printSymbolSignature(ctx.findStaticClass(fqn))
+        assert(sig("java.util.AbstractList").startsWith("abstract class AbstractList"))
+        assert(sig("java.lang.String").startsWith("final class String"))
+      }
+    }
+
   test("printSymbolSignatureSafe does not throw for Java symbol"):
     withCtx { ctx =>
       IO.blocking {
@@ -123,7 +222,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val cls     = ctx.findStaticClass("cellar.fixture.scala3.CellarCurried")
         val combine = cls.declarations.find(_.name.toString == "combine").get
         val sig     = TypePrinter.printSymbolSignature(combine)
-        assertEquals(sig, "def combine[A, B](a: A)(b: B): B")
+        assertEquals(sig, "abstract def combine[A, B](a: A)(b: B): B")
       }
     }
 
@@ -134,7 +233,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val cls     = ctx.findStaticClass("cellar.fixture.scala2.CellarCurried")
         val combine = cls.declarations.find(_.name.toString == "combine").get
         val sig     = TypePrinter.printSymbolSignature(combine)
-        assertEquals(sig, "def combine[A, B](a: A)(b: B): B")
+        assertEquals(sig, "abstract def combine[A, B](a: A)(b: B): B")
       }
     }
 
@@ -145,7 +244,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val cls  = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded")
         val wrap = cls.declarations.find(_.name.toString == "wrap").get
         val sig  = TypePrinter.printSymbolSignature(wrap)
-        assertEquals(sig, "def wrap[F[_], A](fa: F[A]): F[A]")
+        assertEquals(sig, "abstract def wrap[F[_], A](fa: F[A]): F[A]")
       }
     }
 
@@ -169,7 +268,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val sig     = TypePrinter.printSymbolSignature(compose)
         assertEquals(
           sig,
-          "def compose[F[_], G[_]](bf: CellarBox[F], bg: CellarBox[G]): CellarBox[[A] =>> F[G[A]]]"
+          "abstract def compose[F[_], G[_]](bf: CellarBox[F], bg: CellarBox[G]): CellarBox[[A] =>> F[G[A]]]"
         )
       }
     }
@@ -209,7 +308,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val sig            = TypePrinter.printSymbolSignature(composeBounded)
         assertEquals(
           sig,
-          "def composeBounded[F[_]](bf: CellarBox[F]): CellarBoundedBox[[A <: AnyRef] =>> F[A]]"
+          "abstract def composeBounded[F[_]](bf: CellarBox[F]): CellarBoundedBox[[A <: AnyRef] =>> F[A]]"
         )
       }
     }
@@ -221,7 +320,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val cls     = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded")
         val bounded = cls.declarations.find(_.name.toString == "bounded").get
         val sig     = TypePrinter.printSymbolSignature(bounded)
-        assertEquals(sig, "def bounded[F[_ <: AnyRef]](fa: F[String]): F[String]")
+        assertEquals(sig, "abstract def bounded[F[_ <: AnyRef]](fa: F[String]): F[String]")
       }
     }
 
@@ -232,7 +331,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val cls   = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded")
         val upper = cls.declarations.find(_.name.toString == "upper").get
         val sig   = TypePrinter.printSymbolSignature(upper)
-        assertEquals(sig, "def upper[F[A] <: Iterable[A]](fa: F[Int]): F[Int]")
+        assertEquals(sig, "abstract def upper[F[A] <: Iterable[A]](fa: F[Int]): F[Int]")
       }
     }
 
@@ -243,7 +342,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val cls         = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded")
         val selfBounded = cls.declarations.find(_.name.toString == "selfBounded").get
         val sig         = TypePrinter.printSymbolSignature(selfBounded)
-        assertEquals(sig, "def selfBounded[F[A <: Comparable[A]]](fa: F[String]): F[String]")
+        assertEquals(sig, "abstract def selfBounded[F[A <: Comparable[A]]](fa: F[String]): F[String]")
       }
     }
 
@@ -254,7 +353,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val cls   = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded")
         val bimap = cls.declarations.find(_.name.toString == "bimap").get
         val sig   = TypePrinter.printSymbolSignature(bimap)
-        assertEquals(sig, "def bimap[G[_, _], A, B](g: G[A, B]): G[A, B]")
+        assertEquals(sig, "abstract def bimap[G[_, _], A, B](g: G[A, B]): G[A, B]")
       }
     }
 
@@ -265,7 +364,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val cls  = ctx.findStaticClass("cellar.fixture.scala2.CellarHigherKinded")
         val wrap = cls.declarations.find(_.name.toString == "wrap").get
         val sig  = TypePrinter.printSymbolSignature(wrap)
-        assertEquals(sig, "def wrap[F[_], A](fa: F[A]): F[A]")
+        assertEquals(sig, "abstract def wrap[F[_], A](fa: F[A]): F[A]")
       }
     }
 
@@ -276,7 +375,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val cls     = ctx.findStaticClass("cellar.fixture.scala2.CellarHigherKinded")
         val bounded = cls.declarations.find(_.name.toString == "bounded").get
         val sig     = TypePrinter.printSymbolSignature(bounded)
-        assertEquals(sig, "def bounded[F[_ <: AnyRef]](fa: F[String]): F[String]")
+        assertEquals(sig, "abstract def bounded[F[_ <: AnyRef]](fa: F[String]): F[String]")
       }
     }
 
@@ -287,7 +386,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val cls   = ctx.findStaticClass("cellar.fixture.scala2.CellarHigherKinded")
         val bimap = cls.declarations.find(_.name.toString == "bimap").get
         val sig   = TypePrinter.printSymbolSignature(bimap)
-        assertEquals(sig, "def bimap[G[_, _], A, B](g: G[A, B]): G[A, B]")
+        assertEquals(sig, "abstract def bimap[G[_, _], A, B](g: G[A, B]): G[A, B]")
       }
     }
 
@@ -364,8 +463,8 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val fqn = "cellar.fixture.java.CellarJavaInterface"
-        assertEquals(sugarSig(fqn, "identity"), "def identity(value: T): T")
-        assertEquals(sugarSig(fqn, "repeat"), "def repeat(value: T, times: Int): List[T]")
+        assertEquals(sugarSig(fqn, "identity"), "abstract def identity(value: T): T")
+        assertEquals(sugarSig(fqn, "repeat"), "abstract def repeat(value: T, times: Int): List[T]")
       }
     }
 
@@ -378,11 +477,11 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val fqn = "cellar.fixture.scala3.CellarSugar"
-        assertEquals(sugarSig(fqn, "transform"), "def transform[A, B](f: A => B): B")
-        assertEquals(sugarSig(fqn, "zip"), "def zip[A, B, C](f: (A, B) => C): C")
-        assertEquals(sugarSig(fqn, "nested"), "def nested[A, B, C](f: (A => B) => C): C")
-        assertEquals(sugarSig(fqn, "thunk"), "def thunk[A](f: () => A): A")
-        assertEquals(sugarSig(fqn, "ctx"), "def ctx[A, B](f: A ?=> B): B")
+        assertEquals(sugarSig(fqn, "transform"), "abstract def transform[A, B](f: A => B): B")
+        assertEquals(sugarSig(fqn, "zip"), "abstract def zip[A, B, C](f: (A, B) => C): C")
+        assertEquals(sugarSig(fqn, "nested"), "abstract def nested[A, B, C](f: (A => B) => C): C")
+        assertEquals(sugarSig(fqn, "thunk"), "abstract def thunk[A](f: () => A): A")
+        assertEquals(sugarSig(fqn, "ctx"), "abstract def ctx[A, B](f: A ?=> B): B")
       }
     }
 
@@ -391,9 +490,9 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val fqn = "cellar.fixture.scala3.CellarSugar"
-        assertEquals(sugarSig(fqn, "pair"), "def pair[A, B](t: (A, B)): (A, B)")
-        assertEquals(sugarSig(fqn, "triple"), "def triple[A, B, C](t: (A, B, C)): (A, B, C)")
-        assertEquals(sugarSig(fqn, "tupleArg"), "def tupleArg[A, B](f: ((A, B)) => Boolean): Boolean")
+        assertEquals(sugarSig(fqn, "pair"), "abstract def pair[A, B](t: (A, B)): (A, B)")
+        assertEquals(sugarSig(fqn, "triple"), "abstract def triple[A, B, C](t: (A, B, C)): (A, B, C)")
+        assertEquals(sugarSig(fqn, "tupleArg"), "abstract def tupleArg[A, B](f: ((A, B)) => Boolean): Boolean")
       }
     }
 
@@ -412,7 +511,7 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val sig = sugarSig("cellar.fixture.scala3.CellarSugar", "mapK")
-        assertEquals(sig, "def mapK[F[_], G[_]](f: F ~> G): Unit")
+        assertEquals(sig, "abstract def mapK[F[_], G[_]](f: F ~> G): Unit")
       }
     }
 
@@ -421,7 +520,7 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val sig = sugarSig("cellar.fixture.scala3.CellarSugar", "wildcard")
-        assertEquals(sig, "def wildcard: List[?]")
+        assertEquals(sig, "abstract def wildcard: List[?]")
       }
     }
 
@@ -430,7 +529,7 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val sig = sugarSig("cellar.fixture.scala3.CellarSugar", "boundedWildcard")
-        assertEquals(sig, "def boundedWildcard: List[? <: AnyRef]")
+        assertEquals(sig, "abstract def boundedWildcard: List[? <: AnyRef]")
       }
     }
 
@@ -439,8 +538,8 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val fqn = "cellar.fixture.scala3.CellarSugar"
-        assertEquals(sugarSig(fqn, "withImplicit"), "def withImplicit[A](a: A)(implicit s: CellarShow[A]): A")
-        assertEquals(sugarSig(fqn, "withUsing"), "def withUsing[A](a: A)(using s: CellarShow[A]): A")
+        assertEquals(sugarSig(fqn, "withImplicit"), "abstract def withImplicit[A](a: A)(implicit s: CellarShow[A]): A")
+        assertEquals(sugarSig(fqn, "withUsing"), "abstract def withUsing[A](a: A)(using s: CellarShow[A]): A")
       }
     }
 
@@ -449,8 +548,8 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val fqn = "cellar.fixture.scala3.CellarSugar"
-        assertEquals(sugarSig(fqn, "withDefault"), "def withDefault(a: Int, b: String = ...): String")
-        assertEquals(sugarSig(fqn, "curriedDefault"), "def curriedDefault(a: Int)(b: Int = ...): Int")
+        assertEquals(sugarSig(fqn, "withDefault"), "abstract def withDefault(a: Int, b: String = ...): String")
+        assertEquals(sugarSig(fqn, "curriedDefault"), "abstract def curriedDefault(a: Int)(b: Int = ...): Int")
       }
     }
 
@@ -459,8 +558,8 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val fqn = "cellar.fixture.scala3.CellarSugar"
-        assertEquals(sugarSig(fqn, "withDefault"), "def withDefault(a: Int, b: String = \"b\"): String")
-        assertEquals(sugarSig(fqn, "curriedDefault"), "def curriedDefault(a: Int)(b: Int = a): Int")
+        assertEquals(sugarSig(fqn, "withDefault"), "abstract def withDefault(a: Int, b: String = \"b\"): String")
+        assertEquals(sugarSig(fqn, "curriedDefault"), "abstract def curriedDefault(a: Int)(b: Int = a): Int")
       }
     }
 
@@ -469,8 +568,8 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val fqn = "cellar.fixture.scala2.CellarSugar"
-        assertEquals(sugarSig(fqn, "withDefault"), "def withDefault(a: Int, b: String = \"b\"): String")
-        assertEquals(sugarSig(fqn, "curriedDefault"), "def curriedDefault(a: Int)(b: Int = a): Int")
+        assertEquals(sugarSig(fqn, "withDefault"), "abstract def withDefault(a: Int, b: String = \"b\"): String")
+        assertEquals(sugarSig(fqn, "curriedDefault"), "abstract def curriedDefault(a: Int)(b: Int = a): Int")
       }
     }
 
@@ -480,11 +579,11 @@ class TypePrinterTest extends CatsEffectSuite:
         given Context = ctx
         assertEquals(
           sugarSig("cellar.fixture.scala2.CellarSugar", "withDefault"),
-          "def withDefault(a: Int, b: String = \"b\"): String"
+          "abstract def withDefault(a: Int, b: String = \"b\"): String"
         )
         assertEquals(
           sugarSig("cellar.fixture.scala2.nested.CellarSugar", "withDefault"),
-          "def withDefault(a: Int, b: String = \"nested\"): String"
+          "abstract def withDefault(a: Int, b: String = \"nested\"): String"
         )
       }
     }
@@ -503,8 +602,8 @@ class TypePrinterTest extends CatsEffectSuite:
         val byType = decls(cls, "process").map { sym =>
           TypePrinter.printSymbolSignature(sym) -> (ScalaSources.docFor(sym), ScalaSources.location(sym).map(_.startLine))
         }.toMap
-        assertEquals(byType("def process(value: Int): String"), (Some("/** Int process. */"), Some(5)))
-        assertEquals(byType("def process(value: String): String"), (Some("/** String process. */"), Some(7)))
+        assertEquals(byType("abstract def process(value: Int): String"), (Some("/** Int process. */"), Some(5)))
+        assertEquals(byType("abstract def process(value: String): String"), (Some("/** String process. */"), Some(7)))
       }
     }
 
@@ -631,8 +730,8 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val fqn = "cellar.fixture.scala2.CellarSugar"
-        assertEquals(sugarSig(fqn, "withDefault"), "def withDefault(a: Int, b: String = ...): String")
-        assertEquals(sugarSig(fqn, "curriedDefault"), "def curriedDefault(a: Int)(b: Int = ...): Int")
+        assertEquals(sugarSig(fqn, "withDefault"), "abstract def withDefault(a: Int, b: String = ...): String")
+        assertEquals(sugarSig(fqn, "curriedDefault"), "abstract def curriedDefault(a: Int)(b: Int = ...): Int")
       }
     }
 
@@ -641,10 +740,10 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val fqn = "cellar.fixture.scala2.CellarSugar"
-        assertEquals(sugarSig(fqn, "transform"), "def transform[A, B](f: A => B): B")
-        assertEquals(sugarSig(fqn, "zip"), "def zip[A, B, C](f: (A, B) => C): C")
-        assertEquals(sugarSig(fqn, "nested"), "def nested[A, B, C](f: (A => B) => C): C")
-        assertEquals(sugarSig(fqn, "thunk"), "def thunk[A](f: () => A): A")
+        assertEquals(sugarSig(fqn, "transform"), "abstract def transform[A, B](f: A => B): B")
+        assertEquals(sugarSig(fqn, "zip"), "abstract def zip[A, B, C](f: (A, B) => C): C")
+        assertEquals(sugarSig(fqn, "nested"), "abstract def nested[A, B, C](f: (A => B) => C): C")
+        assertEquals(sugarSig(fqn, "thunk"), "abstract def thunk[A](f: () => A): A")
       }
     }
 
@@ -653,9 +752,9 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val fqn = "cellar.fixture.scala2.CellarSugar"
-        assertEquals(sugarSig(fqn, "pair"), "def pair[A, B](t: (A, B)): (A, B)")
-        assertEquals(sugarSig(fqn, "triple"), "def triple[A, B, C](t: (A, B, C)): (A, B, C)")
-        assertEquals(sugarSig(fqn, "tupleArg"), "def tupleArg[A, B](f: ((A, B)) => Boolean): Boolean")
+        assertEquals(sugarSig(fqn, "pair"), "abstract def pair[A, B](t: (A, B)): (A, B)")
+        assertEquals(sugarSig(fqn, "triple"), "abstract def triple[A, B, C](t: (A, B, C)): (A, B, C)")
+        assertEquals(sugarSig(fqn, "tupleArg"), "abstract def tupleArg[A, B](f: ((A, B)) => Boolean): Boolean")
       }
     }
 
@@ -664,7 +763,7 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val sig = sugarSig("cellar.fixture.scala2.CellarSugar", "wildcard")
-        assertEquals(sig, "def wildcard: List[?]")
+        assertEquals(sig, "abstract def wildcard: List[?]")
       }
     }
 
@@ -673,7 +772,7 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val sig = sugarSig("cellar.fixture.scala2.CellarSugar", "boundedWildcard")
-        assertEquals(sig, "def boundedWildcard: List[? <: AnyRef]")
+        assertEquals(sig, "abstract def boundedWildcard: List[? <: AnyRef]")
       }
     }
 
@@ -683,7 +782,7 @@ class TypePrinterTest extends CatsEffectSuite:
         given Context = ctx
         assertEquals(
           sugarSig("cellar.fixture.scala2.CellarSugar", "withImplicit"),
-          "def withImplicit[A](a: A)(implicit s: CellarShow[A]): A"
+          "abstract def withImplicit[A](a: A)(implicit s: CellarShow[A]): A"
         )
       }
     }

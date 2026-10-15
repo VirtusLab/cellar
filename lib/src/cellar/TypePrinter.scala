@@ -1,6 +1,8 @@
 package cellar
 
 import tastyquery.Contexts.Context
+import tastyquery.Modifiers.{OpenLevel, TermSymbolKind}
+import tastyquery.Names.nme
 import tastyquery.Symbols.{
   ClassSymbol,
   ClassTypeParamSymbol,
@@ -139,19 +141,25 @@ object TypePrinter:
   def printSymbolSignature(sym: tastyquery.Symbols.Symbol)(using ctx: Context): String =
     sym match
       case cls: ClassSymbol =>
-        val kind       = if cls.isTrait then "trait" else if cls.isModuleClass then "object" else "class"
+        val kind =
+          if cls.isTrait then "trait"
+          else if cls.isModuleClass then "object"
+          else if cls.isEnum then (if cls.isCaseClass then "case" else "enum")
+          else "class"
         // A module class is named `Foo$` on the JVM; print the source-level name.
         val name       = if cls.isModuleClass then cls.name.toString.stripSuffix("$") else cls.name.toString
         val typeParams = printClassTypeParams(cls.typeParams)
         // `AnyRef` is how the universal parent prints for a Scala 2 / Java symbol,
         // the same way `Object` is for a Scala 3 one -- neither carries information.
-        val parents    = cls.parents.map(printParent).filterNot(universalParents.contains)
+        val parents =
+          cls.parents.filterNot(p => cls.isEnum && isEnumBase(p)).map(printParent).filterNot(universalParents.contains)
         val extendsStr = if parents.isEmpty then "" else s" extends ${parents.mkString(" with ")}"
-        s"$kind $name$typeParams$extendsStr"
+        s"${classModifiers(cls)}$kind $name$typeParams$extendsStr"
 
       case term: TermSymbol =>
-        val keyword = termKeyword(term)
+        val keyword = termModifiers(term) + termKeyword(term)
         if term.isModuleVal then s"$keyword ${term.name}"
+        else if term.isEnumCase then s"case ${term.name} extends ${printMethodic(term.declaredType)}"
         else
           val lang      = detectLanguage(term)
           val javaNames =
@@ -226,12 +234,45 @@ object TypePrinter:
       // TypeAlias is the other TypeBounds subtype; low == high == the aliased type
       case b: TypeAlias => s" = ${printType(b.low)}"
 
+  /** Space-terminated, so it prepends to the kind keyword as-is; empty when there is nothing to say. */
+  private def classModifiers(cls: ClassSymbol): String =
+    val caseness = if cls.isCaseClass then List("case") else Nil
+    // Every object is final, and the statics module tasty-query synthesizes for a Java abstract
+    // class inherits its abstractness; only `case` tells objects apart.
+    if cls.isModuleClass then caseness.map(_ + " ").mkString
+    // `sealed abstract` / `final case` are how an enum and its cases are encoded, not declared.
+    else if cls.isEnum then ""
+    else
+      val openness = cls.openLevel match
+        case OpenLevel.Sealed => List("sealed")
+        case OpenLevel.Final  => List("final")
+        case _                => Nil
+      // A trait is abstract by definition.
+      val abstractness = if cls.isAbstractClass && !cls.isTrait then List("abstract") else Nil
+      (openness ++ abstractness ++ caseness).map(_ + " ").mkString
+
+  /** Space-terminated, like [[classModifiers]]. */
+  private def termModifiers(sym: TermSymbol)(using Context): String =
+    val implicitness = if sym.isImplicit then "implicit " else ""
+    if sym.isModuleVal then
+      // `implicit` sits on the val that holds an object; `case` on its module class.
+      implicitness + sym.moduleClass.map(classModifiers).getOrElse("")
+    else
+      List(
+        // tasty-query reports every Scala 3 constructor as abstract.
+        Option.when(sym.isAbstractMember && sym.name != nme.Constructor)("abstract "),
+        Option.when(sym.isFinalMember)("final ")
+      ).flatten.mkString + implicitness
+
   private def termKeyword(sym: TermSymbol): String =
     if sym.isGivenOrUsing then "given"
     else if sym.isInline && sym.isMethod then "inline def"
     else if sym.isMethod then "def"
     else if sym.isModuleVal then "object"
-    else "val"
+    else sym.kind match
+      case TermSymbolKind.LazyVal => "lazy val"
+      case TermSymbolKind.Var     => "var"
+      case _                      => "val"
 
   private def printTopLevelMethodic(
       tpe: TypeOrMethodic,
@@ -305,6 +346,16 @@ object TypePrinter:
             if lo.isEmpty && hi.isEmpty then "?" else s"?$lo$hi"
           case _ => "?"
       case t: Type => printType(t)
+
+  /** The supertype every enum gets implicitly, which its declaration never names. */
+  private def isEnumBase(parent: Type): Boolean =
+    parent match
+      case t: AppliedType => isEnumBase(t.tycon)
+      case t: TypeRef =>
+        t.name.toString == "Enum" && (t.prefix match
+          case p: PackageRef => Set("scala.reflect", "java.lang").contains(p.fullyQualifiedName.toString)
+          case _             => false)
+      case _ => false
 
   /** Render a class parent, parenthesising function-arrow sugar so it is valid in `extends` position. */
   private val universalParents = Set("Object", "Any", "AnyRef")
