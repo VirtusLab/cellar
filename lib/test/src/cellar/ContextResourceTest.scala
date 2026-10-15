@@ -46,6 +46,22 @@ class ContextResourceTest extends CatsEffectSuite:
         }
     }
 
+  test("makeFromCoord pairs a Java static member with its class's sources jar"):
+    TestFixtures.assumeFixturesAvailable()
+    JreClasspath.jrtPath().flatMap { jrePaths =>
+      ContextResource
+        .makeFromCoord(TestFixtures.javaCoord, jrePaths, Seq(TestFixtures.localM2Repo))
+        .use { (ctx, _, sourceJars) =>
+          IO.blocking {
+            given tastyquery.Contexts.Context = ctx
+            // Java statics live on tasty-query's synthetic `CellarJavaClass$`, which has no classfile.
+            val statics = ctx.findStaticModuleClass("cellar.fixture.java.CellarJavaClass")
+            val helper  = statics.declarations.find(_.name.toString == "staticHelper").get
+            assert(sourceJars.forSymbol(helper).exists(_.fileName.toString.endsWith("-sources.jar")), "static member")
+          }
+        }
+    }
+
   test("makeFromCoord with bad coordinate raises CoordinateNotFound"):
     val bad = MavenCoordinate("com.nonexistent.x12345", "artifact", "1.0.0")
     JreClasspath.jrtPath().flatMap { jrePaths =>
