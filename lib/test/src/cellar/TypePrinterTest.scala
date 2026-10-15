@@ -461,6 +461,20 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature names a static nested Java interface's parameters from the sources jar"):
+    withSourcesCtx(TestFixtures.javaCoord) { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+
+        // when
+        val sig = sugarSig("cellar.fixture.java.CellarJavaNested.Callback", "call")
+
+        // then
+        assertEquals(sig, "void call(String message)")
+      }
+    }
+
   test("printSymbolSignature names abstract Java parameters from the sources jar"):
     withSourcesCtx(TestFixtures.javaCoord) { ctx =>
       IO.blocking {
