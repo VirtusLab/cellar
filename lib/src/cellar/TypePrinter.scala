@@ -133,13 +133,8 @@ object TypePrinter:
     if printable && expr.length <= MaxDefaultLength then expr else "..."
 
   def printSymbolSignatureSafe(sym: Symbol)(using ctx: Context): String =
-    val lang = detectLanguage(sym)
-    val sig =
-      try printSymbolSignature(sym)
-      catch case _: Exception => s"${sym.name} // [signature unavailable]"
-    lang match
-      case DetectedLanguage.Scala2 => s"$sig // [Scala 2 — limited type information]"
-      case _                       => sig
+    try printSymbolSignature(sym)
+    catch case _: Exception => s"${sym.name} // [signature unavailable]"
 
   def printSymbolSignature(sym: tastyquery.Symbols.Symbol)(using ctx: Context): String =
     sym match

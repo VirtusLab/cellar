@@ -155,7 +155,7 @@ assert_clean s2-get.md
 step "list-external Scala 2: $S2_PKG"
 run s2-list.md list-external $REPO_FLAGS "$S2_COORD" "$S2_PKG"
 assert_contains s2-list.md "${S2_FQN##*.}"
-assert_contains s2-list.md 'Scala 2'
+assert_not_contains s2-list.md 'limited type information'
 assert_clean s2-list.md
 
 step "search-external Scala 2: $S2_SEARCH"

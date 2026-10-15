@@ -53,7 +53,6 @@ object GetHandler:
                          .map(_.orElse(symbols.headOption.flatMap(sourceDoc)))
           formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols, docstring, limit, hideInherited, groupInherited))
           _         <- Console[IO].println(formatted)
-          _         <- warnScala2(symbols)
         yield ExitCode.Success
       case LookupResult.IsPackage =>
         Console[IO].errorln(
@@ -108,13 +107,6 @@ object GetHandler:
         Some(CellarError.ShadedDuplicate(fqn, first, dup))
       catch case _: Exception => None
     else None
-
-  /** Warns to stderr when any resolved symbol is from a Scala 2 artifact. */
-  private def warnScala2(symbols: List[Symbol])(using Console[IO]): IO[Unit] =
-    val isScala2 = symbols.exists(s => TypePrinter.detectLanguage(s) == DetectedLanguage.Scala2)
-    if isScala2 then
-      Console[IO].errorln("Note: Scala 2 artifact — type information may be incomplete.")
-    else IO.unit
 
   // Scala 3 docs come from TASTy, which DocstringExtractor has already read.
   private def sourceDoc(sym: Symbol)(using Context): Option[String] =

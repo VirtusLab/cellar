@@ -274,11 +274,7 @@ class GetFormatterTest extends CatsEffectSuite:
         val cls    = ctx.findStaticClass("cellar.fixture.scala2.CellarSugar")
         val output = GetFormatter.formatSymbol(cls)
         val lines  = output.linesIterator.filter(_.contains("withDefault")).toList
-        assertEquals(
-          lines,
-          List("def withDefault(a: Int, b: String = ...): String // [Scala 2 — limited type information]"),
-          s"Output:\n$output"
-        )
+        assertEquals(lines, List("def withDefault(a: Int, b: String = ...): String"), s"Output:\n$output")
         assert(!output.contains("$default$"), s"Output:\n$output")
       }
     }

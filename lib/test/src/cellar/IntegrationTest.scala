@@ -164,7 +164,7 @@ class IntegrationTest extends CatsEffectSuite:
         assert(!out.contains("trait CellarTypeClass"), out)
       }
 
-  test("get: Scala2 artifact prints Scala 2 note to stderr"):
+  test("get: Scala2 artifact prints no language note to stderr"):
     TestFixtures.assumeFixturesAvailable()
     val console = CapturingConsole()
     given Console[IO] = console
@@ -176,10 +176,7 @@ class IntegrationTest extends CatsEffectSuite:
       )
       .map { code =>
         assertEquals(code, ExitCode.Success)
-        assert(
-          console.errBuf.toString.contains("Scala 2"),
-          s"Stderr: ${console.errBuf}"
-        )
+        assert(!console.errBuf.toString.contains("Scala 2"), s"Stderr: ${console.errBuf}")
       }
 
   test("get: Scala3 artifact does not print Scala 2 note to stderr"):
