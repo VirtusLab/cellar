@@ -3,7 +3,7 @@ package cellar.handlers
 import cats.effect.std.Console
 import cats.effect.{ExitCode, IO}
 import cellar.*
-import coursierapi.Repository
+import coursier.Repository
 import org.typelevel.log4cats.Logger
 
 object MetaHandler:

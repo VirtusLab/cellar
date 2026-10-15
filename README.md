@@ -183,7 +183,7 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 
 Private repositories: credentials from `~/.config/coursier/credentials.properties` (or
 `COURSIER_CONFIG_DIR`) and the `COURSIER_CREDENTIALS` environment variable are read the same way
-the coursier CLI, sbt and Mill read them, and applied to every `--repository` whose host matches.
+the coursier CLI, sbt and Mill read them, and applied to every repository whose host matches.
 See the [coursier credentials docs](https://get-coursier.io/docs/other-credentials).
 
 Diagnostics are written to stderr, never stdout, so `--verbose` and `--debug` are safe to use

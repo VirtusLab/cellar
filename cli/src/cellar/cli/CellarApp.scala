@@ -7,7 +7,7 @@ import cellar.*
 import cellar.handlers.{DepsHandler, GetHandler, GetSourceHandler, ListHandler, MetaHandler, ProjectGetHandler, ProjectListHandler, ProjectSearchHandler, SearchHandler}
 import cellar.profiling.{ProfilingIOApp, PyroscopeSetup, TracingRuntime}
 import com.monovore.decline.*
-import coursierapi.Repository
+import coursier.Repository
 import fs2.io.file.{Files, Path}
 import org.typelevel.log4cats.Logger
 import org.typelevel.otel4s.trace.Tracer
@@ -156,7 +156,7 @@ object CellarApp extends ProfilingIOApp:
   private val javaHomeOpt: Opts[Option[Path]] =
     Opts.option[Path]("java-home", "Use a specific JDK for JRE classpath").orNone
 
-  private val extraReposOpt: Opts[IO[List[Repository]]] =
+  private val extraReposOpt: Opts[List[Repository]] =
     Opts.options[String](
       "repository",
       "Extra Maven repository URL, appended to configured maven.repositories (repeatable)",
@@ -170,10 +170,6 @@ object CellarApp extends ProfilingIOApp:
           Config.global.maven.repositories.traverse(validate("maven.repositories entry")),
           commandLine.traverse(validate("--repository"))
         ).mapN(ExtraRepositories.effective)
-      }
-      .map { repos =>
-        if repos.isEmpty then IO.pure(Nil)
-        else CoursierCredentials.load().map(creds => repos.map(CoursierCredentials.applyTo(_, creds)))
       }
 
   private val limitOpt: Opts[Int] =
@@ -214,14 +210,10 @@ object CellarApp extends ProfilingIOApp:
   private val groupInheritedOpt: Opts[Boolean] =
     Opts.flag("group-inherited", "Group members by declaring type with section headers").orFalse
 
-  private def parseAndResolve(
-      raw: String,
-      extraReposIO: IO[List[Repository]]
-  ): IO[Either[String, (MavenCoordinate, List[Repository])]] =
+  private def parseAndResolve(raw: String, extraRepos: List[Repository]): IO[Either[String, MavenCoordinate]] =
     MavenCoordinate.parse(raw) match
       case Left(err)    => IO.pure(Left(err))
-      case Right(coord) =>
-        extraReposIO.flatMap(extraRepos => coord.resolveLatest(extraRepos).map(c => Right((c, extraRepos))))
+      case Right(coord) => coord.resolveLatest(extraRepos).map(Right(_))
 
   private val getSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("get", "Fetch symbol info from the current project") {
@@ -256,11 +248,11 @@ object CellarApp extends ProfilingIOApp:
   private val getExternalSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("get-external", "Fetch symbol info from a Maven coordinate") {
       (coordArg, symbolArg, memberLimitOpt, hideInheritedOpt, groupInheritedOpt, javaHomeOpt, extraReposOpt, loggerOpt).mapN {
-        (rawCoord, fqn, limit, hideInherited, groupInherited, javaHome, extraReposIO, logger) =>
+        (rawCoord, fqn, limit, hideInherited, groupInherited, javaHome, extraRepos, logger) =>
           traced("get-external") {
-            parseAndResolve(rawCoord, extraReposIO).flatMap {
+            parseAndResolve(rawCoord, extraRepos).flatMap {
               case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-              case Right((coord, extraRepos)) =>
+              case Right(coord) =>
                 GetHandler.run(coord, fqn, javaHome, extraRepos, limit, hideInherited, groupInherited, logger)
             }
           }
@@ -269,11 +261,11 @@ object CellarApp extends ProfilingIOApp:
 
   private val getSourceSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("get-source", "Fetch the source code of a named symbol") {
-      (coordArg, symbolArg, javaHomeOpt, extraReposOpt, loggerOpt).mapN { (rawCoord, fqn, javaHome, extraReposIO, logger) =>
+      (coordArg, symbolArg, javaHomeOpt, extraReposOpt, loggerOpt).mapN { (rawCoord, fqn, javaHome, extraRepos, logger) =>
         traced("get-source") {
-          parseAndResolve(rawCoord, extraReposIO).flatMap {
+          parseAndResolve(rawCoord, extraRepos).flatMap {
             case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-            case Right((coord, extraRepos)) => GetSourceHandler.run(coord, fqn, javaHome, extraRepos, logger)
+            case Right(coord) => GetSourceHandler.run(coord, fqn, javaHome, extraRepos, logger)
           }
         }
       }
@@ -281,11 +273,11 @@ object CellarApp extends ProfilingIOApp:
 
   private val listExternalSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("list-external", "List symbols from a Maven coordinate") {
-      (coordArg, symbolArg, limitOpt, javaHomeOpt, extraReposOpt, loggerOpt).mapN { (rawCoord, fqn, limit, javaHome, extraReposIO, logger) =>
+      (coordArg, symbolArg, limitOpt, javaHomeOpt, extraReposOpt, loggerOpt).mapN { (rawCoord, fqn, limit, javaHome, extraRepos, logger) =>
         traced("list-external") {
-          parseAndResolve(rawCoord, extraReposIO).flatMap {
+          parseAndResolve(rawCoord, extraRepos).flatMap {
             case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-            case Right((coord, extraRepos)) => ListHandler.run(coord, fqn, limit, javaHome, extraRepos, logger)
+            case Right(coord) => ListHandler.run(coord, fqn, limit, javaHome, extraRepos, logger)
           }
         }
       }
@@ -294,11 +286,11 @@ object CellarApp extends ProfilingIOApp:
   private val searchExternalSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("search-external", "Substring search for symbol names from a Maven coordinate") {
       (coordArg, Opts.argument[String]("query"), limitOpt, javaHomeOpt, extraReposOpt, loggerOpt).mapN {
-        (rawCoord, query, limit, javaHome, extraReposIO, logger) =>
+        (rawCoord, query, limit, javaHome, extraRepos, logger) =>
           traced("search-external") {
-            parseAndResolve(rawCoord, extraReposIO).flatMap {
+            parseAndResolve(rawCoord, extraRepos).flatMap {
               case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-              case Right((coord, extraRepos)) => SearchHandler.run(coord, query, limit, javaHome, extraRepos, logger)
+              case Right(coord) => SearchHandler.run(coord, query, limit, javaHome, extraRepos, logger)
             }
           }
       }
@@ -306,11 +298,11 @@ object CellarApp extends ProfilingIOApp:
 
   private val depsSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("deps", "Print the transitive dependency list") {
-      (coordArg, extraReposOpt, loggerOpt).mapN { (rawCoord, extraReposIO, logger) =>
+      (coordArg, extraReposOpt, loggerOpt).mapN { (rawCoord, extraRepos, logger) =>
         traced("deps") {
-          parseAndResolve(rawCoord, extraReposIO).flatMap {
+          parseAndResolve(rawCoord, extraRepos).flatMap {
             case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-            case Right((coord, extraRepos)) => DepsHandler.run(coord, extraRepositories = extraRepos, logger = logger)
+            case Right(coord) => DepsHandler.run(coord, extraRepositories = extraRepos, logger = logger)
           }
         }
       }
@@ -318,11 +310,11 @@ object CellarApp extends ProfilingIOApp:
 
   private val metaSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("meta", "Print POM metadata (name, description, license, SCM, developers)") {
-      (coordArg, extraReposOpt, loggerOpt).mapN { (rawCoord, extraReposIO, logger) =>
+      (coordArg, extraReposOpt, loggerOpt).mapN { (rawCoord, extraRepos, logger) =>
         traced("meta") {
-          parseAndResolve(rawCoord, extraReposIO).flatMap {
+          parseAndResolve(rawCoord, extraRepos).flatMap {
             case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
-            case Right((coord, extraRepos)) => MetaHandler.run(coord, extraRepositories = extraRepos, logger = logger)
+            case Right(coord) => MetaHandler.run(coord, extraRepositories = extraRepos, logger = logger)
           }
         }
       }

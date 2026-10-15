@@ -1,37 +1,28 @@
 package cellar
 
 import cats.effect.IO
-import coursierapi.{Complete, Module, Repository, Versions}
-
-import scala.jdk.CollectionConverters.*
+import coursier.complete.Complete
+import coursier.{Repository, Versions}
 
 object CoordinateCompleter:
   def suggest(coord: MavenCoordinate, extraRepos: Seq[Repository]): IO[List[String]] =
     IO.blocking {
-      val complete = Complete.create().withInput(s"${coord.group}:${coord.artifact}")
-      if extraRepos.nonEmpty then complete.addRepositories(extraRepos*): Unit
-      val completions = complete.complete().getCompletions.asScala.toList
+      def release(artifact: String): Option[String] =
+        Some(Versions().withModule(coord.copy(artifact = artifact).toCoursierModule).addRepositories(extraRepos*).run())
+          .map(_.release0.asString)
+          .filter(_.nonEmpty)
+
+      val complete    = Complete().addRepositories(extraRepos*).copy(input = s"${coord.group}:${coord.artifact}")
+      val completions = complete.complete().unsafeRun()(using complete.cache.ec)._2.toList
 
       val exactMatch = completions.contains(coord.artifact)
 
       if exactMatch then
         // Artifact exists — must be a version problem
-        val versions = Versions.create().withModule(Module.of(coord.group, coord.artifact, java.util.Collections.emptyMap()))
-        if extraRepos.nonEmpty then versions.addRepositories(extraRepos*): Unit
-        val release = versions.versions().getMergedListings.getRelease
-        if release != null && release.nonEmpty then
-          List(s"Artifact exists. Latest version: $release")
-        else Nil
+        release(coord.artifact).map(r => s"Artifact exists. Latest version: $r").toList
       else if completions.nonEmpty then
-        completions.take(5).flatMap { artifactName =>
-          val module = Module.of(coord.group, artifactName, java.util.Collections.emptyMap())
-          val versions = Versions.create().withModule(module)
-          if extraRepos.nonEmpty then versions.addRepositories(extraRepos*): Unit
-          val release = versions.versions().getMergedListings.getRelease
-          if release != null && release.nonEmpty then
-            Some(s"${coord.group}:$artifactName:$release")
-          else
-            Some(s"${coord.group}:$artifactName")
+        completions.take(5).map { artifactName =>
+          release(artifactName).fold(s"${coord.group}:$artifactName")(r => s"${coord.group}:$artifactName:$r")
         }
       else Nil
     }.handleError(_ => Nil)

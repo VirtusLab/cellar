@@ -3,7 +3,7 @@ package cellar
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import cellar.CoursierFetchClient.ResolvedClasspath
-import coursierapi.Repository
+import coursier.Repository
 import fs2.io.file.Path
 import org.typelevel.log4cats.Logger
 import org.typelevel.otel4s.trace.Tracer

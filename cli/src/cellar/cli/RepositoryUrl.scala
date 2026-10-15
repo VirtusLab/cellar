@@ -1,11 +1,11 @@
 package cellar.cli
 
-import coursierapi.MavenRepository
+import coursier.MavenRepository
 
 import java.net.URI
 import scala.util.Try
 
-/** `MavenRepository.of` accepts any string verbatim, so a typo such as a missing scheme survives
+/** `MavenRepository(...)` accepts any string verbatim, so a typo such as a missing scheme survives
   * until resolution fails — and it then fails as a coordinate error, pointing at the coordinate
   * rather than at the repository. Rejecting the URL up front keeps the blame where it belongs.
   */
@@ -31,5 +31,5 @@ object RepositoryUrl:
             case Some(scheme) if scheme != "file" && Option(uri.getHost).forall(_.isEmpty) =>
               Left(s"'$raw' has no host")
             case Some(_) =>
-              Right(MavenRepository.of(trimmed))
+              Right(MavenRepository(trimmed))
         }
