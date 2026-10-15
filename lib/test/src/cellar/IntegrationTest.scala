@@ -126,6 +126,26 @@ class IntegrationTest extends CatsEffectSuite:
         assert(out.contains("object CellarTypeClass"), out)
       }
 
+  test("get-source: Scala 2 same-named source files resolve by package"):
+    TestFixtures.assumeFixturesAvailable()
+    def source(fqn: String): IO[String] =
+      val console = CapturingConsole()
+      given Console[IO] = console
+      handlers.GetSourceHandler
+        .run(TestFixtures.scala2Coord, fqn, extraRepositories = Seq(TestFixtures.localM2Repo))
+        .map { code =>
+          assertEquals(code, ExitCode.Success, console.errBuf.toString)
+          console.outBuf.toString
+        }
+    for
+      outer <- source("cellar.fixture.scala2.CellarSugar")
+      inner <- source("cellar.fixture.scala2.nested.CellarSugar")
+    yield
+      assert(outer.contains("// cellar/fixture/scala2/CellarSugar.scala lines"), outer)
+      assert(outer.contains("def curriedDefault"), outer)
+      assert(inner.contains("// cellar/fixture/scala2/nested/CellarSugar.scala lines 4–6"), inner)
+      assert(!inner.contains("def curriedDefault"), inner)
+
   test("get-source: Scala 2 method returns just its definition"):
     TestFixtures.assumeFixturesAvailable()
     val console = CapturingConsole()

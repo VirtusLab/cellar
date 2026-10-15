@@ -480,6 +480,21 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature takes defaults from the source file of the symbol's own package"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        assertEquals(
+          sugarSig("cellar.fixture.scala2.CellarSugar", "withDefault"),
+          "def withDefault(a: Int, b: String = \"b\"): String"
+        )
+        assertEquals(
+          sugarSig("cellar.fixture.scala2.nested.CellarSugar", "withDefault"),
+          "def withDefault(a: Int, b: String = \"nested\"): String"
+        )
+      }
+    }
+
   test("printSymbolSignature marks parameters that have a default (Scala 2)"):
     withScala2Ctx { ctx =>
       IO.blocking {
