@@ -1,6 +1,6 @@
 package cellar.bench
 
-import cellar.{DetectedLanguage, JavaParamNames, PublicApiFilter, TypePrinter}
+import cellar.{DetectedLanguage, JavaClassfiles, PublicApiFilter, TypePrinter}
 import fs2.io.file.Path
 import tastyquery.Contexts.Context
 import tastyquery.Symbols.{ClassSymbol, TermSymbol}
@@ -49,7 +49,13 @@ object JavaLanguage extends Language:
 
   private def key(term: TermSymbol, owner: ClassSymbol): String =
     if term.isMethod then
-      val erased = JavaParamNames.erasedParams(term, owner).getOrElse(Nil).map(simpleName)
+      val all = JavaClassfiles.erasedParams(term, owner).getOrElse(Nil).map(simpleName)
+      // The descriptor of an inner class's constructor leads with the outer instance, which the
+      // source, and so the printed signature, leaves out.
+      val outer = owner.owner match
+        case c: ClassSymbol if term.name.toString == "<init>" && !c.isModuleClass => Some(c.name.toString)
+        case _                                                                     => None
+      val erased = if outer.isDefined && all.headOption == outer then all.tail else all
       s"method:${term.name}(${erased.mkString(",")})"
     else s"field:${term.name}"
 
