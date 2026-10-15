@@ -1,6 +1,7 @@
 package cellar
 
 import com.github.javaparser.ParserConfiguration.LanguageLevel
+import com.github.javaparser.ast.Node
 import com.github.javaparser.ast.`type`.{ArrayType, ClassOrInterfaceType, PrimitiveType, Type, TypeParameter}
 import com.github.javaparser.ast.body.{ConstructorDeclaration, MethodDeclaration, Parameter, TypeDeclaration}
 import com.github.javaparser.ast.nodeTypes.{NodeWithJavadoc, NodeWithTypeParameters}
@@ -74,7 +75,7 @@ object JavaSources:
     val pkg = if dot < 0 then "" else binary.substring(0, dot).replace('.', '/') + "/"
     s"$pkg$top.java"
 
-  // Sources are a best-effort extra; a jar or file javac cannot parse must only cost names and docs.
+  // Sources are a best-effort extra; an unreadable jar or unparsable file must only cost names and docs.
   private def parseSafe(jar: Path, binary: String): Option[Parsed] =
     try
       Using.resource(ZipFile(jar.toNioPath.toFile)) { zip =>
@@ -117,7 +118,7 @@ object JavaSources:
     Parsed(classDocs.result(), members.result())
 
   // Enums and annotations declare no type parameters, and are not `NodeWithTypeParameters`.
-  private def typeVarBounds(node: Any): Map[String, String] =
+  private def typeVarBounds(node: Node): Map[String, String] =
     val params = node match
       case d: NodeWithTypeParameters[?] => d.getTypeParameters.asScala.toList
       case _                            => Nil
