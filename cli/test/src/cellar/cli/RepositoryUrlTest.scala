@@ -8,7 +8,7 @@ class RepositoryUrlTest extends FunSuite:
     RepositoryUrl.parse(raw).left.getOrElse(fail(s"expected '$raw' to be rejected"))
 
   private def accepted(raw: String): String =
-    RepositoryUrl.parse(raw).fold(err => fail(s"expected '$raw' to be accepted, got: $err"), _.getBase)
+    RepositoryUrl.parse(raw).fold(err => fail(s"expected '$raw' to be accepted, got: $err"), _.root)
 
   test("accepts http, https and file URLs"):
     assertEquals(accepted("https://artifactory.company.com/maven"), "https://artifactory.company.com/maven")

@@ -1,6 +1,6 @@
 package cellar
 
-import coursierapi.{MavenRepository, Repository}
+import coursier.{MavenRepository, Repository}
 
 /** Test fixture coordinates and local-m2 repository accessor.
   *
@@ -16,7 +16,7 @@ object TestFixtures:
   lazy val localM2: String = require("cellar.test.localM2")
 
   lazy val localM2Repo: Repository =
-    MavenRepository.of(s"file://$localM2")
+    MavenRepository(s"file://$localM2")
 
   lazy val javaCoord: MavenCoordinate = MavenCoordinate(
     group    = require("cellar.test.fixtureJavaGroup"),

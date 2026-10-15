@@ -61,7 +61,7 @@ object lib extends CellarPublishModule {
   def mvnDeps = Seq(
     mvn"org.typelevel::cats-effect:3.7.1",
     mvn"co.fs2::fs2-io:3.14.0",
-    mvn"io.get-coursier:interface:1.0.30",
+    mvn"io.get-coursier::coursier:2.1.26",
     tastyQuery,
     mvn"org.ow2.asm:asm:9.11",
     mvn"com.github.javaparser:javaparser-core:3.27.0",

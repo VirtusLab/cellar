@@ -1,6 +1,6 @@
 package cellar
 
-import coursierapi.{MavenRepository, Repository}
+import coursier.{MavenRepository, Repository}
 
 private[cellar] object ExtraRepositories:
 
@@ -9,4 +9,4 @@ private[cellar] object ExtraRepositories:
     * Duplicates collapse to their first occurrence, ignoring a trailing slash.
     */
   def effective(configured: List[MavenRepository], commandLine: List[MavenRepository]): List[Repository] =
-    (configured ++ commandLine).distinctBy(_.getBase.stripSuffix("/"))
+    (configured ++ commandLine).distinctBy(_.root.stripSuffix("/"))

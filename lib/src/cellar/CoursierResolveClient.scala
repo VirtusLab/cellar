@@ -1,10 +1,8 @@
 package cellar
 
 import cats.effect.IO
-import coursierapi.{Cache, Dependency, Fetch, Repository}
+import coursier.{Dependency, Repository, Resolve}
 import org.typelevel.log4cats.Logger
-
-import scala.jdk.CollectionConverters.*
 
 /** Resolved dependency list — a flat sorted sequence of all transitive dependencies. */
 final case class ResolvedDeps(root: MavenCoordinate, deps: Seq[Dependency])
@@ -16,14 +14,15 @@ object CoursierResolveClient:
   )(using logger: Logger[IO] = StderrLogger.off): IO[ResolvedDeps] =
     logger.debug(s"resolving dependency tree for ${coord.render}") *>
       IO.blocking {
-        val dep   = coord.toCoursierDependency
-        val fetch = Fetch.create().addDependencies(dep).withCache(Cache.create())
-        if extraRepositories.nonEmpty then fetch.addRepositories(extraRepositories*): Unit
-        val result = fetch.fetchResult()
-        val deps   = result.getDependencies.asScala.toSeq
-          .sortBy(d => s"${d.getModule.getOrganization}:${d.getModule.getName}:${d.getVersion}")
+        val resolution = Resolve()
+          .addDependencies(coord.toCoursierDependency)
+          .addRepositories(extraRepositories*)
+          .run()
+        val deps = resolution.orderedDependencies
+          .distinctBy(_.moduleVersionConstraint)
+          .sortBy(d => s"${d.module.organization.value}:${d.module.name.value}:${d.versionConstraint.asString}")
         ResolvedDeps(coord, deps)
-      }.handleErrorWith { case e: coursierapi.error.FetchError =>
+      }.handleErrorWith { case e: coursier.error.CoursierError =>
         CoordinateCompleter.suggest(coord, extraRepositories).flatMap { suggestions =>
           IO.raiseError(CellarError.CoordinateNotFound(coord, e, suggestions))
         }

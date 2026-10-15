@@ -2,12 +2,10 @@ package cellar
 
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
-import coursierapi.{Cache, Fetch}
 import fs2.io.file.{Files, Path}
 import org.typelevel.log4cats.Logger
 
 import java.util.zip.ZipFile
-import scala.jdk.CollectionConverters.*
 import scala.quoted.*
 import scala.tasty.inspector.*
 
@@ -22,12 +20,10 @@ object DocstringExtractor:
     // yields "" and the fetch below asks for `scala3-library_3:` with no version at all.
     // Requires the Scala 3 stdlib (3.8+), where `library.properties` carries a 3.x version.
     val scalaVersion = scala.util.Properties.versionNumberString
-    val deps = Seq(
-      coursierapi.Dependency.of("org.scala-lang", "scala3-library_3", scalaVersion)
-    )
-    val fetch = Fetch.create().withCache(Cache.create())
-    deps.foreach(fetch.addDependencies(_))
-    fetch.fetch().asScala.toSeq.map(file => Path.fromNioPath(file.toPath))
+    coursier.Fetch()
+      .addDependencies(MavenCoordinate("org.scala-lang", "scala3-library_3", scalaVersion).toCoursierDependency)
+      .run()
+      .map(file => Path.fromNioPath(file.toPath))
 
   def extract(jars: Seq[Path], coord: MavenCoordinate, fqn: String)(using logger: Logger[IO]): IO[Option[String]] =
     findPrimaryJar(jars, coord) match

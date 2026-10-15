@@ -2,7 +2,7 @@ package cellar
 
 import cats.effect.IO
 import cats.syntax.all.*
-import coursierapi.MavenRepository
+import coursier.MavenRepository
 import fs2.io.file.{Files => Fs2Files, Path}
 import munit.CatsEffectSuite
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
@@ -25,8 +25,8 @@ class ExtraRepositoriesTest extends CatsEffectSuite:
     }
 
   private def bases(configured: List[String], commandLine: List[String]): List[String] =
-    ExtraRepositories.effective(configured.map(MavenRepository.of), commandLine.map(MavenRepository.of)).map {
-      case maven: MavenRepository => maven.getBase
+    ExtraRepositories.effective(configured.map(MavenRepository(_)), commandLine.map(MavenRepository(_))).map {
+      case maven: MavenRepository => maven.root
       case other                  => fail(s"Expected a MavenRepository, got $other")
     }
 
@@ -60,7 +60,7 @@ class ExtraRepositoriesTest extends CatsEffectSuite:
       userConfig = Some(s"""maven.repositories = ["file://${TestFixtures.localM2}"]"""),
       projectConfig = None
     ) { config =>
-      val repositories = ExtraRepositories.effective(config.maven.repositories.map(MavenRepository.of), Nil)
+      val repositories = ExtraRepositories.effective(config.maven.repositories.map(MavenRepository(_)), Nil)
       CoursierFetchClient
         .fetchClasspath(TestFixtures.scala3Coord, repositories)
         .map(paths => assert(paths.nonEmpty, "Expected the fixture JAR to resolve through the configured repository"))

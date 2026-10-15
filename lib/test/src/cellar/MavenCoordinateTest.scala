@@ -15,17 +15,17 @@ class MavenCoordinateTest extends munit.FunSuite:
   test("toCoursierDependency group matches"):
     val coord = MavenCoordinate("org.typelevel", "cats-core_3", "2.10.0")
     val dep   = coord.toCoursierDependency
-    assertEquals(dep.getModule.getOrganization, "org.typelevel")
+    assertEquals(dep.module.organization.value, "org.typelevel")
 
   test("toCoursierDependency artifact matches"):
     val coord = MavenCoordinate("org.typelevel", "cats-core_3", "2.10.0")
     val dep   = coord.toCoursierDependency
-    assertEquals(dep.getModule.getName, "cats-core_3")
+    assertEquals(dep.module.name.value, "cats-core_3")
 
   test("toCoursierDependency version matches"):
     val coord = MavenCoordinate("org.typelevel", "cats-core_3", "2.10.0")
     val dep   = coord.toCoursierDependency
-    assertEquals(dep.getVersion, "2.10.0")
+    assertEquals(dep.versionConstraint.asString, "2.10.0")
 
   test("empty string returns Left"):
     assert(MavenCoordinate.parse("").isLeft)
