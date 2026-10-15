@@ -100,18 +100,27 @@ object JavaTypePrinter:
     ).flatten
     val (typeParams, method) = term.declaredType match
       case p: PolyType =>
-        // A constructor carries its class's type parameters, which Java writes on the class only.
-        val ownParams = if isConstructor then "" else printTypeParams(p.paramNames.map(_.toString).zip(p.paramTypeBounds))
-        (ownParams, p.resultType)
+        // A constructor also carries its class's type parameters, which Java writes on the class.
+        val classParams = if isConstructor then owner.typeParams.map(_.name.toString).toSet else Set.empty[String]
+        val own         = p.paramNames.map(_.toString).zip(p.paramTypeBounds).filterNot((n, _) => classParams(n))
+        (printTypeParams(own), p.resultType)
       case other => ("", other)
     method match
       case m: MethodType =>
+        // An inner class's constructor takes its outer instance first; tasty-query keeps that
+        // parameter when it reads the descriptor, though no source passes it explicitly.
+        val outer = owner.owner match
+          case c: ClassSymbol if isConstructor && !c.isModuleClass => Some(c)
+          case _                                                   => None
+        val dropped = if m.paramTypes.headOption.exists(t => outer.exists(o => isNamed(t, o.displayFullName))) then 1 else 0
+        val types   = m.paramTypes.drop(dropped)
         val names = TypePrinter.javaParamNames(term)
-          .filter(_.length == m.paramNames.length)
-          .getOrElse(m.paramNames.map(_.toString))
+          .map(ns => if ns.length == m.paramTypes.length then ns.drop(dropped) else ns)
+          .filter(_.length == types.length)
+          .getOrElse(m.paramNames.drop(dropped).map(_.toString))
         // `x$N` is tasty-query's stand-in when no name survived compilation; like javap, print
         // the bare type rather than a name nobody wrote.
-        val params = names.zip(m.paramTypes).map { (n, tpe) =>
+        val params = names.zip(types).map { (n, tpe) =>
           if n.startsWith("x$") then printType(tpe) else s"${printType(tpe)} $n"
         }
         val head =

@@ -521,6 +521,30 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature prints what Java source declares where the classfile adds to it"):
+    withJavaCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val fqn      = "cellar.fixture.java.CellarJavaNested"
+        def sigs(cls: tastyquery.Symbols.ClassSymbol, name: String) =
+          cls.declarations.filter(_.name.toString == name).map(TypePrinter.printSymbolSignature)
+        val nested   = ctx.findStaticClass(fqn)
+        val statics  = ctx.findStaticModuleClass(fqn)
+        val bound    = nested.declarations.collectFirst { case c: tastyquery.Symbols.ClassSymbol if c.name.toString == "Bound" => c }.get
+
+        // when
+        val constructors      = sigs(nested, "<init>")
+        val closing           = sigs(statics, "closing")
+        val innerConstructors = sigs(bound, "<init>")
+
+        // then
+        assert(constructors.contains("<T> CellarJavaNested(T value, int count)"), constructors)
+        assertEquals(closing, List("static <C extends AutoCloseable> C closing(C closeable)"))
+        assertEquals(innerConstructors, List("Bound(int size)"))
+      }
+    }
+
   test("printSymbolSignature prints a Java member in Scala syntax when asked to"):
     withJavaCtx { ctx =>
       IO.blocking {
