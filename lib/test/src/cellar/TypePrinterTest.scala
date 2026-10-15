@@ -70,7 +70,7 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
-  test("printSymbolSignatureSafe for Scala2 symbol appends Scala 2 comment"):
+  test("printSymbolSignatureSafe prints a Scala 2 symbol without a language marker"):
     TestFixtures.assumeFixturesAvailable()
     for
       jrePaths <- JreClasspath.jrtPath()
@@ -81,7 +81,7 @@ class TypePrinterTest extends CatsEffectSuite:
                     given Context = ctx
                     val cls = ctx.findStaticClass("cellar.fixture.scala2.CellarTypeClass")
                     val sig = TypePrinter.printSymbolSignatureSafe(cls)
-                    assert(sig.contains("Scala 2"), s"Expected Scala 2 annotation in: $sig")
+                    assertEquals(sig, "trait CellarTypeClass[A]")
                   }
                 }
     yield result
