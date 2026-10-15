@@ -16,6 +16,15 @@ class PublicApiFilterTest extends CatsEffectSuite:
       result   <- ContextResource.make(jars, jrePaths).use { (ctx, _) => body(ctx) }
     yield result
 
+  private def withJavaCtx[A](body: Context => IO[A]): IO[A] =
+    TestFixtures.assumeFixturesAvailable()
+    for
+      jrePaths <- JreClasspath.jrtPath()
+      jars     <- CoursierFetchClient.fetchClasspath(
+                    TestFixtures.javaCoord, Seq(TestFixtures.localM2Repo))
+      result   <- ContextResource.make(jars, jrePaths).use { (ctx, _) => body(ctx) }
+    yield result
+
   test("public method passes filter"):
     withScala3Ctx { ctx =>
       IO.blocking {
@@ -49,5 +58,16 @@ class PublicApiFilterTest extends CatsEffectSuite:
         dollarMembers.foreach { m =>
           assert(!PublicApiFilter.isPublic(m), s"Expected ${m.name} to be filtered")
         }
+      }
+    }
+
+  test("static initializer is filtered"):
+    withJavaCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val statics = ctx.findStaticModuleClass("cellar.fixture.java.CellarJavaClass")
+        val clinits = statics.declarations.filter(_.name.toString == "<clinit>")
+        assert(clinits.nonEmpty, "Fixture must declare a static initializer")
+        clinits.foreach(c => assert(!PublicApiFilter.isPublic(c), "Expected <clinit> to be filtered"))
       }
     }
