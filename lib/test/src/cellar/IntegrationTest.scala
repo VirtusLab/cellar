@@ -225,7 +225,7 @@ class IntegrationTest extends CatsEffectSuite:
       .map { code =>
         assertEquals(code, ExitCode.Success)
         val out = console.outBuf.toString
-        assert(out.contains("def repeat(value: T, times: Int): List[T]"), out)
+        assert(out.contains("List<T> repeat(T value, int times)"), out)
         assert(out.contains("Repeats {@code value} the given number of times."), out)
       }
 
@@ -528,7 +528,7 @@ class IntegrationTest extends CatsEffectSuite:
       )
     ).map { code =>
       assertEquals(code, ExitCode.Success, s"stderr: ${console.errBuf}")
-      assert(console.outBuf.toString.contains("def toArray(): Array[Object]"), s"Output: ${console.outBuf}")
+      assert(console.outBuf.toString.contains("Object[] toArray()"), s"Output: ${console.outBuf}")
     }
 
   // ─── list subcommand ─────────────────────────────────────────────────────

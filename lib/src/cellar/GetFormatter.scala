@@ -17,16 +17,20 @@ object GetFormatter:
     val members   = renderMembers(sym, limit, hideInherited, groupInherited)
     val companion = renderCompanion(sym, limit, groupInherited && !hideInherited)
     val subtypes  = renderSubtypes(sym)
+    val isJava    = TypePrinter.detectLanguage(sym) == DetectedLanguage.Java
+    val fence     = if isJava then "java" else "scala"
+    // Java statics are what tasty-query models as the companion's members.
+    val companionLabel = if isJava then "Static members" else "Companion members"
 
     val sb = new StringBuilder
     sb.append(s"## $fqn\n")
-    sb.append(s"```scala\n$signature\n```\n")
+    sb.append(s"```$fence\n$signature\n```\n")
     docstring.map(cleanDocstring).filter(_.nonEmpty).foreach { doc =>
       sb.append(s"$doc\n\n")
     }
     sb.append(s"**Origin:** $origin\n")
-    members.foreach(m => sb.append(s"**Members:**\n```scala\n$m\n```\n"))
-    companion.foreach(c => sb.append(s"**Companion members:**\n```scala\n$c\n```\n"))
+    members.foreach(m => sb.append(s"**Members:**\n```$fence\n$m\n```\n"))
+    companion.foreach(c => sb.append(s"**$companionLabel:**\n```$fence\n$c\n```\n"))
     subtypes.foreach(s => sb.append(s"**Known subtypes:** $s\n"))
     sb.toString
 
@@ -83,16 +87,19 @@ object GetFormatter:
     sym match
       case cls: ClassSymbol =>
         // --hide-inherited silently wins over --group-inherited
-        if hideInherited then renderFlatMembers(cls.declarations.filter(PublicApiFilter.isPublic).toList, limit)
+        val syntax = TypePrinter.detectLanguage(cls)
+        if hideInherited then renderFlatMembers(cls.declarations.filter(PublicApiFilter.isPublic).toList, limit, syntax)
         else if groupInherited then renderGroupedMembers(cls, limit)
-        else renderFlatMembers(SymbolResolver.collectClassMembers(cls).filter(PublicApiFilter.isPublic), limit)
+        else renderFlatMembers(SymbolResolver.collectClassMembers(cls).filter(PublicApiFilter.isPublic), limit, syntax)
       case _ => None
 
-  private def formatMember(m: TermOrTypeSymbol)(using Context): String =
-    TypePrinter.printSymbolSignatureSafe(m).linesIterator.mkString(" ").trim
+  private def formatMember(m: TermOrTypeSymbol, syntax: DetectedLanguage)(using Context): String =
+    TypePrinter.printSymbolSignatureSafe(m, syntax).linesIterator.mkString(" ").trim
 
-  private def renderFlatMembers(raw: List[TermOrTypeSymbol], limit: Option[Int])(using Context): Option[String] =
-    val members = raw.map(formatMember)
+  private def renderFlatMembers(raw: List[TermOrTypeSymbol], limit: Option[Int], syntax: DetectedLanguage)(using
+      Context
+  ): Option[String] =
+    val members = raw.map(formatMember(_, syntax))
     if members.isEmpty then None
     else limit match
       case Some(n) if members.length > n =>
@@ -101,6 +108,7 @@ object GetFormatter:
         Some(members.mkString("\n"))
 
   private def renderGroupedMembers(cls: ClassSymbol, limit: Option[Int])(using ctx: Context): Option[String] =
+    val syntax = TypePrinter.detectLanguage(cls)
     val linearization =
       try cls.linearization
       catch case _: Exception => List(cls)
@@ -115,7 +123,7 @@ object GetFormatter:
           val dominated = decl.overridingSymbol(cls).exists(_ != decl)
           if !dominated then
             seen += decl
-            Some(formatMember(decl))
+            Some(formatMember(decl, syntax))
           else None
         case _ => None
       }.toList
@@ -148,7 +156,7 @@ object GetFormatter:
       case cls: ClassSymbol =>
         cls.companionClass.flatMap { companion =>
           if groupInherited then renderGroupedMembers(companion, limit)
-          else renderFlatMembers(companion.declarations.filter(PublicApiFilter.isPublic).toList, limit)
+          else renderFlatMembers(companion.declarations.filter(PublicApiFilter.isPublic).toList, limit, TypePrinter.detectLanguage(companion))
         }
       case _ => None
 

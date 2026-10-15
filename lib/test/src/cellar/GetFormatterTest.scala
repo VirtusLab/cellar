@@ -155,7 +155,7 @@ class GetFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls    = ctx.findStaticClass("cellar.fixture.java.CellarJavaClass")
         val output = GetFormatter.formatSymbol(cls)
-        val formatCount = output.linesIterator.count(_.contains("def format("))
+        val formatCount = output.linesIterator.count(_.contains("String format("))
         assertEquals(formatCount, 3, s"Expected 3 format overloads in:\n$output")
       }
     }
@@ -251,7 +251,7 @@ class GetFormatterTest extends CatsEffectSuite:
         // A Java type has no companion `apply`, so the constructors are the only
         // listing that shows how it is built. CellarJavaClass declares exactly one,
         // and a constructor is never inherited, so exactly one must be listed.
-        assertEquals(output.linesIterator.count(_.contains("<init>")), 1, s"Output:\n$output")
+        assertEquals(output.linesIterator.count(_.startsWith("CellarJavaClass(")), 1, s"Output:\n$output")
       }
     }
 
