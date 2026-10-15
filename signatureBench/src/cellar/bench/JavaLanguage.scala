@@ -47,15 +47,10 @@ object JavaLanguage extends Language:
   private def print(sym: ClassSymbol | TermSymbol)(using Context): String =
     TypePrinter.printSymbolSignatureSafe(sym, DetectedLanguage.Java)
 
-  private def key(term: TermSymbol, owner: ClassSymbol): String =
+  private def key(term: TermSymbol, owner: ClassSymbol)(using Context): String =
     if term.isMethod then
-      val all = JavaClassfiles.erasedParams(term, owner).getOrElse(Nil).map(simpleName)
-      // The descriptor of an inner class's constructor leads with the outer instance, which the
-      // source, and so the printed signature, leaves out.
-      val outer = owner.owner match
-        case c: ClassSymbol if term.name.toString == "<init>" && !c.isModuleClass => Some(c.name.toString)
-        case _                                                                     => None
-      val erased = if outer.isDefined && all.headOption == outer then all.tail else all
+      val all    = JavaClassfiles.erasedParams(term, owner).getOrElse(Nil).map(simpleName)
+      val erased = if JavaClassfiles.leadsWithOuterInstance(term) then all.drop(1) else all
       s"method:${term.name}(${erased.mkString(",")})"
     else s"field:${term.name}"
 

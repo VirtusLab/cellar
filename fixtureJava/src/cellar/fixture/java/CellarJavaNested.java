@@ -26,6 +26,14 @@ public class CellarJavaNested {
         public Bound(int size) {}
     }
 
+    public class Linked<E> {
+        public Linked(CellarJavaNested owner, java.util.List<E> items) {}
+    }
+
+    public static class Box<T> {
+        public <U> Box(T value, U extra) {}
+    }
+
     public interface Callback {
         void call(String message);
     }

@@ -8,18 +8,6 @@ import tastyquery.Types.*
   * and protected members.
   */
 object JavaTypePrinter:
-  private val primitives = Map(
-    "Int"     -> "int",
-    "Long"    -> "long",
-    "Boolean" -> "boolean",
-    "Byte"    -> "byte",
-    "Short"   -> "short",
-    "Char"    -> "char",
-    "Float"   -> "float",
-    "Double"  -> "double",
-    "Unit"    -> "void"
-  )
-
   def printSymbolSignature(sym: Symbol)(using ctx: Context): String =
     sym match
       // The module class tasty-query makes for a Java class's statics is no Java declaration of its
@@ -31,9 +19,9 @@ object JavaTypePrinter:
   def printType(tpe: Type)(using ctx: Context): String =
     tpe match
       case t: TypeRef if TypePrinter.isFromJavaObject(t) => "Object"
-      case t: TypeRef if TypePrinter.isScalaPackage(t.prefix) && primitives.contains(t.name.toString) =>
-        primitives(t.name.toString)
       case t: TypeRef if TypePrinter.isScalaPackage(t.prefix) && TypePrinter.universalParents.contains(t.name.toString) => "Object"
+      case t: TypeRef if TypePrinter.isScalaPackage(t.prefix) && JavaClassfiles.primitives.contains(s"scala.${t.name}") =>
+        JavaClassfiles.primitives(s"scala.${t.name}")
       case t: TypeRef => printPrefix(t.prefix).fold(t.name.toString)(p => s"$p.${t.name}")
       case t: AppliedType =>
         t.tycon match
@@ -98,21 +86,19 @@ object JavaTypePrinter:
       Option.when(owner.isTrait && !term.isAbstractMember && !isStatic(term))("default"),
       Option.when(term.isFinalMember)("final")
     ).flatten
-    val (typeParams, method) = term.declaredType match
-      case p: PolyType =>
-        // A constructor also carries its class's type parameters, which Java writes on the class.
-        val classParams = if isConstructor then owner.typeParams.map(_.name.toString).toSet else Set.empty[String]
-        val own         = p.paramNames.map(_.toString).zip(p.paramTypeBounds).filterNot((n, _) => classParams(n))
-        (printTypeParams(own), p.resultType)
-      case other => ("", other)
+    // A constructor also carries its class's type parameters, which Java writes on the class; a
+    // generic constructor of a generic class nests its own after them.
+    def unwrap(tpe: TypeOrMethodic): (List[(String, TypeBounds)], TypeOrMethodic) =
+      tpe match
+        case p: PolyType =>
+          val (rest, method) = unwrap(p.resultType)
+          (p.paramNames.map(_.toString).zip(p.paramTypeBounds) ++ rest, method)
+        case other => (Nil, other)
+    val (allTypeParams, method) = unwrap(term.declaredType)
+    val typeParams = printTypeParams(if isConstructor then allTypeParams.drop(owner.typeParams.size) else allTypeParams)
     method match
       case m: MethodType =>
-        // An inner class's constructor takes its outer instance first; tasty-query keeps that
-        // parameter when it reads the descriptor, though no source passes it explicitly.
-        val outer = owner.owner match
-          case c: ClassSymbol if isConstructor && !c.isModuleClass => Some(c)
-          case _                                                   => None
-        val dropped = if m.paramTypes.headOption.exists(t => outer.exists(o => isNamed(t, o.displayFullName))) then 1 else 0
+        val dropped = if JavaClassfiles.leadsWithOuterInstance(term) then 1 else 0
         val types   = m.paramTypes.drop(dropped)
         val names = TypePrinter.javaParamNames(term)
           .map(ns => if ns.length == m.paramTypes.length then ns.drop(dropped) else ns)
@@ -178,10 +164,14 @@ object JavaTypePrinter:
   private def isNothing(tpe: Type)(using Context): Boolean =
     tpe.isInstanceOf[NothingType] || TypePrinter.printType(tpe) == "Nothing"
 
-  private def isNamed(tpe: Type, fqn: String)(using Context): Boolean =
+  // Compared by name, not by resolving the symbol, which throws for a type missing from the classpath.
+  private def isNamed(tpe: Type, fqn: String): Boolean =
     val tref = tpe match
       case t: AppliedType => t.tycon
       case t              => t
     tref match
-      case t: TypeRef => t.optSymbol.exists(_.displayFullName == fqn)
-      case _          => false
+      case t: TypeRef =>
+        t.prefix match
+          case p: PackageRef => s"${p.fullyQualifiedName}.${t.name}" == fqn
+          case _             => false
+      case _ => false
