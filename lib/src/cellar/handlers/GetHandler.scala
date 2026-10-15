@@ -51,7 +51,6 @@ object GetHandler:
           _         <- warnShadedDuplicate(fqn, classpath)
           docstring <- coord.fold(IO.pure(Option.empty[String]))(c => DocstringExtractor.extract(jars, c, fqn))
                          .map(_.orElse(symbols.headOption.flatMap(javaDoc)))
-                         .map(_.orElse(symbols.headOption.flatMap(javaDoc)))
           formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols, docstring, limit, hideInherited, groupInherited))
           _         <- Console[IO].println(formatted)
           _         <- warnScala2(symbols)
