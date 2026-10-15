@@ -19,8 +19,11 @@ object SourceFetcher:
     val normalizedSource = sourceFilePath.replace('\\', '/')
     Resource.fromAutoCloseable(IO.blocking(ZipFile(jar.toNioPath.toFile))).use { zip =>
       IO.blocking {
+        // A TASTy path carries the build's directory prefix, so entries are matched as path suffixes,
+        // on a `/` boundary, the longest winning: `ResourcePath.scala` is not `Path.scala`.
         zip.entries().asScala
-          .find(e => !e.isDirectory && normalizedSource.endsWith(e.getName))
+          .filter(e => !e.isDirectory && (normalizedSource == e.getName || normalizedSource.endsWith(s"/${e.getName}")))
+          .maxByOption(_.getName.length)
           .map(e => (e.getName, zip.getInputStream(e)))
       }.flatMap {
         case None =>

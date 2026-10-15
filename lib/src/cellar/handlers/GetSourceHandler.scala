@@ -41,12 +41,10 @@ object GetSourceHandler:
             case LookupResult.Found(symbols) =>
               val sym = symbols.head
               IO.blocking((combinedSourceRef(sym)(using ctx), sourceJars.forSymbol(sym))).flatMap {
-                case (None, _) =>
-                  Console[IO].errorln(
-                    s"No source position for '$fqn'."
-                  ).as(ExitCode.Error)
-                case (Some(_), None) =>
+                case (_, None) =>
                   Console[IO].errorln(s"No sources JAR published for the artifact defining '$fqn'.").as(ExitCode.Error)
+                case (None, Some(_)) =>
+                  Console[IO].errorln(s"No source position for '$fqn' in its sources JAR.").as(ExitCode.Error)
                 case (Some(ref), Some(jar)) =>
                   SourceFetcher.fetch(jar, ref.filePath, ref.startLine, ref.endLine).flatMap {
                     case Left(err) =>

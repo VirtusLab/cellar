@@ -116,7 +116,9 @@ object GetHandler:
       Console[IO].errorln("Note: Scala 2 artifact — type information may be incomplete.")
     else IO.unit
 
+  // Scala 3 docs come from TASTy, which DocstringExtractor has already read.
   private def sourceDoc(sym: Symbol)(using Context): Option[String] =
     TypePrinter.detectLanguage(sym) match
-      case DetectedLanguage.Java => JavaSources.docFor(sym)
-      case _                     => ScalaSources.docFor(sym)
+      case DetectedLanguage.Java   => JavaSources.docFor(sym)
+      case DetectedLanguage.Scala2 => ScalaSources.docFor(sym)
+      case DetectedLanguage.Scala3 => None

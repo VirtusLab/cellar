@@ -125,10 +125,12 @@ object TypePrinter:
 
   private val MaxDefaultLength = 40
 
-  /** A default is shown as written, on one line, unless it is too long to read in a signature. */
+  /** A default is shown as written when it is one short line; joining lines could swallow the
+    * rest of the signature into a `//` comment or run statements together.
+    */
   private def printDefault(expr: String): String =
-    val oneLine = expr.linesIterator.map(_.trim).mkString(" ")
-    if oneLine.length <= MaxDefaultLength then oneLine else "..."
+    val printable = !expr.contains('\n') && !expr.contains("//") && !expr.contains("/*")
+    if printable && expr.length <= MaxDefaultLength then expr else "..."
 
   def printSymbolSignatureSafe(sym: Symbol)(using ctx: Context): String =
     val lang = detectLanguage(sym)
@@ -160,8 +162,7 @@ object TypePrinter:
           val javaNames =
             if lang == DetectedLanguage.Java && term.isMethod then JavaParamNames.namesFor(term).orElse(JavaSources.paramNames(term))
             else None
-          val hasDefault = term.paramSymss.exists { case Left(syms) => syms.exists(_.isParamWithDefault); case _ => false }
-          val defaults   = if lang != DetectedLanguage.Java && hasDefault then ScalaSources.defaults(term) else Map.empty
+          val defaults  = if term.hasParamWithDefault then ScalaSources.defaults(term) else Map.empty
           s"$keyword ${term.name}${printTopLevelMethodic(term.declaredType, term.paramSymss, javaNames, defaults)}"
 
       case tm: TypeMemberSymbol =>

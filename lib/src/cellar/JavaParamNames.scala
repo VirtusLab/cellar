@@ -43,9 +43,12 @@ object JavaParamNames:
     * same classfile as the instance members, so the `$` module suffix is dropped.
     */
   private[cellar] def binaryName(cls: ClassSymbol): Option[String] =
-    val name = if cls.isModuleClass then cls.name.toString.stripSuffix("$") else cls.name.toString
+    val decoded = if cls.isModuleClass then cls.name.toString.stripSuffix("$") else cls.name.toString
+    val name    = SourceJars.encode(decoded)
     cls.owner match
-      case pkg: PackageSymbol => Some(s"${pkg.fullName}.$name")
+      case pkg: PackageSymbol =>
+        val pkgName = SourceJars.packageName(pkg)
+        Some(if pkgName.isEmpty then name else s"$pkgName.$name")
       case outer: ClassSymbol => binaryName(outer).map(o => s"$o$$$name")
       case _                  => None
 
