@@ -240,6 +240,12 @@ maven {
   repositories = []
 }
 
+java {
+  # JVM system properties as "key=value" entries, read from the user-level
+  # file only; properties already set (e.g. via -D) take precedence
+  properties = []
+}
+
 mill {
   # Binary to invoke when extracting Mill classpaths
   binary = "./mill"           # env: CELLAR_MILL_BINARY
@@ -306,6 +312,18 @@ list and `repositories = []` clears it for that project. Configuration holds URL
 credentials come from coursier, as described above.
 
 Or via environment: `CELLAR_SBT_BINARY=sbtn cellar get --module core cats.Monad`
+
+Trust a TLS-intercepting proxy's CA. The native binary ignores `JAVA_TOOL_OPTIONS`, so set the
+trust store in `~/.cellar/cellar.conf` (same format as scala-cli's `java.properties`):
+
+```hocon
+java {
+  properties = [
+    "javax.net.ssl.trustStore=/path/to/cacerts",
+    "javax.net.ssl.trustStorePassword=changeit"
+  ]
+}
+```
 
 ## Telemetry
 

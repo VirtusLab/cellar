@@ -125,6 +125,13 @@ object CellarApp extends ProfilingIOApp:
     ) orElse TelemetrySubcommand.opts
 
   override def run(args: List[String]): IO[ExitCode] =
+    Config.global.java.parsed match
+      case Left(error) =>
+        IO.blocking(System.err.println(error)).as(ExitCode.Error)
+      case Right(properties) =>
+        IO(properties.foreach(sys.props.getOrElseUpdate(_, _))) *> runCommand(args)
+
+  private def runCommand(args: List[String]): IO[ExitCode] =
     val versionOpt = Opts
       .flag("version", "Print the version number and exit", short = "V")
       .map(_ => IO.println(s"${BuildInfo.version} ($runtimeLabel, $platformLabel)").as(ExitCode.Success))
