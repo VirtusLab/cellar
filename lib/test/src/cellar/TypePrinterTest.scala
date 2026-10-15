@@ -4,6 +4,7 @@ import cats.effect.IO
 import munit.CatsEffectSuite
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 import tastyquery.Contexts.Context
+import tastyquery.Symbols.{ClassSymbol, Symbol, TermSymbol}
 
 class TypePrinterTest extends CatsEffectSuite:
 
@@ -24,6 +25,12 @@ class TypePrinterTest extends CatsEffectSuite:
                     TestFixtures.scala2Coord, Seq(TestFixtures.localM2Repo))
       result   <- ContextResource.make(jars, jrePaths).use { (ctx, _) => body(ctx) }
     yield result
+
+  private def withSourcesCtx[A](coord: MavenCoordinate)(body: Context => IO[A]): IO[A] =
+    TestFixtures.assumeFixturesAvailable()
+    JreClasspath.jrtPath().flatMap { jrePaths =>
+      ContextResource.makeFromCoord(coord, jrePaths, Seq(TestFixtures.localM2Repo)).use { (ctx, _, _) => body(ctx) }
+    }
 
   test("detectLanguage returns Scala3 for scala3 fixture symbol"):
     withCtx { ctx =>
@@ -293,13 +300,6 @@ class TypePrinterTest extends CatsEffectSuite:
       result   <- ContextResource.make(jars, jrePaths).use { (ctx, _) => body(ctx) }
     yield result
 
-  private def withJavaSourcesCtx[A](body: Context => IO[A]): IO[A] =
-    TestFixtures.assumeFixturesAvailable()
-    JreClasspath.jrtPath().flatMap { jrePaths =>
-      ContextResource.makeFromCoord(TestFixtures.javaCoord, jrePaths, Seq(TestFixtures.localM2Repo))
-        .use { (ctx, _, _) => body(ctx) }
-    }
-
   // A Java type parameter carries an implicit Nothing lower bound. Printing Nothing as
   // "NothingType" both leaked the internal name and defeated the elision in printTypeParam,
   // yielding `[E >: NothingType <: Comparable[E]]`.
@@ -360,7 +360,7 @@ class TypePrinterTest extends CatsEffectSuite:
     }
 
   test("printSymbolSignature names abstract Java parameters from the sources jar"):
-    withJavaSourcesCtx { ctx =>
+    withSourcesCtx(TestFixtures.javaCoord) { ctx =>
       IO.blocking {
         given Context = ctx
         val fqn = "cellar.fixture.java.CellarJavaInterface"
@@ -451,6 +451,178 @@ class TypePrinterTest extends CatsEffectSuite:
         val fqn = "cellar.fixture.scala3.CellarSugar"
         assertEquals(sugarSig(fqn, "withDefault"), "def withDefault(a: Int, b: String = ...): String")
         assertEquals(sugarSig(fqn, "curriedDefault"), "def curriedDefault(a: Int)(b: Int = ...): Int")
+      }
+    }
+
+  test("printSymbolSignature prints default values from the sources jar (Scala 3)"):
+    withSourcesCtx(TestFixtures.scala3Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val fqn = "cellar.fixture.scala3.CellarSugar"
+        assertEquals(sugarSig(fqn, "withDefault"), "def withDefault(a: Int, b: String = \"b\"): String")
+        assertEquals(sugarSig(fqn, "curriedDefault"), "def curriedDefault(a: Int)(b: Int = a): Int")
+      }
+    }
+
+  test("printSymbolSignature prints default values from the sources jar (Scala 2)"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val fqn = "cellar.fixture.scala2.CellarSugar"
+        assertEquals(sugarSig(fqn, "withDefault"), "def withDefault(a: Int, b: String = \"b\"): String")
+        assertEquals(sugarSig(fqn, "curriedDefault"), "def curriedDefault(a: Int)(b: Int = a): Int")
+      }
+    }
+
+  test("printSymbolSignature takes defaults from the source file of the symbol's own package"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        assertEquals(
+          sugarSig("cellar.fixture.scala2.CellarSugar", "withDefault"),
+          "def withDefault(a: Int, b: String = \"b\"): String"
+        )
+        assertEquals(
+          sugarSig("cellar.fixture.scala2.nested.CellarSugar", "withDefault"),
+          "def withDefault(a: Int, b: String = \"nested\"): String"
+        )
+      }
+    }
+
+  private def decls(owner: ClassSymbol, name: String)(using Context): List[Symbol] =
+    owner.declarations.filter(_.name.toString == name)
+
+  private def methodSig(owner: ClassSymbol, name: String)(using Context): String =
+    TypePrinter.printSymbolSignature(decls(owner, name).head)
+
+  test("sources: overloads with the same parameter names take their own Scaladoc and position"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls = ctx.findStaticClass("cellar.fixture.scala2.CellarSources")
+        val byType = decls(cls, "process").map { sym =>
+          TypePrinter.printSymbolSignature(sym) -> (ScalaSources.docFor(sym), ScalaSources.location(sym).map(_.startLine))
+        }.toMap
+        assertEquals(byType("def process(value: Int): String"), (Some("/** Int process. */"), Some(5)))
+        assertEquals(byType("def process(value: String): String"), (Some("/** String process. */"), Some(7)))
+      }
+    }
+
+  test("sources: a val and a type of the same name keep their own Scaladoc"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls  = ctx.findStaticClass("cellar.fixture.scala2.CellarSources")
+        val docs = decls(cls, "Thing").map(s => s.isType -> ScalaSources.docFor(s)).toMap
+        assertEquals(docs, Map(false -> Some("/** Value Thing. */"), true -> Some("/** Type Thing. */")))
+      }
+    }
+
+  test("sources: context-bound evidence does not stop a method from matching its source"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls = ctx.findStaticClass("cellar.fixture.scala2.CellarSources")
+        assert(methodSig(cls, "withBound").contains("b: Int = 3"), methodSig(cls, "withBound"))
+      }
+    }
+
+  test("sources: context bounds and anonymous using clauses match in Scala 3"):
+    withSourcesCtx(TestFixtures.scala3Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls = ctx.findStaticClass("cellar.fixture.scala3.CellarScala3Sources")
+        assert(methodSig(cls, "withBound").contains("b: Int = 3"), methodSig(cls, "withBound"))
+        assert(methodSig(cls, "withUsingDefault").contains("a: Int = 2"), methodSig(cls, "withUsingDefault"))
+      }
+    }
+
+  test("sources: a multi-line default with a comment is elided rather than flattened"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls = ctx.findStaticClass("cellar.fixture.scala2.CellarSources")
+        assertEquals(methodSig(cls, "commented"), "def commented(xs: List[Int] = ...): Int")
+      }
+    }
+
+  test("sources: a Scaladoc is found past an ordinary comment"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls = ctx.findStaticClass("cellar.fixture.scala2.CellarSources")
+        assertEquals(ScalaSources.docFor(decls(cls, "afterComment").head), Some("/** Has a doc. */"))
+      }
+    }
+
+  test("sources: an object nested in a trait is found through its module val"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls  = ctx.findStaticClass("cellar.fixture.scala2.CellarSources")
+        val lone = decls(cls, "Lone").collectFirst { case t: TermSymbol => t }.get
+        assertEquals(ScalaSources.docFor(lone), Some("/** Doc for nested Lone. */"))
+        assertEquals(ScalaSources.location(lone).map(l => (l.startLine, l.endLine)), Some((24, 26)))
+        val module = lone.moduleClass.get
+        assertEquals(methodSig(module, "g"), "def g(a: Int = 4): Int")
+      }
+    }
+
+  test("sources: a written companion apply wins over the case class's synthetic one"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val companion = ctx.findStaticModuleClass("cellar.fixture.scala2.CellarCase")
+        val apply     = decls(companion, "apply").head
+        assertEquals(TypePrinter.printSymbolSignature(apply), "def apply(a: Int, b: String = \"custom\"): CellarCase")
+        assertEquals(ScalaSources.docFor(apply), Some("/** Custom apply. */"))
+        val cls = ctx.findStaticClass("cellar.fixture.scala2.CellarCase")
+        assertEquals(methodSig(cls, "<init>"), "def <init>(a: Int = 1, b: String = \"x\"): Unit")
+      }
+    }
+
+  test("sources: secondary constructors take their own defaults"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls  = ctx.findStaticClass("cellar.fixture.scala2.CellarSecondary")
+        val sigs = decls(cls, "<init>").map(TypePrinter.printSymbolSignature).sorted
+        assertEquals(sigs, List("def <init>(a: Int): Unit", "def <init>(s: String, b: Int = 5): Unit"))
+      }
+    }
+
+  test("sources: a class with a symbolic name is found through its encoded classfile"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls = ctx.findStaticClass("cellar.fixture.scala2.~>")
+        assertEquals(methodSig(cls, "m"), "def m(a: Int = 6): Int")
+        assertEquals(methodSig(cls, "<init>"), "def <init>(x: Int = 5): Unit")
+        assertEquals(ScalaSources.docFor(cls), Some("/** Symbolic class. */"))
+      }
+    }
+
+  test("sources: a case class field has the position of its constructor parameter"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls   = ctx.findStaticModuleClass("cellar.fixture.scala2.CellarADT")
+        val ab    = decls(cls, "CellarAB").collectFirst { case c: ClassSymbol => c }.get
+        val value = decls(ab, "value").head
+        assertEquals(ScalaSources.location(value).map(_.startLine), Some(7))
+      }
+    }
+
+  test("sources: Scala 3 top-level, extension and enum-case defaults"):
+    withSourcesCtx(TestFixtures.scala3Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val holder = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarSources$package")
+        assertEquals(methodSig(holder, "topLevelDefault"), "def topLevelDefault(a: Int, b: Int = 7): Int")
+        assertEquals(methodSig(holder, "plusDefault"), "def plusDefault(x: Int)(y: Int = 1): Int")
+        val color  = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarColor")
+        val custom = decls(color, "Custom").collectFirst { case c: ClassSymbol => c }.get
+        assertEquals(methodSig(custom, "<init>"), "def <init>(r: Int = 255): Unit")
       }
     }
 

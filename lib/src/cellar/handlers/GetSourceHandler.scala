@@ -41,12 +41,10 @@ object GetSourceHandler:
             case LookupResult.Found(symbols) =>
               val sym = symbols.head
               IO.blocking((combinedSourceRef(sym)(using ctx), sourceJars.forSymbol(sym))).flatMap {
-                case (None, _) =>
-                  Console[IO].errorln(
-                    s"No source position for '$fqn'. Only Scala 3 (TASTy) and Java symbols are supported."
-                  ).as(ExitCode.Error)
-                case (Some(_), None) =>
+                case (_, None) =>
                   Console[IO].errorln(s"No sources JAR published for the artifact defining '$fqn'.").as(ExitCode.Error)
+                case (None, Some(_)) =>
+                  Console[IO].errorln(s"No source position for '$fqn' in its sources JAR.").as(ExitCode.Error)
                 case (Some(ref), Some(jar)) =>
                   SourceFetcher.fetch(jar, ref.filePath, ref.startLine, ref.endLine).flatMap {
                     case Left(err) =>
@@ -80,7 +78,7 @@ object GetSourceHandler:
         Some((filePath = p.filePath, startLine = math.min(p.startLine, c.startLine), endLine = math.max(p.endLine, c.endLine), language = p.language))
       case _ => primary
 
-  private def sourceRef(sym: Symbol): Option[SourceRef] =
+  private def sourceRef(sym: Symbol)(using Context): Option[SourceRef] =
     sym.tree.flatMap { t =>
       val pos = t.asInstanceOf[Tree].pos
       if pos.isUnknown || pos.isSynthetic || pos.sourceFile == tastyquery.SourceFile.NoSource then None
@@ -89,7 +87,8 @@ object GetSourceHandler:
       sym match
         case s: TermOrTypeSymbol if s.sourceLanguage == SourceLanguage.Java =>
           Some((filePath = javaSourcePath(s), startLine = 0, endLine = Int.MaxValue, language = "java"))
-        case _ => None
+        case _ =>
+          ScalaSources.location(sym).map(l => (filePath = l.entry, startLine = l.startLine, endLine = l.endLine, language = "scala"))
     }
 
   private def javaSourcePath(sym: TermOrTypeSymbol): String =

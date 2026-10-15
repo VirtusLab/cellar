@@ -93,7 +93,8 @@ object TypePrinter:
   def printMethodic(
       tpe: TypeOrMethodic,
       paramSymss: List[ParamSymbolsClause] = Nil,
-      javaNames: Option[List[String]] = None
+      javaNames: Option[List[String]] = None,
+      defaultValues: Map[String, String] = Map.empty
   )(using ctx: Context): String =
     tpe match
       case t: MethodType =>
@@ -106,20 +107,30 @@ object TypePrinter:
           case _                => Nil
         val names = javaNames.filter(_.length == t.paramNames.length).getOrElse(t.paramNames.map(_.toString))
         val params = names.zip(t.paramTypes).zipWithIndex.map { case ((n, tp), i) =>
-          val default = if defaults.lift(i).contains(true) then " = ..." else ""
+          val default =
+            if defaults.lift(i).contains(true) then s" = ${defaultValues.get(n).map(printDefault).getOrElse("...")}" else ""
           s"$n: ${printType(tp)}$default"
         }
         val paramStr = s"($prefix${params.mkString(", ")})"
         val rest = t.resultType match
-          case _: MethodType | _: PolyType => printMethodic(t.resultType, paramSymss.drop(1), None)
-          case r                           => s": ${printMethodic(r, Nil, None)}"
+          case _: MethodType | _: PolyType => printMethodic(t.resultType, paramSymss.drop(1), None, defaultValues)
+          case r                           => s": ${printMethodic(r, Nil, None, Map.empty)}"
         s"$paramStr$rest"
 
       case t: PolyType =>
         val typeParams = t.paramNames.zip(t.paramTypeBounds).map(printTypeParam)
-        s"[${typeParams.mkString(", ")}]${printMethodic(t.resultType, paramSymss.drop(1), javaNames)}"
+        s"[${typeParams.mkString(", ")}]${printMethodic(t.resultType, paramSymss.drop(1), javaNames, defaultValues)}"
 
       case t: Type => printType(t)
+
+  private val MaxDefaultLength = 40
+
+  /** A default is shown as written when it is one short line; joining lines could swallow the
+    * rest of the signature into a `//` comment or run statements together.
+    */
+  private def printDefault(expr: String): String =
+    val printable = !expr.contains('\n') && !expr.contains("//") && !expr.contains("/*")
+    if printable && expr.length <= MaxDefaultLength then expr else "..."
 
   def printSymbolSignatureSafe(sym: Symbol)(using ctx: Context): String =
     val lang = detectLanguage(sym)
@@ -147,10 +158,12 @@ object TypePrinter:
         val keyword = termKeyword(term)
         if term.isModuleVal then s"$keyword ${term.name}"
         else
+          val lang      = detectLanguage(term)
           val javaNames =
-            if detectLanguage(term) == DetectedLanguage.Java && term.isMethod then JavaParamNames.namesFor(term).orElse(JavaSources.paramNames(term))
+            if lang == DetectedLanguage.Java && term.isMethod then JavaParamNames.namesFor(term).orElse(JavaSources.paramNames(term))
             else None
-          s"$keyword ${term.name}${printTopLevelMethodic(term.declaredType, term.paramSymss, javaNames)}"
+          val defaults  = if term.hasParamWithDefault then ScalaSources.defaults(term) else Map.empty
+          s"$keyword ${term.name}${printTopLevelMethodic(term.declaredType, term.paramSymss, javaNames, defaults)}"
 
       case tm: TypeMemberSymbol =>
         tm.typeDef match
@@ -228,14 +241,15 @@ object TypePrinter:
   private def printTopLevelMethodic(
       tpe: TypeOrMethodic,
       paramSymss: List[ParamSymbolsClause],
-      javaNames: Option[List[String]]
+      javaNames: Option[List[String]],
+      defaultValues: Map[String, String]
   )(using ctx: Context): String =
     tpe match
       case t: Type => s": ${printType(t)}"
       case t: PolyType =>
         val typeParams = t.paramNames.zip(t.paramTypeBounds).map(printTypeParam)
-        s"[${typeParams.mkString(", ")}]${printTopLevelMethodic(t.resultType, paramSymss.drop(1), javaNames)}"
-      case t: MethodType => printMethodic(t, paramSymss, javaNames)
+        s"[${typeParams.mkString(", ")}]${printTopLevelMethodic(t.resultType, paramSymss.drop(1), javaNames, defaultValues)}"
+      case t: MethodType => printMethodic(t, paramSymss, javaNames, defaultValues)
 
   private def printClassTypeParams(params: List[ClassTypeParamSymbol])(using ctx: Context): String =
     if params.isEmpty then ""

@@ -163,9 +163,11 @@ run s2-search.md search-external $REPO_FLAGS "$S2_COORD" "$S2_SEARCH"
 assert_contains s2-search.md "$S2_FQN"
 assert_clean s2-search.md
 
-step "get-source Scala 2 is rejected with a clear message"
-run_expect_fail s2-source.txt get-source $REPO_FLAGS "$S2_COORD" "$S2_FQN"
-assert_contains s2-source.txt 'Only Scala 3 (TASTy) and Java symbols are supported'
+step "get-source Scala 2: $S2_FQN"
+run s2-source.md get-source $REPO_FLAGS "$S2_COORD" "$S2_FQN"
+assert_contains s2-source.md '```scala'
+assert_contains s2-source.md "$S2_SIG"
+assert_clean s2-source.md
 
 # ─── external: Java (bundled JRE path) ────────────────────────────────────
 

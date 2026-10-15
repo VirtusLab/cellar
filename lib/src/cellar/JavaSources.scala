@@ -10,12 +10,10 @@ import fs2.io.file.Path
 import tastyquery.Contexts.Context
 import tastyquery.Symbols.{ClassSymbol, Symbol, TermSymbol}
 
-import java.util.zip.ZipFile
 import java.util.{Collections, WeakHashMap}
 import scala.collection.concurrent.TrieMap
 import scala.jdk.CollectionConverters.*
 import scala.jdk.OptionConverters.*
-import scala.util.Using
 import scala.util.control.NonFatal
 
 /** Parameter names and Javadoc read from the `-sources.jar`, for Java members whose classfile
@@ -76,15 +74,10 @@ object JavaSources:
     s"$pkg$top.java"
 
   // Sources are a best-effort extra; an unreadable jar or unparsable file must only cost names and docs.
+  // A recursive-descent parser can overflow on deeply nested code, which is not `NonFatal`.
   private def parseSafe(jar: Path, binary: String): Option[Parsed] =
-    try
-      Using.resource(ZipFile(jar.toNioPath.toFile)) { zip =>
-        Option(zip.getEntry(sourcePath(binary))).map { entry =>
-          val text = String(zip.getInputStream(entry).readAllBytes(), "UTF-8")
-          parse(binary.take(binary.lastIndexOf('.') + 1), text)
-        }
-      }
-    catch case NonFatal(_) => None
+    try SourceJars.readText(jar, sourcePath(binary)).map(parse(binary.take(binary.lastIndexOf('.') + 1), _))
+    catch case NonFatal(_) | _: StackOverflowError => None
 
   private def parse(pkgPrefix: String, text: String): Parsed =
     // Language-level validation reads AST fields reflectively, which the native image strips;

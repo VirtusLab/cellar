@@ -43,13 +43,19 @@ object JavaParamNames:
     * same classfile as the instance members, so the `$` module suffix is dropped.
     */
   private[cellar] def binaryName(cls: ClassSymbol): Option[String] =
-    val name = if cls.isModuleClass then cls.name.toString.stripSuffix("$") else cls.name.toString
+    val decoded = if cls.isModuleClass then cls.name.toString.stripSuffix("$") else cls.name.toString
+    val name    = SourceJars.encode(decoded)
     cls.owner match
-      case pkg: PackageSymbol => Some(s"${pkg.fullName}.$name")
+      case pkg: PackageSymbol =>
+        val pkgName = SourceJars.packageName(pkg)
+        Some(if pkgName.isEmpty then name else s"$pkgName.$name")
       case outer: ClassSymbol => binaryName(outer).map(o => s"$o$$$name")
       case _                  => None
 
   private def readTable(classpath: Classpath, binary: String): Option[Table] =
+    classBytes(classpath, binary).map(parse)
+
+  private[cellar] def classBytes(classpath: Classpath, binary: String): Option[Array[Byte]] =
     val dot          = binary.lastIndexOf('.')
     val pkg          = if dot < 0 then "" else binary.substring(0, dot)
     val simpleBinary = binary.substring(dot + 1)
@@ -58,7 +64,7 @@ object JavaParamNames:
       .filter(_.dotSeparatedName == pkg)
       .flatMap(_.getClassDataByBinaryName(simpleBinary))
       .find(_.hasClassFile)
-      .map(data => parse(data.readClassFileBytes().unsafeArray))
+      .map(_.readClassFileBytes().unsafeArray)
 
   // A classfile ASM cannot read (newer than it supports, or corrupt) must only cost the names.
   private def readTableSafe(classpath: Classpath, binary: String): Option[Table] =

@@ -56,6 +56,7 @@ object ContextResource:
                             case None    => logger.warn("classpath entries do not line up with jars; sources unavailable")
                           }.map(_.getOrElse(SourceJars.empty))
           _             = JavaSources.register(ctx, sourceJars)
+          _             = ScalaSources.register(ctx, classpath, sourceJars)
         yield (ctx, classpath, sourceJars)
       }
     }

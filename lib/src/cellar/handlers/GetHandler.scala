@@ -50,7 +50,7 @@ object GetHandler:
         for
           _         <- warnShadedDuplicate(fqn, classpath)
           docstring <- coord.fold(IO.pure(Option.empty[String]))(c => DocstringExtractor.extract(jars, c, fqn))
-                         .map(_.orElse(symbols.headOption.flatMap(javaDoc)))
+                         .map(_.orElse(symbols.headOption.flatMap(sourceDoc)))
           formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols, docstring, limit, hideInherited, groupInherited))
           _         <- Console[IO].println(formatted)
           _         <- warnScala2(symbols)
@@ -116,5 +116,9 @@ object GetHandler:
       Console[IO].errorln("Note: Scala 2 artifact — type information may be incomplete.")
     else IO.unit
 
-  private def javaDoc(sym: Symbol)(using Context): Option[String] =
-    Option.when(TypePrinter.detectLanguage(sym) == DetectedLanguage.Java)(JavaSources.docFor(sym)).flatten
+  // Scala 3 docs come from TASTy, which DocstringExtractor has already read.
+  private def sourceDoc(sym: Symbol)(using Context): Option[String] =
+    TypePrinter.detectLanguage(sym) match
+      case DetectedLanguage.Java   => JavaSources.docFor(sym)
+      case DetectedLanguage.Scala2 => ScalaSources.docFor(sym)
+      case DetectedLanguage.Scala3 => None
