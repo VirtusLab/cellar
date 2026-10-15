@@ -7,6 +7,9 @@ import java.util.List;
  * A concrete generic Java class implementing CellarJavaInterface.
  */
 public class CellarJavaClass<T extends Comparable<T>> implements CellarJavaInterface<T> {
+    // Non-constant initializer, so javac emits a <clinit> for the filter to hide.
+    public static final List<String> LABELS = List.of("cellar");
+
     private final T defaultValue;
 
     public CellarJavaClass(T defaultValue) {
