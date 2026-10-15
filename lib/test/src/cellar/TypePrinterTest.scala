@@ -25,6 +25,12 @@ class TypePrinterTest extends CatsEffectSuite:
       result   <- ContextResource.make(jars, jrePaths).use { (ctx, _) => body(ctx) }
     yield result
 
+  private def withSourcesCtx[A](coord: MavenCoordinate)(body: Context => IO[A]): IO[A] =
+    TestFixtures.assumeFixturesAvailable()
+    JreClasspath.jrtPath().flatMap { jrePaths =>
+      ContextResource.makeFromCoord(coord, jrePaths, Seq(TestFixtures.localM2Repo)).use { (ctx, _, _) => body(ctx) }
+    }
+
   test("detectLanguage returns Scala3 for scala3 fixture symbol"):
     withCtx { ctx =>
       IO.blocking {
@@ -451,6 +457,26 @@ class TypePrinterTest extends CatsEffectSuite:
         val fqn = "cellar.fixture.scala3.CellarSugar"
         assertEquals(sugarSig(fqn, "withDefault"), "def withDefault(a: Int, b: String = ...): String")
         assertEquals(sugarSig(fqn, "curriedDefault"), "def curriedDefault(a: Int)(b: Int = ...): Int")
+      }
+    }
+
+  test("printSymbolSignature prints default values from the sources jar (Scala 3)"):
+    withSourcesCtx(TestFixtures.scala3Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val fqn = "cellar.fixture.scala3.CellarSugar"
+        assertEquals(sugarSig(fqn, "withDefault"), "def withDefault(a: Int, b: String = \"b\"): String")
+        assertEquals(sugarSig(fqn, "curriedDefault"), "def curriedDefault(a: Int)(b: Int = a): Int")
+      }
+    }
+
+  test("printSymbolSignature prints default values from the sources jar (Scala 2)"):
+    withSourcesCtx(TestFixtures.scala2Coord) { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val fqn = "cellar.fixture.scala2.CellarSugar"
+        assertEquals(sugarSig(fqn, "withDefault"), "def withDefault(a: Int, b: String = \"b\"): String")
+        assertEquals(sugarSig(fqn, "curriedDefault"), "def curriedDefault(a: Int)(b: Int = a): Int")
       }
     }
 

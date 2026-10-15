@@ -50,6 +50,9 @@ object JavaParamNames:
       case _                  => None
 
   private def readTable(classpath: Classpath, binary: String): Option[Table] =
+    classBytes(classpath, binary).map(parse)
+
+  private[cellar] def classBytes(classpath: Classpath, binary: String): Option[Array[Byte]] =
     val dot          = binary.lastIndexOf('.')
     val pkg          = if dot < 0 then "" else binary.substring(0, dot)
     val simpleBinary = binary.substring(dot + 1)
@@ -58,7 +61,7 @@ object JavaParamNames:
       .filter(_.dotSeparatedName == pkg)
       .flatMap(_.getClassDataByBinaryName(simpleBinary))
       .find(_.hasClassFile)
-      .map(data => parse(data.readClassFileBytes().unsafeArray))
+      .map(_.readClassFileBytes().unsafeArray)
 
   // A classfile ASM cannot read (newer than it supports, or corrupt) must only cost the names.
   private def readTableSafe(classpath: Classpath, binary: String): Option[Table] =

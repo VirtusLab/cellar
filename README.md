@@ -18,9 +18,9 @@ Cellar gives agents — and humans — a single shell command that returns exact
 
 | Format | Support |
 |---|---|
-| Scala 3 (TASTy) | Full — signatures, flags, companions, sealed hierarchies, givens, extensions, docstrings |
-| Scala 2 (pickles) | Best-effort — type information may be incomplete |
-| Java (.class) | Good — signatures, members |
+| Scala 3 (TASTy) | Full — signatures, flags, companions, sealed hierarchies, givens, extensions, docstrings; default values from the `-sources.jar` |
+| Scala 2 (pickles) | Good — signatures, members; default values, docstrings and source positions from the `-sources.jar` |
+| Java (.class) | Good — signatures, members; parameter names and Javadoc from the `-sources.jar` when the classfile lacks them |
 
 ## Installation
 

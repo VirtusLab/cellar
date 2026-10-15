@@ -91,6 +91,59 @@ class IntegrationTest extends CatsEffectSuite:
         assert(console.outBuf.toString.nonEmpty)
       }
 
+  test("get: Scala 2 member shows its Scaladoc and default value"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetHandler
+      .run(
+        TestFixtures.scala2Coord,
+        "cellar.fixture.scala2.CellarSugar.withDefault",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        val out = console.outBuf.toString
+        assert(out.contains("def withDefault(a: Int, b: String = \"b\"): String"), out)
+        assert(out.contains("Takes a default for `b`."), out)
+      }
+
+  test("get-source: Scala 2 trait with same-file companion returns both"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetSourceHandler
+      .run(
+        TestFixtures.scala2Coord,
+        "cellar.fixture.scala2.CellarTypeClass",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        val out = console.outBuf.toString
+        assert(out.contains("// cellar/fixture/scala2/CellarTypeClass.scala lines 4–12"), out)
+        assert(out.contains("trait CellarTypeClass[A]"), out)
+        assert(out.contains("object CellarTypeClass"), out)
+      }
+
+  test("get-source: Scala 2 method returns just its definition"):
+    TestFixtures.assumeFixturesAvailable()
+    val console = CapturingConsole()
+    given Console[IO] = console
+    handlers.GetSourceHandler
+      .run(
+        TestFixtures.scala2Coord,
+        "cellar.fixture.scala2.CellarTypeClass.describe",
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        assertEquals(code, ExitCode.Success)
+        val out = console.outBuf.toString
+        assert(out.contains("lines 5–5"), out)
+        assert(out.contains("def describe(a: A): String"), out)
+        assert(!out.contains("trait CellarTypeClass"), out)
+      }
+
   test("get: Scala2 artifact prints Scala 2 note to stderr"):
     TestFixtures.assumeFixturesAvailable()
     val console = CapturingConsole()
