@@ -510,6 +510,15 @@ Scalafix runs `OrganizeImports` and a `DisableSyntax` rule that bans `java.nio.f
 
 Where JDK interop genuinely requires `java.nio` (`JreClasspath`, for instance), suppress the rule with `// scalafix:off DisableSyntax.javaNioFile` above the `package` clause and say why.
 
+### Signature benchmark
+
+Compares the signatures cellar prints with the declarations in published sources jars and writes a Markdown report of the differences:
+
+```sh
+./mill signatureBench.run java                                      # default libraries
+./mill signatureBench.run java org.apache.commons:commons-lang3:3.17.0
+```
+
 ### Installing a local build with Nix
 
 ```sh
