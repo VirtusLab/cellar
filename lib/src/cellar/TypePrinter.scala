@@ -131,7 +131,7 @@ object TypePrinter:
 
   private[cellar] def javaParamNames(term: TermSymbol)(using Context): Option[List[String]] =
     if detectLanguage(term) == DetectedLanguage.Java && term.isMethod then
-      JavaParamNames.namesFor(term).orElse(JavaSources.paramNames(term))
+      JavaClassfiles.namesFor(term).orElse(JavaSources.paramNames(term))
     else None
 
   private val MaxDefaultLength = 40

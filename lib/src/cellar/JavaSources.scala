@@ -41,7 +41,7 @@ object JavaSources:
     sym match
       case cls: ClassSymbol =>
         for
-          binary <- JavaParamNames.binaryName(cls)
+          binary <- JavaClassfiles.binaryName(cls)
           parsed <- parsedFor(cls, binary)
           doc    <- parsed.classDocs.get(binary)
         yield doc
@@ -53,9 +53,9 @@ object JavaSources:
       owner  <- method.owner match
                   case c: ClassSymbol => Some(c)
                   case _              => None
-      binary <- JavaParamNames.binaryName(owner)
+      binary <- JavaClassfiles.binaryName(owner)
       parsed <- parsedFor(owner, binary)
-      erased <- JavaParamNames.erasedParams(method, owner)
+      erased <- JavaClassfiles.erasedParams(method, owner)
       member <- parsed.members.get((binary, method.name.toString, erased.map(simpleName)))
     yield member
 

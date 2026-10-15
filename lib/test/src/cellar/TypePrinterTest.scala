@@ -532,6 +532,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val nested   = ctx.findStaticClass(fqn)
         val statics  = ctx.findStaticModuleClass(fqn)
         val bound    = nested.declarations.collectFirst { case c: tastyquery.Symbols.ClassSymbol if c.name.toString == "Bound" => c }.get
+        val hidden   = statics.declarations.collectFirst { case c: tastyquery.Symbols.ClassSymbol if c.name.toString == "Hidden" => c }.get
 
         // when
         val constructors      = sigs(nested, "<init>")
@@ -540,6 +541,8 @@ class TypePrinterTest extends CatsEffectSuite:
 
         // then
         assert(constructors.contains("<T> CellarJavaNested(T value, int count)"), constructors)
+        assert(constructors.contains("CellarJavaNested(String... names)"), constructors)
+        assertEquals(TypePrinter.printSymbolSignature(hidden), "protected static class Hidden")
         assertEquals(closing, List("static <C extends AutoCloseable> C closing(C closeable)"))
         assertEquals(innerConstructors, List("Bound(int size)"))
       }

@@ -72,7 +72,7 @@ object JavaTypePrinter:
       else if parents.headOption.exists(isNamed(_, "java.lang.Enum")) then "enum"
       else "class"
     val modifiers = List(
-      Option.when(isProtected(cls))("protected"),
+      Option.when(isProtected(cls) || JavaClassfiles.isProtectedNested(cls))("protected"),
       Option.when(isStatic(cls))("static"),
       Option.when(kind == "class" && cls.isAbstractClass)("abstract"),
       Option.when(kind == "class" && cls.openLevel.productPrefix == "Final")("final")
@@ -120,14 +120,23 @@ object JavaTypePrinter:
           .getOrElse(m.paramNames.drop(dropped).map(_.toString))
         // `x$N` is tasty-query's stand-in when no name survived compilation; like javap, print
         // the bare type rather than a name nobody wrote.
-        val params = names.zip(types).map { (n, tpe) =>
-          if n.startsWith("x$") then printType(tpe) else s"${printType(tpe)} $n"
+        val varargs = isConstructor && JavaClassfiles.isVarargs(term)
+        val params = names.zip(types).zipWithIndex.map { case ((n, tpe), i) =>
+          val rendered = if varargs && i == types.length - 1 then printVarargs(tpe) else printType(tpe)
+          if n.startsWith("x$") then rendered else s"$rendered $n"
         }
         val head =
           if isConstructor then owner.name.toString.stripSuffix("$")
           else s"${returnType(m.resultType)} ${term.name}"
         (modifiers ++ Option.when(typeParams.nonEmpty)(typeParams) :+ s"$head(${params.mkString(", ")})").mkString(" ")
       case _ => TypePrinter.printScalaSignature(term)
+
+  // tasty-query turns a varargs method's last parameter into a RepeatedType, but leaves a
+  // constructor's as the array it is in the descriptor.
+  private def printVarargs(tpe: Type)(using Context): String =
+    tpe match
+      case t: AppliedType if t.args.sizeIs == 1 => s"${printArg(t.args.head)}..."
+      case t                                     => printType(t)
 
   private def printField(term: TermSymbol)(using Context): String =
     val modifiers = List(
