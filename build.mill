@@ -62,13 +62,29 @@ object lib extends CellarPublishModule {
     mvn"org.typelevel::cats-effect:3.7.1",
     mvn"co.fs2::fs2-io:3.13.0",
     mvn"io.get-coursier:interface:1.0.29-M4",
-    mvn"ch.epfl.scala::tasty-query:1.9.0",
+    tastyQuery,
     mvn"org.ow2.asm:asm:9.9",
     mvn"org.scala-lang:scala3-tasty-inspector_3:3.9.0",
     mvn"com.github.pureconfig::pureconfig-core:0.17.10",
     mvn"org.typelevel::log4cats-core:2.8.0",
     mvn"org.typelevel::otel4s-core-trace:1.1.0"
   )
+
+  def tastyQuery = mvn"ch.epfl.scala::tasty-query:1.9.0"
+
+  // tasty-query needs the Scala stdlib on every classpath it reads; pin the one it is built against.
+  def generatedSources = Task {
+    val jars    = defaultResolver().classpath(Seq(bindDependency()(tastyQuery)))
+    val version = jars.map(_.path.last).collectFirst { case s"scala-library-$v.jar" => v }.get
+    os.write(
+      Task.dest / "TastyQueryStdlib.scala",
+      s"""package cellar
+         |private[cellar] object TastyQueryStdlib:
+         |  val version = "$version"
+         |""".stripMargin
+    )
+    super.generatedSources() ++ Seq(PathRef(Task.dest))
+  }
 
 
   object test extends ScalaTests with TestModule.Munit {

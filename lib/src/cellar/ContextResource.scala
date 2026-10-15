@@ -18,14 +18,23 @@ object ContextResource:
   ): Resource[IO, (Context, Classpath)] =
     makeWithSources(ResolvedClasspath(jars, Map.empty), jreClasspath).map((ctx, cp, _) => (ctx, cp))
 
-  def makeWithSources(resolved: ResolvedClasspath, jreClasspath: Classpath)(using
+  /** Adds the Scala stdlib when `resolved` lacks one (Java-only artifacts and projects), since
+    * tasty-query reads Java's `int` and `T[]` as `scala.Int` and `scala.Array`. `extraRepositories`
+    * are only used to fetch it.
+    */
+  def makeWithSources(
+      resolved: ResolvedClasspath,
+      jreClasspath: Classpath,
+      extraRepositories: Seq[Repository] = Seq.empty
+  )(using
       tracer: Tracer[IO],
       logger: Logger[IO] = StderrLogger.off
   ): Resource[IO, (Context, Classpath, SourceJars)] =
-    val jars = resolved.jars
     Resource.eval {
       tracer.span("tasty.context.init").surround {
         for
+          full         <- withScalaLibrary(resolved, extraRepositories)
+          jars          = full.jars
           _            <- logger.debug(s"loading ${jars.size} jar(s)")
           _            <- jars.traverse_(j => logger.debug(s"  $j"))
           loaded       <- IO.blocking(readClasspathRobust(jars.toList)).adaptError { case e =>
@@ -42,13 +51,27 @@ object ContextResource:
           classpath    = jreClasspath ++ jarClasspath
           ctx          <- IO.blocking(Context.initialize(classpath))
           _             = JavaParamNames.register(ctx, classpath)
-          sourceJars   <- IO(SourceJars.pair(kept, jarClasspath, resolved.sourcesJars)).flatTap {
+          sourceJars   <- IO(SourceJars.pair(kept, jarClasspath, full.sourcesJars)).flatTap {
                             case Some(_) => IO.unit
                             case None    => logger.warn("classpath entries do not line up with jars; sources unavailable")
                           }
         yield (ctx, classpath, sourceJars.getOrElse(SourceJars.empty))
       }
     }
+
+  private def withScalaLibrary(resolved: ResolvedClasspath, extraRepositories: Seq[Repository])(using
+      Tracer[IO],
+      Logger[IO]
+  ): IO[ResolvedClasspath] =
+    if resolved.jars.exists(j => DocstringExtractor.isStdlib(j.fileName.toString)) then IO.pure(resolved)
+    else
+      val stdlib = MavenCoordinate("org.scala-lang", "scala-library", TastyQueryStdlib.version)
+      CoursierFetchClient
+        .fetchClasspathWithSources(stdlib, extraRepositories)
+        .map(s => ResolvedClasspath(resolved.jars ++ s.jars, resolved.sourcesJars ++ s.sourcesJars))
+        .handleErrorWith(e =>
+          Logger[IO].warn(s"could not fetch ${stdlib.render}; Java members may fail to resolve: ${e.getMessage}").as(resolved)
+        )
 
   /** Reads the classpath, excluding paths that cause `MatchError` in tasty-query
     * (e.g. vendor-injected JRT modules such as the Azul CRS client). Returns the excluded paths
@@ -76,10 +99,12 @@ object ContextResource:
       logger: Logger[IO] = StderrLogger.off
   ): Resource[IO, (Context, Classpath, SourceJars)] =
     Resource.eval(CoursierFetchClient.fetchClasspathWithSources(coord, extraRepositories)).flatMap { resolved =>
-      makeWithSources(resolved, jreClasspath).evalMap { (ctx, classpath, sourceJars) =>
+      makeWithSources(resolved, jreClasspath, extraRepositories).evalMap { (ctx, classpath, sourceJars) =>
         IO.blocking {
           if resolved.jars.nonEmpty then
-            val jarEntries = classpath.filter(_.toString.endsWith(".jar"))
+            // Only the artifact's own jars: the stdlib `makeWithSources` may add always has symbols.
+            val artifactJars = resolved.jars.map(_.toString).toSet
+            val jarEntries   = classpath.filter(e => artifactJars(e.toString))
             val hasSymbols = jarEntries.exists { entry =>
               try ctx.findSymbolsByClasspathEntry(entry).nonEmpty
               catch case _: Exception => false
