@@ -29,10 +29,13 @@ object DocstringExtractor:
     findPrimaryJar(jars, coord) match
       case None =>
         logger.debug(s"no primary jar for ${coord.artifact} among ${jars.size} fetched jars").as(None)
-      case Some(primaryJar) =>
-        bundledJre.use { jre =>
-          candidateTastyEntries(fqn).collectFirstSomeM(extractAndInspect(primaryJar, _, jars, fqn, jre))
-        }
+      case Some(primaryJar) => extractFrom(primaryJar, jars, fqn)
+
+  /** The docstring of `fqn` from the TASTy in `jar`, the jar the symbol was loaded from. */
+  def extractFrom(jar: Path, jars: Seq[Path], fqn: String)(using logger: Logger[IO]): IO[Option[String]] =
+    bundledJre.use { jre =>
+      candidateTastyEntries(fqn).collectFirstSomeM(extractAndInspect(jar, _, jars, fqn, jre))
+    }
 
   /** The JDK classes dotc needs, for native-image only.
     *

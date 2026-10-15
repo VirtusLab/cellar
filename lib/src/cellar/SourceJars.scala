@@ -6,6 +6,7 @@ import tastyquery.Contexts.Context
 import tastyquery.Symbols.{ClassSymbol, PackageSymbol, Symbol, TermOrTypeSymbol, TermSymbol}
 
 import java.util.zip.ZipFile
+import scala.collection.concurrent.TrieMap
 import scala.reflect.NameTransformer
 import scala.util.Using
 
@@ -13,9 +14,18 @@ import scala.util.Using
   * entry the symbol was loaded from, which for an inherited or transitive member is not the jar
   * the user named.
   */
-final class SourceJars private (byEntry: List[(ClasspathEntry, Path)]):
-  // Classpath order, because the first entry defining a class is the one tasty-query loaded it from.
+final class SourceJars private (
+    entries: List[(ClasspathEntry, Path)],
+    paired: Map[Path, Path],
+    resolve: Path => Option[Path]
+):
+  private val resolved = TrieMap.empty[Path, Option[Path]]
+
   def forSymbol(sym: Symbol): Option[Path] =
+    jarFor(sym).flatMap(jar => paired.get(jar).orElse(resolved.getOrElseUpdate(jar, resolve(jar))))
+
+  /** The classpath jar (or directory) the symbol's top-level class was loaded from. */
+  def jarFor(sym: Symbol): Option[Path] =
     for
       top <- SourceJars.topLevelOwner(sym)
       pkg <- top.owner match
@@ -23,7 +33,8 @@ final class SourceJars private (byEntry: List[(ClasspathEntry, Path)]):
                case _                => None
       // Java statics live on a synthetic module class `Foo$` that has no classfile of its own.
       binaries = List(SourceJars.encode(top.name.toString)).flatMap(n => List(n, n.stripSuffix("$"))).distinct
-      jar <- byEntry.collectFirst {
+      // Classpath order, because the first entry defining a class is the one tasty-query loaded it from.
+      jar <- entries.collectFirst {
                case (entry, jar) if entry.listAllPackages().exists { data =>
                      data.dotSeparatedName == pkg && binaries.exists(data.getClassDataByBinaryName(_).isDefined)
                    } => jar
@@ -31,15 +42,19 @@ final class SourceJars private (byEntry: List[(ClasspathEntry, Path)]):
     yield jar
 
 object SourceJars:
-  val empty: SourceJars = new SourceJars(Nil)
+  val empty: SourceJars = new SourceJars(Nil, Map.empty, _ => None)
 
   /** `ClasspathLoaders.read` yields one entry per path, in order; anything else means the pairing
-    * would be a guess, so the caller gets `None` rather than wrong sources.
+    * would be a guess, so the caller gets `None` rather than wrong sources. A jar missing from
+    * `sourcesJars` is looked up with `resolve` the first time a symbol needs it.
     */
-  def pair(jars: List[Path], entries: Classpath, sourcesJars: Map[Path, Path]): Option[SourceJars] =
-    Option.when(jars.length == entries.length) {
-      new SourceJars(jars.zip(entries).flatMap((jar, entry) => sourcesJars.get(jar).map(entry -> _)))
-    }
+  def pair(
+      jars: List[Path],
+      entries: Classpath,
+      sourcesJars: Map[Path, Path],
+      resolve: Path => Option[Path] = _ => None
+  ): Option[SourceJars] =
+    Option.when(jars.length == entries.length)(new SourceJars(entries.zip(jars), sourcesJars, resolve))
 
   /** The dotted package name as the classpath spells it, `""` for the root and empty packages. */
   private[cellar] def packageName(pkg: PackageSymbol): String =

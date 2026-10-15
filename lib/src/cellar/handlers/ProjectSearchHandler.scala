@@ -21,7 +21,7 @@ object ProjectSearchHandler:
       logger: Logger[IO] = StderrLogger.off
   )(using Console[IO], Tracer[IO]): IO[ExitCode] =
     given Logger[IO] = logger
-    ProjectHandler.run(javaHome, cwd, module, noCache, config, testScope) { (ctx, classpath, jreClasspath) =>
+    ProjectHandler.run(javaHome, cwd, module, noCache, config, testScope) { (ctx, classpath, jreClasspath, _) =>
       given Context = ctx
       SearchHandler.runCore(query, limit, classpath, jreClasspath)
     }

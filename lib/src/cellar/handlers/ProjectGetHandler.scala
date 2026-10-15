@@ -23,7 +23,7 @@ object ProjectGetHandler:
       logger: Logger[IO] = StderrLogger.off
   )(using Console[IO], Tracer[IO]): IO[ExitCode] =
     given Logger[IO] = logger
-    ProjectHandler.run(javaHome, cwd, module, noCache, config, testScope) { (ctx, classpath, _) =>
+    ProjectHandler.run(javaHome, cwd, module, noCache, config, testScope) { (ctx, classpath, _, sourceJars) =>
       given Context = ctx
-      GetHandler.runCore(fqn, classpath, coord = None, limit, hideInherited, groupInherited, logger)
+      GetHandler.runCore(fqn, classpath, coord = None, sourceJars, limit, hideInherited, groupInherited, logger)
     }

@@ -337,6 +337,25 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         }
     }
 
+  test("E2E scala-cli: get shows a dependency's default values and docs from its sources jar"):
+    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
+    withTempDir { dir =>
+      val console = CapturingConsole()
+      given Console[IO] = console
+      IO.blocking(Files.writeString(dir.resolve("Main.scala").toNioPath,
+        """//> using dep org.scalameta::munit:1.0.4
+          |object Main:
+          |  def run: Unit = ()
+          |""".stripMargin
+      )) >>
+        handlers.ProjectGetHandler.run("munit.Assertions.assertEquals", module = None, cwd = Some(dir)).map { code =>
+          assertEquals(code, ExitCode.Success, s"Stderr: ${console.errBuf}")
+          val out = console.outBuf.toString
+          assert(out.contains("clue: => Any = \"values are not the same\""), s"Output: $out")
+          assert(out.contains("Asserts that two elements are equal"), s"Output: $out")
+        }
+    }
+
   test("E2E scala-cli: --test resolves symbol from test-only dependency"):
     isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
     withTempDir { dir =>

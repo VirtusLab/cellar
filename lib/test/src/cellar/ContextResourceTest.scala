@@ -62,6 +62,26 @@ class ContextResourceTest extends CatsEffectSuite:
         }
     }
 
+  test("makeWithSources resolves a jar's sources only when a symbol needs them, once"):
+    TestFixtures.assumeFixturesAvailable()
+    var asked = List.empty[fs2.io.file.Path]
+    for
+      jrePaths <- JreClasspath.jrtPath()
+      resolved <- CoursierFetchClient.fetchClasspathWithSources(TestFixtures.javaCoord, Seq(TestFixtures.localM2Repo))
+      unpaired  = resolved.copy(sourcesJars = Map.empty)
+      result   <- ContextResource
+                    .makeWithSources(unpaired, jrePaths, resolveSources = jar => { asked = jar :: asked; resolved.sourcesJars.get(jar) })
+                    .use { (ctx, _, sourceJars) =>
+                      IO.blocking {
+                        assertEquals(asked, Nil)
+                        val cls = ctx.findStaticClass("cellar.fixture.java.CellarJavaClass")
+                        assert(sourceJars.forSymbol(cls).exists(_.fileName.toString.endsWith("-sources.jar")))
+                        assert(sourceJars.forSymbol(cls).isDefined)
+                        assertEquals(asked.map(_.fileName.toString), List("cellar-fixture-java-0.1.0-SNAPSHOT.jar"))
+                      }
+                    }
+    yield result
+
   test("makeFromCoord with bad coordinate raises CoordinateNotFound"):
     val bad = MavenCoordinate("com.nonexistent.x12345", "artifact", "1.0.0")
     JreClasspath.jrtPath().flatMap { jrePaths =>

@@ -26,9 +26,9 @@ object GetHandler:
     val program =
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
-        result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, classpath, _) =>
+        result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, classpath, sourceJars) =>
           given Context = ctx
-          runCore(fqn, classpath, Some(coord), limit, hideInherited, groupInherited, logger)
+          runCore(fqn, classpath, Some(coord), sourceJars, limit, hideInherited, groupInherited, logger)
         }
       yield result
 
@@ -38,6 +38,7 @@ object GetHandler:
       fqn: String,
       classpath: Classpath,
       coord: Option[MavenCoordinate],
+      sourceJars: SourceJars,
       limit: Option[Int] = None,
       hideInherited: Boolean = false,
       groupInherited: Boolean = false,
@@ -49,7 +50,7 @@ object GetHandler:
         val jars = classpath.filter(_.toString.endsWith(".jar")).map(e => Path(e.toString)).toSeq
         for
           _         <- warnShadedDuplicate(fqn, classpath)
-          docstring <- coord.fold(IO.pure(Option.empty[String]))(c => DocstringExtractor.extract(jars, c, fqn))
+          docstring <- tastyDoc(fqn, symbols, jars, coord, sourceJars)
                          .map(_.orElse(symbols.headOption.flatMap(sourceDoc)))
           formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols, docstring, limit, hideInherited, groupInherited))
           _         <- Console[IO].println(formatted)
@@ -107,6 +108,19 @@ object GetHandler:
         Some(CellarError.ShadedDuplicate(fqn, first, dup))
       catch case _: Exception => None
     else None
+
+  // The jar the symbol was loaded from, rather than the coordinate's own jar, so that a project
+  // classpath (no coordinate) and transitive symbols get their docstring too.
+  private def tastyDoc(
+      fqn: String,
+      symbols: List[Symbol],
+      jars: Seq[Path],
+      coord: Option[MavenCoordinate],
+      sourceJars: SourceJars
+  )(using Logger[IO]): IO[Option[String]] =
+    symbols.headOption.flatMap(sourceJars.jarFor).filter(_.fileName.toString.endsWith(".jar")) match
+      case Some(jar) => DocstringExtractor.extractFrom(jar, jars, fqn)
+      case None      => coord.fold(IO.pure(Option.empty[String]))(DocstringExtractor.extract(jars, _, fqn))
 
   // Scala 3 docs come from TASTy, which DocstringExtractor has already read.
   private def sourceDoc(sym: Symbol)(using Context): Option[String] =

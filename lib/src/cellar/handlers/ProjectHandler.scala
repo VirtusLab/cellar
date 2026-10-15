@@ -16,7 +16,7 @@ object ProjectHandler:
       noCache: Boolean,
       config: Config = Config.global,
       testScope: Boolean = false
-  )(body: (Context, Classpath, Classpath) => IO[ExitCode])(using
+  )(body: (Context, Classpath, Classpath, SourceJars) => IO[ExitCode])(using
       tracer: Tracer[IO],
       logger: Logger[IO] = StderrLogger.off
   ): IO[ExitCode] =
@@ -24,8 +24,8 @@ object ProjectHandler:
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
         workingDir   = cwd.getOrElse(Path(System.getProperty("user.dir")))
-        result       <- build.ProjectClasspathProvider.provide(workingDir, module, jreClasspath, noCache, config, testScope).use { (ctx, classpath) =>
-          body(ctx, classpath, jreClasspath)
+        result       <- build.ProjectClasspathProvider.provide(workingDir, module, jreClasspath, noCache, config, testScope).use { (ctx, classpath, sourceJars) =>
+          body(ctx, classpath, jreClasspath, sourceJars)
         }
       yield result
 

@@ -21,7 +21,7 @@ object ProjectListHandler:
       logger: Logger[IO] = StderrLogger.off
   )(using Console[IO], Tracer[IO]): IO[ExitCode] =
     given Logger[IO] = logger
-    ProjectHandler.run(javaHome, cwd, module, noCache, config, testScope) { (ctx, _, _) =>
+    ProjectHandler.run(javaHome, cwd, module, noCache, config, testScope) { (ctx, _, _, _) =>
       given Context = ctx
       ListHandler.runCore(fqn, limit, coord = None)
     }
