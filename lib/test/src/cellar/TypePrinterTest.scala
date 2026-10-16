@@ -131,6 +131,22 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature names an object scope as the object"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val origin = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarScope").declarations
+          .find(_.name.toString == "origin").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(origin)
+
+        // then
+        assertEquals(sig, "private[CellarScope] def origin: Int")
+      }
+    }
+
   test("printSymbolSignature renders lazy vals and vars (Scala 3)"):
     withCtx { ctx =>
       IO.blocking {
