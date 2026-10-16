@@ -213,7 +213,8 @@ object TypePrinter:
           cls.parents.filterNot(p => cls.isEnum && isEnumBase(p) || isCompilerAddedParent(cls, p))
             .map(printParent).filterNot(universalParents.contains)
         val extendsStr = if parents.isEmpty then "" else s" extends ${parents.mkString(" with ")}"
-        s"${visibilityModifier(cls)}${classModifiers(cls)}$kind $name$typeParams$extendsStr"
+        val implicitness = if isImplicitClass(cls) then "implicit " else ""
+        s"${visibilityModifier(cls)}$implicitness${classModifiers(cls)}$kind $name$typeParams$extendsStr"
 
       case term: TermSymbol =>
         val keyword = visibilityModifier(term) + termModifiers(term) + termKeyword(term)
@@ -305,6 +306,18 @@ object TypePrinter:
         val params = tl.paramNames.zip(tl.paramTypeBounds).map(printTypeParam)
         s"[${params.mkString(", ")}] = ${printType(tl.resultType)}"
       case other => s" = ${printType(other)}"
+
+  /** tasty-query exposes no implicit flag on a class, but an implicit class always comes with the
+   *  implicit conversion of the same name the compiler writes next to it.
+   */
+  private def isImplicitClass(cls: ClassSymbol)(using Context): Boolean =
+    !cls.isModuleClass && (cls.owner match
+      case owner: ClassSymbol =>
+        owner.declarations.exists {
+          case t: TermSymbol => t.isImplicit && t.isMethod && t.name.toString == cls.name.toString
+          case _             => false
+        }
+      case _ => false)
 
   /** Space-terminated, so it prepends to the kind keyword as-is; empty when there is nothing to say. */
   private def classModifiers(cls: ClassSymbol): String =

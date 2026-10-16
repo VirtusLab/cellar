@@ -194,6 +194,22 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature marks an implicit class implicit (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val ops = ctx.findStaticModuleClass("cellar.fixture.scala2.CellarSyntax").declarations
+          .collectFirst { case c: tastyquery.Symbols.ClassSymbol if c.name.toString == "CellarOps" => c }.get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(ops)
+
+        // then
+        assertEquals(sig, "implicit class CellarOps[A]")
+      }
+    }
+
   test("printSymbolSignature leaves out parents the compiler adds to objects (Scala 2)"):
     withScala2Ctx { ctx =>
       IO.blocking {
