@@ -369,28 +369,36 @@ object TypePrinter:
     bounds match
       case b: AbstractTypeBounds =>
         b.high match
-          case tl: TypeLambda => s"$name${printHkParams(tl)}"
+          case tl: TypeLambda =>
+            b.low match
+              // `F2[x] >: F[x]`: a lambda lower bound names the parameters it mentions.
+              case low: TypeLambda if low.paramNames.sizeIs == tl.paramNames.size =>
+                val lowStr = printType(low.resultType)
+                if lowStr == "Nothing" then s"$name${printHkParams(tl)}"
+                else s"$name${printHkParams(tl, low.paramNames.map(_.toString), lowStr)} >: $lowStr"
+              case _ => s"$name${printHkParams(tl)}"
           case _ =>
             val lo = if printType(b.low) == "Nothing" then "" else s" >: ${printType(b.low)}"
             val hi = if printType(b.high) == "Any" then "" else s" <: ${printType(b.high)}"
             s"$name$lo$hi"
       case _ => name.toString
 
-  private def printHkParams(tl: TypeLambda)(using ctx: Context): String =
-    val rendered = tl.paramNames.zip(tl.paramTypeBounds).map { (name, bounds) =>
+  private def printHkParams(tl: TypeLambda, names: List[String] = Nil, mentionedIn: String = "")(using ctx: Context): String =
+    val paramNames = if names.nonEmpty then names else tl.paramNames.map(_.toString)
+    val rendered = paramNames.zip(tl.paramTypeBounds).map { (name, bounds) =>
       val (lo, hi) = bounds match
         case b: AbstractTypeBounds =>
           val lo = if printType(b.low) == "Nothing" then "" else s" >: ${printType(b.low)}"
           val hi = if printType(b.high) == "Any" then "" else s" <: ${printType(b.high)}"
           (lo, hi)
         case _ => ("", "")
-      (name.toString, lo, hi)
+      (name, lo, hi)
     }
     // A parameter must be named (not `_`) when it is referenced elsewhere in the lambda:
     // in a bound (self-referential, e.g. `A <: Comparable[A]`) or in the constructor
     // bound (the lambda's result, e.g. `F[A] <: Iterable[A]`).
     val resultStr = printType(tl.resultType)
-    val context   = (resultStr :: rendered.flatMap((_, lo, hi) => List(lo, hi))).mkString(" ")
+    val context   = (mentionedIn :: resultStr :: rendered.flatMap((_, lo, hi) => List(lo, hi))).mkString(" ")
     val params = rendered.map { (name, lo, hi) =>
       val head = if isMentioned(context, name) then name else "_"
       s"$head$lo$hi"
