@@ -131,6 +131,38 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature prints context bounds as written"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val renderAll = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarTC").declarations
+          .find(_.name.toString == "renderAll").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(renderAll)
+
+        // then
+        assertEquals(sig, "def renderAll[A: CellarTC, B](as: List[A], b: B)(using sep: String): String")
+      }
+    }
+
+  test("printSymbolSignature prints context bounds as written (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val describe = ctx.findStaticModuleClass("cellar.fixture.scala2.CellarTypeClass").declarations
+          .find(_.name.toString == "describe").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(describe)
+
+        // then
+        assertEquals(sig, "def describe[A: CellarTypeClass](a: A): String")
+      }
+    }
+
   test("printSymbolSignature renders lazy vals and vars (Scala 3)"):
     withCtx { ctx =>
       IO.blocking {

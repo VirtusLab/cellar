@@ -8,6 +8,8 @@ trait CellarTC[A]:
 object CellarTC:
   def apply[A](using tc: CellarTC[A]): CellarTC[A] = tc
 
+  def renderAll[A: CellarTC, B](as: List[A], b: B)(using sep: String): String = as.map(CellarTC[A].render).mkString(sep) + b.toString
+
 given CellarTC[Int] with
   def render(i: Int): String = i.toString
 
