@@ -8,15 +8,28 @@ object PublicApiFilter:
 
   private def isPrivateSym(sym: Symbol): Boolean =
     sym match
-      case s: (ClassSymbol | TermSymbol | TypeSymbol) => s.isPrivate
+      case s: (ClassSymbol | TermSymbol | TypeSymbol) => s.isPrivate || isJavaPackagePrivate(s)
       case _              => false
+
+  // tasty-query reads Java's package-private as `ScopedPrivate(pkg)`, not as Private.
+  private def isJavaPackagePrivate(sym: ClassSymbol | TermSymbol | TypeSymbol): Boolean =
+    sym.sourceLanguage.productPrefix == "Java" && sym.visibility.productPrefix == "ScopedPrivate"
 
   private def isSyntheticSym(sym: Symbol): Boolean =
     sym match
       case s: (ClassSymbol | TermSymbol | TypeSymbol) =>
         s.isSynthetic || s.name.toString.startsWith("$") || isDefaultGetter(s) ||
-          isStaticInitializer(s) || isUncallableConstructor(s)
+          isStaticInitializer(s) || isUncallableConstructor(s) || isJavaStaticsHolder(s)
       case _ => false
+
+  /** tasty-query models a Java class's statics as a companion object; listed beside the class it
+   *  would duplicate it as a declaration Java does not have.
+   */
+  private def isJavaStaticsHolder(sym: ClassSymbol | TermSymbol | TypeSymbol): Boolean =
+    sym.sourceLanguage.productPrefix == "Java" && (sym match
+      case c: ClassSymbol => c.isModuleClass
+      case t: TermSymbol  => t.isModuleVal
+      case _              => false)
 
   /** Scala 2 pickles flag default getters synthetic; TASTy does not, so they surface by name.
    *  The default is already shown as `= ...` on the parameter itself.

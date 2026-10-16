@@ -31,11 +31,7 @@ object TypePrinter:
 
   def printType(tpe: Type)(using ctx: Context): String =
     tpe match
-      // `<FromJavaObject>` is the internal name for Java's Object as seen from Scala. It is a real
-      // TypeRef, not a fallback, so it would otherwise print verbatim, angle brackets and all.
-      // Matched by name rather than `isFromJavaObject`, which resolves the symbol and throws on
-      // primitive parameter types — that took out every signature containing an int or boolean.
-      case t: TypeRef if t.name.toString == "<FromJavaObject>" => "Object"
+      case t: TypeRef if isFromJavaObject(t) => "Object"
 
       case t: TypeRef =>
         val name = t.name.toString
@@ -125,6 +121,19 @@ object TypePrinter:
 
       case t: Type => printType(t)
 
+  /** `<FromJavaObject>` is the internal name for Java's Object as seen from Scala. It is a real
+   *  TypeRef, not a fallback, so it would otherwise print verbatim, angle brackets and all.
+   *  Matched by name rather than tasty-query's `isFromJavaObject`, which resolves the symbol and
+   *  throws on primitive parameter types — that took out every signature containing an int.
+   */
+  private[cellar] def isFromJavaObject(t: TypeRef): Boolean =
+    t.name.toString == "<FromJavaObject>"
+
+  private[cellar] def javaParamNames(term: TermSymbol)(using Context): Option[List[String]] =
+    if detectLanguage(term) == DetectedLanguage.Java && term.isMethod then
+      JavaClassfiles.namesFor(term).orElse(JavaSources.paramNames(term))
+    else None
+
   private val MaxDefaultLength = 40
 
   /** A default is shown as written when it is one short line; joining lines could swallow the
@@ -135,10 +144,23 @@ object TypePrinter:
     if printable && expr.length <= MaxDefaultLength then expr else "..."
 
   def printSymbolSignatureSafe(sym: Symbol)(using ctx: Context): String =
-    try printSymbolSignature(sym)
+    printSymbolSignatureSafe(sym, detectLanguage(sym))
+
+  /** `syntax` is set by a listing to its own language, so that members inherited from the other
+   *  language do not switch syntax mid-block.
+   */
+  def printSymbolSignatureSafe(sym: Symbol, syntax: DetectedLanguage)(using ctx: Context): String =
+    try printSymbolSignature(sym, syntax)
     catch case _: Exception => s"${sym.name} // [signature unavailable]"
 
-  def printSymbolSignature(sym: tastyquery.Symbols.Symbol)(using ctx: Context): String =
+  def printSymbolSignature(sym: Symbol)(using ctx: Context): String =
+    printSymbolSignature(sym, detectLanguage(sym))
+
+  def printSymbolSignature(sym: Symbol, syntax: DetectedLanguage)(using ctx: Context): String =
+    if syntax == DetectedLanguage.Java then JavaTypePrinter.printSymbolSignature(sym)
+    else printScalaSignature(sym)
+
+  private[cellar] def printScalaSignature(sym: Symbol)(using ctx: Context): String =
     sym match
       case cls: ClassSymbol =>
         val kind =
@@ -161,10 +183,7 @@ object TypePrinter:
         if term.isModuleVal then s"$keyword ${term.name}"
         else if term.isEnumCase then s"case ${term.name} extends ${printMethodic(term.declaredType)}"
         else
-          val lang      = detectLanguage(term)
-          val javaNames =
-            if lang == DetectedLanguage.Java && term.isMethod then JavaParamNames.namesFor(term).orElse(JavaSources.paramNames(term))
-            else None
+          val javaNames = javaParamNames(term)
           val defaults  = if term.hasParamWithDefault then ScalaSources.defaults(term) else Map.empty
           s"$keyword ${term.name}${printTopLevelMethodic(term.declaredType, term.paramSymss, javaNames, defaults)}"
 
@@ -358,7 +377,7 @@ object TypePrinter:
       case _ => false
 
   /** Render a class parent, parenthesising function-arrow sugar so it is valid in `extends` position. */
-  private val universalParents = Set("Object", "Any", "AnyRef")
+  private[cellar] val universalParents = Set("Object", "Any", "AnyRef")
 
   private def printParent(tpe: Type)(using ctx: Context): String =
     val rendered = printType(tpe)
@@ -408,7 +427,7 @@ object TypePrinter:
   private def isOperatorName(name: String): Boolean =
     name.nonEmpty && name.forall(c => !c.isLetterOrDigit && c != '_' && c != '$')
 
-  private def isScalaPackage(prefix: Prefix): Boolean =
+  private[cellar] def isScalaPackage(prefix: Prefix): Boolean =
     prefix match
       case p: PackageRef => p.fullyQualifiedName.toString == "scala"
       case _             => false

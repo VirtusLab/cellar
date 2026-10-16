@@ -52,7 +52,7 @@ object ContextResource:
                           )
           classpath    = jreClasspath ++ jarClasspath
           ctx          <- IO.blocking(Context.initialize(classpath))
-          _             = JavaParamNames.register(ctx, classpath)
+          _             = JavaClassfiles.register(ctx, classpath)
           sourceJars   <- IO(SourceJars.pair(kept, jarClasspath, full.sourcesJars, resolveSources)).flatTap {
                             case Some(_) => IO.unit
                             case None    => logger.warn("classpath entries do not line up with jars; sources unavailable")

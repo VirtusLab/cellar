@@ -9,13 +9,26 @@ import tastyquery.Types.*
 import java.util.{Collections, WeakHashMap}
 import scala.collection.concurrent.TrieMap
 
-/** Parameter names for Java methods whose classfile lacks `MethodParameters` (javac only emits it
-  * with `-parameters`, which the JDK itself does not use). The `LocalVariableTable` from `-g` still
-  * names every parameter of a method that has a body, so we read it with ASM and match the method
-  * by name plus erased parameter types, the only identity a classfile knows.
+/** Facts about Java declarations that tasty-query does not read from the classfile, read with ASM.
+  * A method is matched by name plus erased parameter types, the only identity a classfile knows.
+  *
+  *  - Parameter names, when `MethodParameters` is absent (javac only emits it with `-parameters`,
+  *    which the JDK itself does not use): the `LocalVariableTable` from `-g` still names every
+  *    parameter of a method that has a body.
+  *  - `ACC_VARARGS` on constructors, which tasty-query only honours on methods.
+  *  - Whether a method has a `Signature` attribute, which decides whether tasty-query's parameters
+  *    include an inner class constructor's outer instance (the descriptor has it, the signature not).
+  *  - A nested class's declared access, which only the `InnerClasses` attribute records: the class's
+  *    own access flags say `public` for a `protected` class.
   */
-object JavaParamNames:
-  private type Table = Map[(String, List[String]), List[String]]
+object JavaClassfiles:
+  private type Method = (String, List[String])
+  private final case class Table(
+      names: Map[Method, List[String]],
+      varargs: Set[Method],
+      unsigned: Set[Method],
+      innerAccess: Map[String, Int]
+  )
 
   private final class Registered(val classpath: Classpath):
     val tables = TrieMap.empty[String, Option[Table]]
@@ -28,16 +41,55 @@ object JavaParamNames:
     registry.put(ctx, Registered(classpath)): Unit
 
   def namesFor(method: TermSymbol)(using ctx: Context): Option[List[String]] =
+    methodIn(method).flatMap { (table, key) =>
+      table.names.get(key).orElse {
+        // A generic inner class constructor's signature leaves out the outer instance that its
+        // descriptor, and so the table, leads with.
+        for
+          outer <- method.owner.owner match
+                     case c: ClassSymbol if method.name.toString == "<init>" && !c.isModuleClass => binaryName(c)
+                     case _                                                                      => None
+          names <- table.names.get((key._1, outer :: key._2))
+        yield names.drop(1)
+      }
+    }
+
+  def isVarargs(method: TermSymbol)(using ctx: Context): Boolean =
+    methodIn(method).exists((table, key) => table.varargs.contains(key))
+
+  /** True for an inner class's constructor whose parameters, as tasty-query read them from the
+    * descriptor, start with the outer instance that no source passes explicitly.
+    */
+  def leadsWithOuterInstance(ctor: TermSymbol)(using ctx: Context): Boolean =
+    val inner = ctor.owner match
+      case cls: ClassSymbol =>
+        cls.owner match
+          case outer: ClassSymbol => !outer.isModuleClass
+          case _                  => false
+      case _ => false
+    inner && ctor.name.toString == "<init>" && methodIn(ctor).exists((table, key) => table.unsigned.contains(key))
+
+  def isProtectedNested(cls: ClassSymbol)(using ctx: Context): Boolean =
+    cls.owner.isInstanceOf[ClassSymbol] && (for
+      binary <- binaryName(cls)
+      table  <- tableFor(binary)
+      access <- table.innerAccess.get(binary)
+    yield (access & Opcodes.ACC_PROTECTED) != 0).getOrElse(false)
+
+  private def methodIn(method: TermSymbol)(using ctx: Context): Option[(Table, Method)] =
     for
-      registered <- Option(registry.get(ctx))
-      owner      <- method.owner match
-                      case c: ClassSymbol => Some(c)
-                      case _              => None
-      binary     <- binaryName(owner)
-      table      <- registered.tables.getOrElseUpdate(binary, readTableSafe(registered.classpath, binary))
-      erased     <- erasedParams(method, owner)
-      names      <- table.get((method.name.toString, erased))
-    yield names
+      owner  <- method.owner match
+                  case c: ClassSymbol => Some(c)
+                  case _              => None
+      binary <- binaryName(owner)
+      table  <- tableFor(binary)
+      erased <- erasedParams(method, owner)
+    yield (table, (method.name.toString, erased))
+
+  private def tableFor(binary: String)(using ctx: Context): Option[Table] =
+    Option(registry.get(ctx)).flatMap { registered =>
+      registered.tables.getOrElseUpdate(binary, readTableSafe(registered.classpath, binary))
+    }
 
   /** Java statics are declared on tasty-query's synthetic module class, but they live in the
     * same classfile as the instance members, so the `$` module suffix is dropped.
@@ -66,14 +118,20 @@ object JavaParamNames:
       .find(_.hasClassFile)
       .map(_.readClassFileBytes().unsafeArray)
 
-  // A classfile ASM cannot read (newer than it supports, or corrupt) must only cost the names.
+  // A classfile ASM cannot read (newer than it supports, or corrupt) must only cost these facts.
   private def readTableSafe(classpath: Classpath, binary: String): Option[Table] =
     try readTable(classpath, binary)
     catch case _: Exception => None
 
   private def parse(bytes: Array[Byte]): Table =
-    val table = Map.newBuilder[(String, List[String]), List[String]]
+    val table       = Map.newBuilder[Method, List[String]]
+    val varargs     = Set.newBuilder[Method]
+    val unsigned    = Set.newBuilder[Method]
+    val innerAccess = Map.newBuilder[String, Int]
     val visitor = new ClassVisitor(Opcodes.ASM9):
+      override def visitInnerClass(name: String, outerName: String, innerName: String, access: Int): Unit =
+        innerAccess += name.replace('/', '.') -> access: Unit
+
       override def visitMethod(
           access: Int,
           name: String,
@@ -82,6 +140,9 @@ object JavaParamNames:
           exceptions: Array[String]
       ): MethodVisitor =
         val argTypes   = AsmType.getArgumentTypes(descriptor)
+        val key        = (name, argTypes.map(_.getClassName).toList)
+        if (access & Opcodes.ACC_VARARGS) != 0 then varargs += key
+        if signature == null then unsigned += key
         val fromAttr   = Array.fill[String](argTypes.length)(null)
         val fromLvt    = Array.fill[String](argTypes.length)(null)
         var attrIndex  = 0
@@ -103,9 +164,9 @@ object JavaParamNames:
             if i >= 0 && i < fromLvt.length && fromLvt(i) == null then fromLvt(i) = name
           override def visitEnd(): Unit =
             val names = List(fromAttr, fromLvt).find(_.forall(_ != null))
-            names.foreach(n => table += (name, argTypes.map(_.getClassName).toList) -> n.toList)
+            names.foreach(n => table += key -> n.toList)
     new ClassReader(bytes).accept(visitor, ClassReader.SKIP_FRAMES)
-    table.result()
+    Table(table.result(), varargs.result(), unsigned.result(), innerAccess.result())
 
   /** Erases a Java method's parameter types to the names ASM's `Type.getClassName` produces.
     * Done structurally, without resolving symbols: tasty-query's own erasure throws on some Java
@@ -120,7 +181,7 @@ object JavaParamNames:
     try Some(clauses(method.declaredType).map(erase(_, owner)))
     catch case _: Exception => None
 
-  private val primitives = Map(
+  private[cellar] val primitives = Map(
     "scala.Int"     -> "int",
     "scala.Long"    -> "long",
     "scala.Double"  -> "double",

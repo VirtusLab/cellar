@@ -154,12 +154,15 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
-  test("printSymbolSignature does not mark the statics object of a Java abstract class abstract"):
+  test("printSymbolSignature prints the statics object of a Java class as the class itself"):
     withCtx { ctx =>
       IO.blocking {
         given Context = ctx
         val module = ctx.findStaticModuleClass("java.util.AbstractList")
-        assertEquals(TypePrinter.printSymbolSignature(module), "object AbstractList")
+        assertEquals(
+          TypePrinter.printSymbolSignature(module),
+          "abstract class AbstractList<E> extends AbstractCollection<E> implements List<E>"
+        )
       }
     }
 
@@ -409,7 +412,7 @@ class TypePrinterTest extends CatsEffectSuite:
         val cls = ctx.findStaticClass("cellar.fixture.java.CellarJavaClass")
         val sig = TypePrinter.printSymbolSignature(cls)
         assert(!sig.contains("NothingType"), s"leaked internal type name: $sig")
-        assert(sig.startsWith("class CellarJavaClass[T <: Comparable[T]]"), s"unexpected: $sig")
+        assertEquals(sig, "class CellarJavaClass<T extends Comparable<T>> implements CellarJavaInterface<T>")
       }
     }
 
@@ -421,7 +424,7 @@ class TypePrinterTest extends CatsEffectSuite:
         given Context = ctx
         val sig = sugarSig("java.lang.String", "equals")
         assert(!sig.contains("FromJavaObject"), s"leaked internal type name: $sig")
-        assertEquals(sig, "def equals(anObject: Object): Boolean")
+        assertEquals(sig, "boolean equals(Object anObject)")
       }
     }
 
@@ -435,16 +438,16 @@ class TypePrinterTest extends CatsEffectSuite:
         assertEquals(
           formats,
           List(
-            "def format(value: Int): String",
-            "def format(value: Int, verbose: Boolean): String",
-            "def format(value: String): String"
+            "String format(String value)",
+            "String format(int value)",
+            "String format(int value, boolean verbose)"
           )
         )
-        assertEquals(sugarSig(fqn, "repeat"), "def repeat(value: T, times: Int): List[T]")
-        assertEquals(sugarSig(fqn, "<init>"), "def <init>[T <: Comparable[T]](defaultValue: T): Unit")
+        assertEquals(sugarSig(fqn, "repeat"), "List<T> repeat(T value, int times)")
+        assertEquals(sugarSig(fqn, "<init>"), "CellarJavaClass(T defaultValue)")
         val module = ctx.findStaticModuleClass(fqn)
         val of     = module.declarations.find(_.name.toString == "of").get
-        assertEquals(TypePrinter.printSymbolSignature(of), "def of[E <: Comparable[E]](value: E): CellarJavaClass[E]")
+        assertEquals(TypePrinter.printSymbolSignature(of), "static <E extends Comparable<E>> CellarJavaClass<E> of(E value)")
       }
     }
 
@@ -454,7 +457,21 @@ class TypePrinterTest extends CatsEffectSuite:
         given Context = ctx
         val sig = ctx.findStaticClass("java.util.AbstractMap.SimpleEntry").declarations
           .filter(_.name.toString == "<init>").map(TypePrinter.printSymbolSignature)
-        assert(sig.contains("def <init>[K <: Object, V <: Object](entry: Map.Entry[? <: K, ? <: V]): Unit"), sig)
+        assert(sig.contains("SimpleEntry(Map.Entry<? extends K, ? extends V> entry)"), sig)
+      }
+    }
+
+  test("printSymbolSignature names a static nested Java interface's parameters from the sources jar"):
+    withSourcesCtx(TestFixtures.javaCoord) { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+
+        // when
+        val sig = sugarSig("cellar.fixture.java.CellarJavaNested.Callback", "call")
+
+        // then
+        assertEquals(sig, "void call(String message)")
       }
     }
 
@@ -463,8 +480,105 @@ class TypePrinterTest extends CatsEffectSuite:
       IO.blocking {
         given Context = ctx
         val fqn = "cellar.fixture.java.CellarJavaInterface"
-        assertEquals(sugarSig(fqn, "identity"), "abstract def identity(value: T): T")
-        assertEquals(sugarSig(fqn, "repeat"), "abstract def repeat(value: T, times: Int): List[T]")
+        assertEquals(sugarSig(fqn, "identity"), "T identity(T value)")
+        assertEquals(sugarSig(fqn, "repeat"), "List<T> repeat(T value, int times)")
+      }
+    }
+
+  test("printSymbolSignature renders Java generics, wildcards and varargs in Java syntax"):
+    withJavaCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val statics = ctx.findStaticModuleClass("java.util.Collections").declarations
+
+        // when
+        val sigs = statics.filter(s => Set("addAll", "max").contains(s.name.toString)).map(TypePrinter.printSymbolSignature)
+
+        // then
+        assert(sigs.contains("static <T> boolean addAll(Collection<? super T> c, T... elements)"), sigs)
+        assert(sigs.contains("static <T extends Object & Comparable<? super T>> T max(Collection<? extends T> coll)"), sigs)
+      }
+    }
+
+  test("printSymbolSignature renders Java interface, enum and annotation declarations"):
+    withJavaCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val pkg = "cellar.fixture.java"
+
+        // when
+        val enumSig       = TypePrinter.printSymbolSignature(ctx.findStaticClass(s"$pkg.CellarJavaEnum"))
+        val annotationSig = TypePrinter.printSymbolSignature(ctx.findStaticClass(s"$pkg.CellarJavaAnnotation"))
+        val describeSig   = sugarSig(s"$pkg.CellarJavaInterface", "describe")
+
+        // then
+        assertEquals(enumSig, "enum CellarJavaEnum")
+        assertEquals(annotationSig, "@interface CellarJavaAnnotation")
+        assertEquals(describeSig, "default String describe()")
+      }
+    }
+
+  test("printSymbolSignature qualifies a static class nested two deep with every outer class"):
+    withJavaCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val statics = ctx.findStaticModuleClass("cellar.fixture.java.CellarJavaNested").declarations
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(statics.find(_.name.toString == "inner").get)
+
+        // then
+        assertEquals(sig, "static CellarJavaNested.Mid.Inner inner()")
+      }
+    }
+
+  test("printSymbolSignature prints what Java source declares where the classfile adds to it"):
+    withJavaCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val fqn      = "cellar.fixture.java.CellarJavaNested"
+        def sigs(cls: tastyquery.Symbols.ClassSymbol, name: String) =
+          cls.declarations.filter(_.name.toString == name).map(TypePrinter.printSymbolSignature)
+        val nested   = ctx.findStaticClass(fqn)
+        val statics  = ctx.findStaticModuleClass(fqn)
+        def nestedClass(in: tastyquery.Symbols.ClassSymbol, name: String) =
+          in.declarations.collectFirst { case c: tastyquery.Symbols.ClassSymbol if c.name.toString == name => c }.get
+        val bound    = nestedClass(nested, "Bound")
+        val hidden   = nestedClass(statics, "Hidden")
+
+        // when
+        val constructors      = sigs(nested, "<init>")
+        val closing           = sigs(statics, "closing")
+        val innerConstructors = sigs(bound, "<init>")
+
+        // then
+        assert(constructors.contains("<T> CellarJavaNested(T value, int count)"), constructors)
+        assert(constructors.contains("CellarJavaNested(String... names)"), constructors)
+        assertEquals(TypePrinter.printSymbolSignature(hidden), "protected static class Hidden")
+        assertEquals(closing, List("static <C extends AutoCloseable> C closing(C closeable)"))
+        assertEquals(innerConstructors, List("Bound(int size)"))
+        assertEquals(sigs(nestedClass(nested, "Linked"), "<init>"), List("Linked(CellarJavaNested owner, List<E> items)"))
+        assertEquals(sigs(nestedClass(statics, "Box"), "<init>"), List("<U> Box(T value, U extra)"))
+      }
+    }
+
+  test("printSymbolSignature prints a Java member in Scala syntax when asked to"):
+    withJavaCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val repeat = ctx.findStaticClass("cellar.fixture.java.CellarJavaClass").declarations
+          .find(_.name.toString == "repeat").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(repeat, DetectedLanguage.Scala3)
+
+        // then
+        assertEquals(sig, "def repeat(value: T, times: Int): List[T]")
       }
     }
 

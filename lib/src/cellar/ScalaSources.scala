@@ -189,8 +189,8 @@ object ScalaSources:
     (LazyList.from(inPkg ++ elsewhere) ++ rest).distinct
 
   private def sourceFileName(classpath: Classpath, top: ClassSymbol): Option[String] =
-    JavaParamNames.binaryName(top).flatMap { binary =>
-      LazyList(binary, s"$binary$$").flatMap(JavaParamNames.classBytes(classpath, _)).headOption.flatMap { bytes =>
+    JavaClassfiles.binaryName(top).flatMap { binary =>
+      LazyList(binary, s"$binary$$").flatMap(JavaClassfiles.classBytes(classpath, _)).headOption.flatMap { bytes =>
         var name: Option[String] = None
         val visitor = new ClassVisitor(Opcodes.ASM9):
           override def visitSource(source: String, debug: String): Unit = name = Option(source)
