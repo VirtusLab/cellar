@@ -146,6 +146,55 @@ object TypePrinterTest extends SequentialIOSuite:
       }
     }
 
+  test("printSymbolSignature prints context bounds as written"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val renderAll = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarTC").declarations
+          .find(_.name.toString == "renderAll").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(renderAll)
+
+        // then
+        expect.eql("def renderAll[A: CellarTC, B](as: List[A], b: B)(using sep: String): String", sig)
+      }
+    }
+
+  test("printSymbolSignature prints context bounds as written (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val describe = ctx.findStaticModuleClass("cellar.fixture.scala2.CellarTypeClass").declarations
+          .find(_.name.toString == "describe").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(describe)
+
+        // then
+        expect.eql("def describe[A: CellarTypeClass](a: A): String", sig)
+      }
+    }
+
+
+  test("printSymbolSignature prints an extension's context bound past the method's own type parameters"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val maxWith = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarTC").declarations
+          .find(_.name.toString == "maxWith").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(maxWith)
+
+        // then
+        expect.eql("def maxWith[A: CellarTC](a: A)[B](b: B)(other: A): A", sig)
+      }
+    }
+
   test("printSymbolSignature renders lazy vals and vars (Scala 3)"):
     withCtx { ctx =>
       IO.blocking {
