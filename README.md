@@ -517,6 +517,7 @@ Compares the signatures cellar prints with the declarations in published sources
 ```sh
 ./mill signatureBench.run java                                      # default libraries
 ./mill signatureBench.run java org.apache.commons:commons-lang3:3.17.0
+./mill signatureBench.run scala3                                    # also: scala2
 ```
 
 ### Installing a local build with Nix

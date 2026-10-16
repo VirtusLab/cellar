@@ -4,7 +4,7 @@ import cats.effect.{ExitCode, IO, IOApp}
 
 /** `./mill signatureBench.run <language> [coordinate ...]`, printing a Markdown report. */
 object Main extends IOApp:
-  private val languages = List(JavaLanguage).map(l => l.name.toLowerCase -> l).toMap
+  private val languages = List(JavaLanguage, ScalaLanguage.scala2, ScalaLanguage.scala3).map(l => l.name.toLowerCase -> l).toMap
 
   def run(args: List[String]): IO[ExitCode] =
     args match
