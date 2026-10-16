@@ -194,6 +194,22 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature names an object scope as the object"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val origin = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarPoint").declarations
+          .find(_.name.toString == "origin").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(origin)
+
+        // then
+        assertEquals(sig, "private[CellarPoint] def origin: Int")
+      }
+    }
+
   test("printSymbolSignature marks an implicit class implicit (Scala 2)"):
     withScala2Ctx { ctx =>
       IO.blocking {

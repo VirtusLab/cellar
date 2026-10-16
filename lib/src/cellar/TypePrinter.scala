@@ -343,9 +343,13 @@ object TypePrinter:
     sym.visibility match
       case Visibility.Protected              => "protected "
       case Visibility.ProtectedThis          => "protected[this] "
-      case Visibility.ScopedProtected(scope) => s"protected[${scope.name}] "
-      case Visibility.ScopedPrivate(scope)   => s"private[${scope.name}] "
+      case Visibility.ScopedProtected(scope) => s"protected[${scopeName(scope)}] "
+      case Visibility.ScopedPrivate(scope)   => s"private[${scopeName(scope)}] "
       case _                                 => ""
+
+  // A scope that is an object is its module class, named `Foo$` on the JVM.
+  private def scopeName(scope: tastyquery.Symbols.DeclaringSymbol): String =
+    scope.name.toString.stripSuffix("$")
 
   /** Space-terminated, like [[classModifiers]]. */
   private def termModifiers(sym: TermSymbol)(using Context): String =

@@ -13,6 +13,7 @@ case class CellarPoint(x: Int)
 
 object CellarPoint:
   type Self = CellarPoint.type
+  private[CellarPoint] def origin: Int = 0
 
 /** Fixture for how an enum and its cases are printed. */
 enum CellarShape:
