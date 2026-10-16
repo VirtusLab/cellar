@@ -124,7 +124,7 @@ Add `--test` to query the test-scope classpath (test dependencies and test sourc
 
 The classpath is cached after the first run. Use `--no-cache` to force re-extraction.
 
-A dependency's `-sources.jar`, which supplies default values and Scala 2 / Java docs, is found next to its jar or downloaded the first time a symbol from it is shown.
+A dependency's `-sources.jar`, which supplies default values and Scala 2 / Java docs, is found next to its jar or downloaded the first time a symbol from it is shown, from the configured `maven.repositories` plus any `--repository` / `-r` given.
 
 ### External commands
 

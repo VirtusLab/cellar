@@ -217,30 +217,30 @@ object CellarApp extends ProfilingIOApp:
 
   private val getSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("get", "Fetch symbol info from the current project") {
-      (symbolArg, moduleOpt, memberLimitOpt, hideInheritedOpt, groupInheritedOpt, javaHomeOpt, noCacheOpt, testScopeOpt, loggerOpt).mapN {
-        (fqn, module, limit, hideInherited, groupInherited, javaHome, noCache, testScope, logger) =>
+      (symbolArg, moduleOpt, memberLimitOpt, hideInheritedOpt, groupInheritedOpt, javaHomeOpt, noCacheOpt, testScopeOpt, extraReposOpt, loggerOpt).mapN {
+        (fqn, module, limit, hideInherited, groupInherited, javaHome, noCache, testScope, extraRepos, logger) =>
           traced("get") {
-            ProjectGetHandler.run(fqn, module, javaHome, noCache, limit, hideInherited, groupInherited, testScope = testScope, logger = logger)
+            ProjectGetHandler.run(fqn, module, javaHome, noCache, limit, hideInherited, groupInherited, testScope = testScope, extraRepositories = extraRepos, logger = logger)
           }
       }
     }
 
   private val listSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("list", "List symbols in a package or class from the current project") {
-      (symbolArg, moduleOpt, limitOpt, javaHomeOpt, noCacheOpt, testScopeOpt, loggerOpt).mapN {
-        (fqn, module, limit, javaHome, noCache, testScope, logger) =>
+      (symbolArg, moduleOpt, limitOpt, javaHomeOpt, noCacheOpt, testScopeOpt, extraReposOpt, loggerOpt).mapN {
+        (fqn, module, limit, javaHome, noCache, testScope, extraRepos, logger) =>
           traced("list") {
-            ProjectListHandler.run(fqn, module, limit, javaHome, noCache, testScope = testScope, logger = logger)
+            ProjectListHandler.run(fqn, module, limit, javaHome, noCache, testScope = testScope, extraRepositories = extraRepos, logger = logger)
           }
       }
     }
 
   private val searchSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("search", "Substring search for symbol names in the current project") {
-      (Opts.argument[String]("query"), moduleOpt, limitOpt, javaHomeOpt, noCacheOpt, testScopeOpt, loggerOpt).mapN {
-        (query, module, limit, javaHome, noCache, testScope, logger) =>
+      (Opts.argument[String]("query"), moduleOpt, limitOpt, javaHomeOpt, noCacheOpt, testScopeOpt, extraReposOpt, loggerOpt).mapN {
+        (query, module, limit, javaHome, noCache, testScope, extraRepos, logger) =>
           traced("search") {
-            ProjectSearchHandler.run(query, module, limit, javaHome, noCache, testScope = testScope, logger = logger)
+            ProjectSearchHandler.run(query, module, limit, javaHome, noCache, testScope = testScope, extraRepositories = extraRepos, logger = logger)
           }
       }
     }

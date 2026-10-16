@@ -3,7 +3,7 @@ package cellar.build
 import cats.effect.{IO, Resource}
 import cellar.CoursierFetchClient.ResolvedClasspath
 import cellar.{Config, ContextResource, SourceJars, SourcesResolver, StderrLogger}
-import coursier.MavenRepository
+import coursier.Repository
 import fs2.io.file.Path
 import org.typelevel.log4cats.Logger
 import org.typelevel.otel4s.Attribute
@@ -18,14 +18,14 @@ object ProjectClasspathProvider:
       jreClasspath: Classpath,
       noCache: Boolean,
       config: Config = Config.global,
-      testScope: Boolean = false
+      testScope: Boolean = false,
+      repositories: Seq[Repository] = Seq.empty
   )(using
       tracer: Tracer[IO],
       logger: Logger[IO] = StderrLogger.off
   ): Resource[IO, (Context, Classpath, SourceJars)] =
     Resource.eval(resolveClasspath(cwd, module, noCache, config, testScope)).flatMap { paths =>
       // A build tool hands over plain jars, so sources are found per jar, only once a symbol needs them.
-      val repositories = config.maven.repositories.map(MavenRepository(_))
       ContextResource.makeWithSources(
         ResolvedClasspath(paths, Map.empty),
         jreClasspath,
