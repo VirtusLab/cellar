@@ -163,6 +163,36 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature leaves out parents the compiler adds to objects"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val companion = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarPoint")
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(companion)
+
+        // then
+        assertEquals(sig, "object CellarPoint")
+      }
+    }
+
+  test("printSymbolSignature leaves out parents the compiler adds to objects (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val companion = ctx.findStaticModuleClass("cellar.fixture.scala2.CellarTypeClass")
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(companion)
+
+        // then
+        assertEquals(sig, "object CellarTypeClass")
+      }
+    }
+
   test("printSymbolSignature renders lazy vals and vars (Scala 3)"):
     withCtx { ctx =>
       IO.blocking {

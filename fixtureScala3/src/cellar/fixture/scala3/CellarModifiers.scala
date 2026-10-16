@@ -8,6 +8,9 @@ class CellarModifiers:
   protected def guarded: Int = 0
   private[scala3] def internal: Int = 0
 
+/** Its companion object gets compiler-added parents its declaration never names. */
+case class CellarPoint(x: Int)
+
 /** Fixture for how an enum and its cases are printed. */
 enum CellarShape:
   case Circle, Square

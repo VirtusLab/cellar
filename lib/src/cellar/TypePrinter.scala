@@ -207,7 +207,8 @@ object TypePrinter:
         // `AnyRef` is how the universal parent prints for a Scala 2 / Java symbol,
         // the same way `Object` is for a Scala 3 one -- neither carries information.
         val parents =
-          cls.parents.filterNot(p => cls.isEnum && isEnumBase(p)).map(printParent).filterNot(universalParents.contains)
+          cls.parents.filterNot(p => cls.isEnum && isEnumBase(p) || isCompilerAddedParent(cls, p))
+            .map(printParent).filterNot(universalParents.contains)
         val extendsStr = if parents.isEmpty then "" else s" extends ${parents.mkString(" with ")}"
         s"${visibilityModifier(cls)}${classModifiers(cls)}$kind $name$typeParams$extendsStr"
 
@@ -416,6 +417,26 @@ object TypePrinter:
             if lo.isEmpty && hi.isEmpty then "?" else s"?$lo$hi"
           case _ => "?"
       case t: Type => printType(t)
+
+  /** Parents the compilers add that no declaration names: Scala 3's `Mirror` for derivation, and
+   *  the `Serializable` Scala 2 gives every object; a case object's stays, as its case class's does.
+   */
+  private def isCompilerAddedParent(cls: ClassSymbol, parent: Type): Boolean =
+    parent match
+      case t: TypeRef =>
+        def inDeriving(prefix: Prefix) = prefix match
+          case p: PackageRef => p.fullyQualifiedName.toString == "scala.deriving"
+          case _             => false
+        val isMirror = t.prefix match
+          case m: TermRef  => m.name.toString == "Mirror" && inDeriving(m.prefix)
+          case m: ThisType => m.tref.name.toString == "Mirror$" && inDeriving(m.tref.prefix)
+          case _           => false
+        val isObjectSerializable =
+          cls.isModuleClass && !cls.isCaseClass && t.name.toString == "Serializable" && (t.prefix match
+            case p: PackageRef => Set("scala", "java.io").contains(p.fullyQualifiedName.toString)
+            case _             => false)
+        isMirror || isObjectSerializable
+      case _ => false
 
   /** The supertype every enum gets implicitly, which its declaration never names. */
   private def isEnumBase(parent: Type): Boolean =
