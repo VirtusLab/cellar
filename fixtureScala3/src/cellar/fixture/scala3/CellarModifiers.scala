@@ -11,6 +11,9 @@ class CellarModifiers:
 /** Its companion object gets compiler-added parents its declaration never names. */
 case class CellarPoint(x: Int)
 
+object CellarPoint:
+  type Self = CellarPoint.type
+
 /** Fixture for how an enum and its cases are printed. */
 enum CellarShape:
   case Circle, Square

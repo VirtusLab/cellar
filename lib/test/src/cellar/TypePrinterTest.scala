@@ -178,6 +178,22 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature prints a singleton type with its .type"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val self = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarPoint").declarations
+          .find(_.name.toString == "Self").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(self)
+
+        // then
+        assertEquals(sig, "type Self = CellarPoint.type")
+      }
+    }
+
   test("printSymbolSignature leaves out parents the compiler adds to objects (Scala 2)"):
     withScala2Ctx { ctx =>
       IO.blocking {

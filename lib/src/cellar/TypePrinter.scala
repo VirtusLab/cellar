@@ -39,6 +39,8 @@ object TypePrinter:
           case NoPrefix                          => name
           case _: ThisType                       => name
           case p: Type if isElidedPrefix(p)      => name
+          // A path prefix (`Tracer.Type`), not the singleton type a TermRef is on its own.
+          case p: TermRef                        => s"${p.name}.$name"
           case p: Type                           => s"${printType(p)}.$name"
           case _                                 => name
 
@@ -66,7 +68,7 @@ object TypePrinter:
       case t: OrType         => s"${printType(t.first)} | ${printType(t.second)}"
       case t: AnnotatedType  => printType(t.typ)
       case t: ThisType       => s"${t.tref.name}.this"
-      case t: TermRef        => t.name.toString
+      case t: TermRef        => s"${t.name}.type"
       case t: TermParamRef   => t.binder.paramNames(t.paramNum).toString
       case t: TypeParamRef   => t.binder.paramNames(t.paramNum).toString
       case t: RepeatedType   => s"${printType(t.elemType)}*"
