@@ -70,8 +70,9 @@ object TypePrinter:
       case t: TermParamRef   => t.binder.paramNames(t.paramNum).toString
       case t: TypeParamRef   => t.binder.paramNames(t.paramNum).toString
       case t: RepeatedType   => s"${printType(t.elemType)}*"
-      case t: TypeRefinement => printType(t.parent)
-      case t: TermRefinement => printType(t.parent)
+      case t: (TypeRefinement | TermRefinement) =>
+        val (base, members) = refinements(t)
+        s"${printType(base)} { ${members.mkString("; ")} }"
       case t: RecType        => printType(t.parent)
       case t: ConstantType   => t.value.value.toString
       case t: MatchType      => s"${printType(t.scrutinee)} match { ... }"
@@ -274,6 +275,24 @@ object TypePrinter:
         }
         Option.when(passesThrough)(printType(app.tycon))
       case _ => None
+
+  /** The refined type and its members, outermost refinement last as it is declared last. */
+  private def refinements(tpe: Type)(using Context): (Type, List[String]) =
+    tpe match
+      case t: TypeRefinement =>
+        val (base, members) = refinements(t.parent)
+        val member = t.refinedBounds match
+          case alias: TypeAlias => s"type ${t.refinedName}${printAliasRhs(alias.alias)}"
+          case bounds           => s"type ${printTypeParam(t.refinedName, bounds)}"
+        (base, members :+ member)
+      case t: TermRefinement =>
+        val (base, members) = refinements(t.parent)
+        val member = t.refinedType match
+          case tpe: Type if t.isStable => s"val ${t.refinedName}: ${printType(tpe)}"
+          case tpe: Type               => s"def ${t.refinedName}: ${printType(tpe)}"
+          case methodic                => s"def ${t.refinedName}${printMethodic(methodic)}"
+        (base, members :+ member)
+      case other => (other, Nil)
 
   /** TASTy stores `type F[A] = G[A]` and `type F = [A] =>> G[A]` alike; the former is how
    *  aliases are almost always written, so a lambda's parameters print as the alias's.

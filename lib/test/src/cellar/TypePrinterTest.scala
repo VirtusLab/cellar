@@ -333,6 +333,22 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature keeps a refinement's members"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val refined = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "refined").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(refined)
+
+        // then
+        assertEquals(sig, "abstract def refined: CellarBox[List] { type Elem = Int; def first: Int }")
+      }
+    }
+
   test("printSymbolSignature renders higher-kinded class type params (Scala 3)"):
     withCtx { ctx =>
       IO.blocking {
