@@ -350,7 +350,7 @@ class TypePrinterTest extends CatsEffectSuite:
         given Context = ctx
         val cls   = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded")
         val alias = cls.declarations.find(_.name.toString == "HandWrittenEta").get
-        assertEquals(TypePrinter.printSymbolSignature(alias), "type HandWrittenEta = [A] =>> List[A]")
+        assertEquals(TypePrinter.printSymbolSignature(alias), "type HandWrittenEta[A] = List[A]")
       }
     }
 
