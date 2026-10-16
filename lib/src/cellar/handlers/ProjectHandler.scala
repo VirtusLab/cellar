@@ -2,6 +2,7 @@ package cellar.handlers
 
 import cats.effect.{ExitCode, IO}
 import cellar.*
+import coursier.Repository
 import fs2.io.file.Path
 import org.typelevel.log4cats.Logger
 import org.typelevel.otel4s.trace.Tracer
@@ -15,8 +16,9 @@ object ProjectHandler:
       module: Option[String],
       noCache: Boolean,
       config: Config = Config.global,
-      testScope: Boolean = false
-  )(body: (Context, Classpath, Classpath) => IO[ExitCode])(using
+      testScope: Boolean = false,
+      extraRepositories: Seq[Repository] = Seq.empty
+  )(body: (Context, Classpath, Classpath, SourceJars) => IO[ExitCode])(using
       tracer: Tracer[IO],
       logger: Logger[IO] = StderrLogger.off
   ): IO[ExitCode] =
@@ -24,8 +26,8 @@ object ProjectHandler:
       for
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
         workingDir   = cwd.getOrElse(Path(System.getProperty("user.dir")))
-        result       <- build.ProjectClasspathProvider.provide(workingDir, module, jreClasspath, noCache, config, testScope).use { (ctx, classpath) =>
-          body(ctx, classpath, jreClasspath)
+        result       <- build.ProjectClasspathProvider.provide(workingDir, module, jreClasspath, noCache, config, testScope, extraRepositories).use { (ctx, classpath, sourceJars) =>
+          body(ctx, classpath, jreClasspath, sourceJars)
         }
       yield result
 

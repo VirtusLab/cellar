@@ -20,12 +20,14 @@ object ContextResource:
 
   /** Adds the Scala stdlib when `resolved` lacks one (Java-only artifacts and projects), since
     * tasty-query reads Java's `int` and `T[]` as `scala.Int` and `scala.Array`. `extraRepositories`
-    * are only used to fetch it.
+    * are only used to fetch it. A jar without a paired sources jar is looked up with
+    * `resolveSources` the first time a symbol from it needs its source.
     */
   def makeWithSources(
       resolved: ResolvedClasspath,
       jreClasspath: Classpath,
-      extraRepositories: Seq[Repository] = Seq.empty
+      extraRepositories: Seq[Repository] = Seq.empty,
+      resolveSources: Path => Option[Path] = _ => None
   )(using
       tracer: Tracer[IO],
       logger: Logger[IO] = StderrLogger.off
@@ -51,7 +53,7 @@ object ContextResource:
           classpath    = jreClasspath ++ jarClasspath
           ctx          <- IO.blocking(Context.initialize(classpath))
           _             = JavaParamNames.register(ctx, classpath)
-          sourceJars   <- IO(SourceJars.pair(kept, jarClasspath, full.sourcesJars)).flatTap {
+          sourceJars   <- IO(SourceJars.pair(kept, jarClasspath, full.sourcesJars, resolveSources)).flatTap {
                             case Some(_) => IO.unit
                             case None    => logger.warn("classpath entries do not line up with jars; sources unavailable")
                           }.map(_.getOrElse(SourceJars.empty))
