@@ -64,7 +64,7 @@ object lib extends CellarPublishModule {
     mvn"io.get-coursier::coursier:2.1.26",
     tastyQuery,
     mvn"org.ow2.asm:asm:9.11",
-    mvn"com.github.javaparser:javaparser-core:3.27.0",
+    mvn"com.github.javaparser:javaparser-core:3.27.1",
     mvn"org.scalameta::parsers:4.17.4",
     mvn"org.scala-lang:scala3-tasty-inspector_3:3.10.0",
     mvn"com.github.pureconfig::pureconfig-core:0.17.10",
