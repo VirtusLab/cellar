@@ -234,11 +234,11 @@ object TypePrinter:
         val visibility = visibilityModifier(tm)
         tm.typeDef match
           case TypeMemberDefinition.OpaqueTypeAlias(_, alias) =>
-            s"${visibility}opaque type ${tm.name} = ${printType(alias)}"
+            s"${visibility}opaque type ${tm.name}${printAliasRhs(alias)}"
           case TypeMemberDefinition.TypeAlias(alias) =>
-            s"${visibility}type ${tm.name} = ${printType(alias)}"
+            s"${visibility}type ${tm.name}${printAliasRhs(alias)}"
           case TypeMemberDefinition.AbstractType(bounds) =>
-            s"${visibility}type ${tm.name}${printBoundsSuffix(bounds)}"
+            s"${visibility}type ${printTypeParam(tm.name, bounds)}"
 
       case other => other.toString
 
@@ -284,18 +284,15 @@ object TypePrinter:
         Option.when(passesThrough)(printType(app.tycon))
       case _ => None
 
-  /** ` >: L <: H`, omitting either half when it is the trivial bound. */
-  private def printBoundsSuffix(bounds: TypeBounds)(using Context): String =
-    bounds match
-      case b: AbstractTypeBounds =>
-        // compare the rendered form: `Type.toString` is a structural dump, never "Nothing"
-        val low  = printType(b.low)
-        val high = printType(b.high)
-        val lo   = if low == "Nothing" then "" else s" >: $low"
-        val hi   = if high == "Any" then "" else s" <: $high"
-        s"$lo$hi"
-      // TypeAlias is the other TypeBounds subtype; low == high == the aliased type
-      case b: TypeAlias => s" = ${printType(b.low)}"
+  /** TASTy stores `type F[A] = G[A]` and `type F = [A] =>> G[A]` alike; the former is how
+   *  aliases are almost always written, so a lambda's parameters print as the alias's.
+   */
+  private def printAliasRhs(alias: Type)(using Context): String =
+    alias match
+      case tl: TypeLambda =>
+        val params = tl.paramNames.zip(tl.paramTypeBounds).map(printTypeParam)
+        s"[${params.mkString(", ")}] = ${printType(tl.resultType)}"
+      case other => s" = ${printType(other)}"
 
   /** Space-terminated, so it prepends to the kind keyword as-is; empty when there is nothing to say. */
   private def classModifiers(cls: ClassSymbol): String =

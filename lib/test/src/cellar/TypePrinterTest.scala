@@ -382,7 +382,7 @@ object TypePrinterTest extends SequentialIOSuite:
         given Context = ctx
         val cls   = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded")
         val alias = cls.declarations.find(_.name.toString == "HandWrittenEta").get
-        expect.eql("type HandWrittenEta = [A] =>> List[A]", TypePrinter.printSymbolSignature(alias))
+        expect.eql("type HandWrittenEta[A] = List[A]", TypePrinter.printSymbolSignature(alias))
       }
     }
 
