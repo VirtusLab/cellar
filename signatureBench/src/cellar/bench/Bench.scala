@@ -42,7 +42,10 @@ object Bench:
       .flatMap(resolved.sourcesJars.get)
 
   private def compare(language: Language, coordinate: String, expected: SourceSide, printed: List[Decl]): LibraryResult =
-    def index(decls: List[Decl]) = decls.groupMapReduce(d => (d.owner, d.key))(identity)((first, _) => first)
+    // Overloads whose parameters share their names have no key that tells them apart.
+    def ambiguous(decls: List[Decl]) = decls.groupBy(d => (d.owner, d.key)).filter(_._2.sizeIs > 1).keySet
+    val clashing = ambiguous(expected.decls) ++ ambiguous(printed)
+    def index(decls: List[Decl]) = decls.filterNot(d => clashing((d.owner, d.key))).map(d => (d.owner, d.key) -> d).toMap
     val want = index(expected.decls)
     val got  = index(printed)
     val pairs = want.keySet.intersect(got.keySet).toList.sorted.map { k =>
@@ -56,6 +59,7 @@ object Bench:
       matched = pairs.size - mismatches.size,
       mismatches = mismatches,
       missing = (want.keySet -- got.keySet).toList.sorted.map(want),
-      extra = (got.keySet -- want.keySet).toList.sorted.map(got),
-      knownGaps = expected.knownGaps
+      extra = (got.keySet -- want.keySet).toList.sorted.map(got).filterNot(language.isGenerated),
+      knownGaps = expected.knownGaps ++
+        Option.when(clashing.nonEmpty)("overloads with identical parameter names (not compared)" -> clashing.size)
     )

@@ -27,6 +27,9 @@ trait Language:
   /** cellar's rendering of the members of `owners`, keyed as `sourceDecls` keys them. */
   def printedDecls(owners: Set[String])(using Context): List[Decl]
 
+  /** A printed declaration the compiler wrote, which is not reported when no source declares it. */
+  def isGenerated(decl: Decl): Boolean = false
+
   /** Applied to both sides before comparing, for differences that carry no meaning. */
   def normalize(text: String): String
 
