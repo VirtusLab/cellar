@@ -4,8 +4,8 @@ import cats.effect.std.Console
 import cats.effect.{ExitCode, IO}
 import cellar.Config
 import com.monovore.decline.Opts
-import com.typesafe.config.{ConfigFactory, ConfigRenderOptions, ConfigValueFactory}
-import fs2.io.file.{Files, Flags, Path}
+import com.typesafe.config.parser.ConfigDocumentFactory
+import fs2.io.file.{CopyFlag, CopyFlags, Files, Flag, Flags, Path}
 
 object TelemetrySubcommand:
 
@@ -63,9 +63,15 @@ object TelemetrySubcommand:
     }
 
   private[cli] def markAnswered(global: Boolean): IO[Unit] =
-    val marker = if global then globalSeenMarker else projectSeenMarker
+    touchMarker(if global then globalSeenMarker else projectSeenMarker)
+
+  /** Ensures `marker` exists without modifying or following anything already at that path. */
+  private[cli] def touchMarker(marker: Path): IO[Unit] =
+    // CreateNew (O_EXCL) refuses to open an existing path, including a symlink, so a repo that
+    // commits the project marker as a symlink cannot make us truncate or create its target.
     Files[IO].createDirectories(marker.parent.get) *>
-      Files[IO].open(marker, Flags.Write).use_
+      Files[IO].open(marker, Flags(Flag.Write, Flag.CreateNew)).use_
+        .recover { case _: java.nio.file.FileAlreadyExistsException => () }
 
   /**
    * Pure decision for the first-run consent gate: whether to withhold the command and show the
@@ -154,15 +160,26 @@ object TelemetrySubcommand:
     }
 
   private[cli] def setEnabled(enabled: Boolean, global: Boolean): IO[Unit] =
-    val target = if global then confFile else projectConfFile
-    Files[IO].createDirectories(target.parent.get) *>
-      Files[IO].readUtf8(target).compile.string
-        .recover { case _: java.nio.file.NoSuchFileException => "" }
-        .flatMap { existing =>
-          val updated  = ConfigFactory.parseString(existing)
-            .withValue("otel.enabled", ConfigValueFactory.fromAnyRef(enabled))
-          val rendered = updated.root().render(
-            ConfigRenderOptions.defaults().setOriginComments(false).setComments(false).setJson(false)
-          )
-          fs2.Stream.emit(rendered).through(Files[IO].writeUtf8(target)).compile.drain
-        }
+    writeEnabled(if global then confFile else projectConfFile, enabled)
+
+  /**
+   * Sets `otel.enabled` in the HOCON file at `conf`, creating it if absent. The rest of the file —
+   * comments, includes, formatting — is kept as written. If `conf` is a symlink, the file it
+   * points to is updated and the link is kept.
+   */
+  private[cli] def writeEnabled(conf: Path, enabled: Boolean): IO[Unit] =
+    for
+      _      <- Files[IO].createDirectories(conf.parent.get)
+      target <- Files[IO].exists(conf).ifM(Files[IO].realPath(conf), IO.pure(conf))
+      existing <- Files[IO].readUtf8(target).compile.string
+                    .recover { case _: java.nio.file.NoSuchFileException => "" }
+      updated = ConfigDocumentFactory.parseString(existing)
+                  .withValueText("otel.enabled", enabled.toString)
+                  .render()
+      // A random-named temp file renamed over the target means a crash never leaves a truncated
+      // config, and no pre-planted path next to it can redirect the write.
+      tmp <- Files[IO].createTempFile(target.parent, target.fileName.toString, ".tmp", None)
+      _   <- (fs2.Stream.emit(updated).through(Files[IO].writeUtf8(tmp)).compile.drain *>
+               Files[IO].move(tmp, target, CopyFlags(CopyFlag.ReplaceExisting, CopyFlag.AtomicMove)))
+               .onError(_ => Files[IO].deleteIfExists(tmp).void)
+    yield ()
