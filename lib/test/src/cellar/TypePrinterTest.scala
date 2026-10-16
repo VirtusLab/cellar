@@ -147,6 +147,22 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature prints an anonymous using parameter as its type"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val separated = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarTC").declarations
+          .find(_.name.toString == "separated").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(separated)
+
+        // then
+        assertEquals(sig, "def separated(as: List[String])(using String): String")
+      }
+    }
+
   test("printSymbolSignature prints context bounds as written (Scala 2)"):
     withScala2Ctx { ctx =>
       IO.blocking {

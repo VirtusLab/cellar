@@ -115,7 +115,8 @@ object TypePrinter:
         val params = names.zip(t.paramTypes).zipWithIndex.collect { case ((n, tp), i) if !elided(n) =>
           val default =
             if defaults.lift(i).contains(true) then s" = ${defaultValues.get(n).map(printDefault).getOrElse("...")}" else ""
-          s"$n: ${printType(tp)}$default"
+          // An anonymous `using` parameter has a compiler name that no caller can write.
+          if t.isContextual && AnonymousUsing.matches(n) then printType(tp) else s"$n: ${printType(tp)}$default"
         }
         val paramStr = s"($prefix${params.mkString(", ")})"
         val rest = t.resultType match
@@ -129,7 +130,8 @@ object TypePrinter:
 
       case t: Type => printType(t)
 
-  private val Evidence = """evidence\$\d+""".r
+  private val Evidence       = """evidence\$\d+""".r
+  private val AnonymousUsing = """x\$\d+""".r
 
   /** `[A: Monoid, F[_]]` and the evidence parameters those context bounds stand for. The compilers
    *  name a context bound's evidence `evidence$N` and pass it in an implicit or using clause, typed
