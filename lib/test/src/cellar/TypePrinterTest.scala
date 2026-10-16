@@ -242,6 +242,36 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature keeps a Serializable parent written by hand"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val obj = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarSerializable")
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(obj)
+
+        // then
+        assertEquals(sig, "object CellarSerializable extends Serializable")
+      }
+    }
+
+  test("printSymbolSignature keeps a Serializable parent written by hand (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val obj = ctx.findStaticModuleClass("cellar.fixture.scala2.CellarSerializable")
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(obj)
+
+        // then
+        assertEquals(sig, "object CellarSerializable extends Serializable")
+      }
+    }
+
   test("printSymbolSignature leaves out parents the compiler adds to objects (Scala 2)"):
     withScala2Ctx { ctx =>
       IO.blocking {

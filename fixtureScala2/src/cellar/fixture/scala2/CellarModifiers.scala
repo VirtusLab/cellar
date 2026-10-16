@@ -1,6 +1,8 @@
 package cellar.fixture.scala2
 
 /** Fixture for modifiers printed on member lines. */
+object CellarSerializable extends Serializable
+
 class CellarModifiers {
   lazy val lazyValue: Int = 1
   var mutable: Int = 0

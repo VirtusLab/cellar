@@ -471,6 +471,8 @@ object TypePrinter:
           case m: TermRef  => m.name.toString == "Mirror" && inDeriving(m.prefix)
           case m: ThisType => m.tref.name.toString == "Mirror$" && inDeriving(m.tref.prefix)
           case _           => false
+        // A written `Serializable` names the `scala.Serializable` alias in the `scala` package object,
+        // so only the compiler's own parent, the class itself, matches here.
         val isObjectSerializable =
           cls.isModuleClass && !cls.isCaseClass && t.name.toString == "Serializable" && (t.prefix match
             case p: PackageRef => Set("scala", "java.io").contains(p.fullyQualifiedName.toString)

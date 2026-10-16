@@ -15,6 +15,8 @@ object CellarPoint:
   type Self = CellarPoint.type
   private[CellarPoint] def origin: Int = 0
 
+object CellarSerializable extends Serializable
+
 /** Fixture for how an enum and its cases are printed. */
 enum CellarShape:
   case Circle, Square
