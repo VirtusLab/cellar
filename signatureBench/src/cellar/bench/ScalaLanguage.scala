@@ -141,7 +141,9 @@ object ScalaLanguage:
       "org.typelevel:cats-core_3:2.12.0",
       "co.fs2:fs2-core_3:3.11.0",
       "io.circe:circe-core_3:0.14.10",
-      "dev.zio:zio_3:2.1.14"
+      "dev.zio:zio_3:2.1.14",
+      // Compiled by Scala 3 since 3.8, so it exercises enums, givens, extensions and opaque types.
+      "org.scala-lang:scala-library:3.10.0"
     )
   )
 
@@ -152,6 +154,7 @@ object ScalaLanguage:
       "org.typelevel:cats-core_2.13:2.12.0",
       "co.fs2:fs2-core_2.13:3.11.0",
       "io.circe:circe-core_2.13:0.14.10",
-      "dev.zio:zio_2.13:2.1.14"
+      "dev.zio:zio_2.13:2.1.14",
+      "org.scala-lang:scala-library:2.13.18"
     )
   )
