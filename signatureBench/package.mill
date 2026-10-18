@@ -8,6 +8,9 @@ import mill.scalalib.*
   */
 object `package` extends build.CommonScalaModule {
   def moduleDeps = Seq(build.lib)
-  def mvnDeps    = Seq(mvn"com.lihaoyi::ujson:4.4.2")
+  def mvnDeps = Seq(
+    mvn"com.github.plokhotnyuk.jsoniter-scala::jsoniter-scala-core:2.41.6",
+    mvn"com.github.plokhotnyuk.jsoniter-scala::jsoniter-scala-macros:2.41.6"
+  )
   def mainClass  = Some("cellar.bench.Main")
 }

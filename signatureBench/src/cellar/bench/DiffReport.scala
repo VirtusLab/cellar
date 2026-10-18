@@ -1,5 +1,8 @@
 package cellar.bench
 
+import com.github.plokhotnyuk.jsoniter_scala.core.{JsonValueCodec, writeToString}
+import com.github.plokhotnyuk.jsoniter_scala.macros.{CodecMakerConfig, JsonCodecMaker}
+
 import scala.io.Source
 import scala.util.Using
 
@@ -44,29 +47,41 @@ object DiffReport:
     }
     Diff(after.language, changes, shared.size - changes.size, (was.keySet -- shared).size, (now.keySet -- shared).size)
 
+  private final case class ChangeData(
+      library: String,
+      owner: String,
+      key: String,
+      source: String,
+      before: String,
+      after: String,
+      outcome: String,
+      category: String
+  )
+  private final case class ReportData(
+      language: String,
+      before: String,
+      after: String,
+      unchanged: Int,
+      onlyBefore: Int,
+      onlyAfter: Int,
+      changes: List[ChangeData]
+  )
+
+  // The page reads `changes` even when nothing changed, which jsoniter would leave out by default.
+  private given JsonValueCodec[ReportData] = JsonCodecMaker.make(CodecMakerConfig.withTransientEmpty(false))
+
   def html(diff: Diff, beforeLabel: String, afterLabel: String): String =
-    val data = ujson.Obj(
-      "language"   -> diff.language,
-      "before"     -> beforeLabel,
-      "after"      -> afterLabel,
-      "unchanged"  -> diff.unchanged,
-      "onlyBefore" -> diff.onlyBefore,
-      "onlyAfter"  -> diff.onlyAfter,
-      "changes" -> diff.changes.map { c =>
-        ujson.Obj(
-          "library"  -> c.library,
-          "owner"    -> c.owner,
-          "key"      -> c.key,
-          "source"   -> c.source,
-          "before"   -> c.before,
-          "after"    -> c.after,
-          "outcome"  -> c.outcome.label,
-          "category" -> c.category
-        )
-      }
+    val data = ReportData(
+      diff.language,
+      beforeLabel,
+      afterLabel,
+      diff.unchanged,
+      diff.onlyBefore,
+      diff.onlyAfter,
+      diff.changes.map(c => ChangeData(c.library, c.owner, c.key, c.source, c.before, c.after, c.outcome.label, c.category))
     )
     // Embedded in a <script> element, where only a closing tag could end it early.
-    val json     = ujson.write(data).replace("</", "<\\/")
+    val json     = writeToString(data).replace("</", "<\\/")
     val template = Using.resource(Source.fromResource("cellar/bench/diff-report.html", getClass.getClassLoader))(_.mkString)
     template.replace("/*DATA*/", json)
 
