@@ -134,7 +134,7 @@ object profilingRuntime extends CellarPublishModule {
     mvn"org.typelevel::otel4s-sdk-trace:0.19.4",
     mvn"org.typelevel::otel4s-sdk-exporter:0.19.4",
     mvn"io.pyroscope:agent:2.9.2",
-    mvn"org.graalvm.sdk:nativeimage:24.1.2"
+    mvn"org.graalvm.sdk:nativeimage:25.0.1"
   )
 
   object test extends ScalaTests with TestModule.Munit {
@@ -201,7 +201,7 @@ object cli extends CellarPublishModule with NativeImageModule {
     super.generatedSources() ++ Seq(PathRef(dir))
   }
 
-  def jvmVersion = "graalvm-community:23.0.2"
+  def jvmVersion = "graalvm-community:25.0.1"
 
   // No `-H:+AllowJRTFileSystem`: with the jrt provider present, the image carries the *build*
   // machine's `java.home` baked into `jdk.internal.jrtfs.SystemImage`, so opening `jrt:/` on any
@@ -212,13 +212,15 @@ object cli extends CellarPublishModule with NativeImageModule {
   // native binary needs jrt: `JreClasspath` reads the bundled `jre.bin` there instead.
   //
   // GC-bound builds on 7 GB macOS runners outlast the default 10-minute deadlock watchdog.
+  // Unsafe access is fixed at build time; otherwise every run warns about Scala's `LazyVals`.
   def nativeImageOptions = Seq(
     "--no-fallback",
     "--enable-url-protocols=http,https",
     "-H:+ReportExceptionStackTraces",
     "-H:+UnlockExperimentalVMOptions",
     "-H:DeadlockWatchdogInterval=30",
-    "-H:-UnlockExperimentalVMOptions"
+    "-H:-UnlockExperimentalVMOptions",
+    "-J--sun-misc-unsafe-memory-access=allow"
   )
 
   def mvnDeps = Seq(
