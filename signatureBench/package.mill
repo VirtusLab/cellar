@@ -1,0 +1,13 @@
+package build.signatureBench
+
+import mill.*
+import mill.scalalib.*
+
+/** Compares cellar's printed signatures with the declarations in published sources jars. Defined
+  * here rather than in build.mill so `compare.sh` can drop the whole folder into another checkout.
+  */
+object `package` extends build.CommonScalaModule {
+  def moduleDeps = Seq(build.lib)
+  def mvnDeps    = Seq(mvn"com.lihaoyi::ujson:4.4.2")
+  def mainClass  = Some("cellar.bench.Main")
+}

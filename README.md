@@ -520,13 +520,14 @@ Compares the signatures cellar prints with the declarations in published sources
 ./mill signatureBench.run scala3                                    # also: scala2
 ```
 
-To see what a printer change does, run the benchmark with `--json` before and after the change, then diff the two runs into an HTML report of every signature whose printing changed:
+To see what a printer change does, compare the working tree with a base ref (`origin/main` by default):
 
 ```sh
-./mill signatureBench.run scala3 --json /tmp/before.json
-./mill signatureBench.run scala3 --json /tmp/after.json
-./mill signatureBench.run diff /tmp/before.json /tmp/after.json /tmp/report.html
+signatureBench/compare.sh scala3            # also: java, scala2
+signatureBench/compare.sh java my-branch
 ```
+
+It benchmarks the base in a temporary worktree with this checkout's benchmark, so both sides differ only in the printer, and caches that run per base commit. It writes `out/signatureBench/compare/<language>-report.html` with every signature whose printing changed, prints how many were fixed or regressed, and exits 1 on a regression. The steps are also available on their own: `signatureBench.run <language> --json run.json` and `signatureBench.run diff before.json after.json report.html`.
 
 ### Installing a local build with Nix
 
