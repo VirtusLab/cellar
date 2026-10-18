@@ -201,7 +201,11 @@ object cli extends CellarPublishModule with NativeImageModule {
     super.generatedSources() ++ Seq(PathRef(dir))
   }
 
-  def jvmVersion = "graalvm-community:25.0.2"
+  // GraalVM 25.0.1 is the last release for macOS x64.
+  def jvmVersion = Task {
+    if scala.util.Properties.isMac && sys.props("os.arch") == "x86_64" then "graalvm-community:25.0.1"
+    else "graalvm-community:25.0.2"
+  }
 
   // No `-H:+AllowJRTFileSystem`: with the jrt provider present, the image carries the *build*
   // machine's `java.home` baked into `jdk.internal.jrtfs.SystemImage`, so opening `jrt:/` on any
