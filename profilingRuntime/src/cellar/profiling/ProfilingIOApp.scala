@@ -8,8 +8,6 @@ import org.typelevel.otel4s.sdk.context.Context
 trait ProfilingIOApp extends cats.effect.IOApp:
   def profilingEnabled: Boolean
 
-  protected final lazy val profilingOnJvm: Boolean = profilingEnabled && !TracingRuntime.NativeImage
-
   protected final val sharedIOLocal: IOLocal[Context] =
     IOLocal[Context](Context.root)
       .syncStep(100)
@@ -19,7 +17,7 @@ trait ProfilingIOApp extends cats.effect.IOApp:
   // Built once so that every call to `runtime` returns the same instance.
   // IOApp.main calls `this.runtime` multiple times (null check, installGlobal, metrics, unsafeRunFiber…).
   private lazy val customRuntime: Option[IORuntime] =
-    if profilingOnJvm then
+    if !TracingRuntime.NativeImage && profilingEnabled then
       System.setProperty("cats.effect.trackFiberContext", "true")
       val threadLocal = sharedIOLocal.unsafeThreadLocal()
       Some(

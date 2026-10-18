@@ -4,6 +4,7 @@ import cats.effect.std.Console
 import cats.effect.{ExitCode, IO, IOLocal, Resource}
 import cats.mtl.Local
 import cats.syntax.all.*
+import org.graalvm.nativeimage.ImageInfo
 import org.http4s.{Header, Headers, Uri}
 import org.typelevel.ci.CIString
 import org.typelevel.otel4s.context.LocalProvider
@@ -22,8 +23,9 @@ import scala.concurrent.duration.*
 
 object TracingRuntime:
 
-  val NativeImage: Boolean =
-    sys.props.get("org.graalvm.nativeimage.imagecode").contains("runtime")
+  // An inline call to `ImageInfo` is folded to a constant by native-image, so the JVM-only branches
+  // it guards (Ember OTLP exporter, Pyroscope) are left out of the native binary entirely.
+  inline def NativeImage: Boolean = ImageInfo.inImageRuntimeCode()
 
   /** Builds a [[Tracer]] for one CLI invocation. Returns a noop tracer when no OTLP
     * endpoint is configured — without an exporter, spans have nowhere to go and

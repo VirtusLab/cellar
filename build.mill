@@ -133,7 +133,8 @@ object profilingRuntime extends CellarPublishModule {
   def mvnDeps = Seq(
     mvn"org.typelevel::otel4s-sdk-trace:0.19.4",
     mvn"org.typelevel::otel4s-sdk-exporter:0.19.4",
-    mvn"io.pyroscope:agent:2.9.2"
+    mvn"io.pyroscope:agent:2.9.2",
+    mvn"org.graalvm.sdk:nativeimage:24.1.2"
   )
 
   object test extends ScalaTests with TestModule.Munit {
@@ -209,10 +210,17 @@ object cli extends CellarPublishModule with NativeImageModule {
   // so the docstring inspector died and dotc printed a crash report over cellar's stdout. Without
   // the provider the lookup raises `ProviderNotFoundException`, which dotc handles. Nothing in the
   // native binary needs jrt: `JreClasspath` reads the bundled `jre.bin` there instead.
+  //
+  // The watchdog interval is raised because on 7 GB macOS arm64 runners the builder sits near its
+  // heap limit and spends 10+ minutes in GC during "Building universe"; the default 10-minute
+  // watchdog mistakes that for a deadlock and aborts the build.
   def nativeImageOptions = Seq(
     "--no-fallback",
     "--enable-url-protocols=http,https",
-    "-H:+ReportExceptionStackTraces"
+    "-H:+ReportExceptionStackTraces",
+    "-H:+UnlockExperimentalVMOptions",
+    "-H:DeadlockWatchdogInterval=30",
+    "-H:-UnlockExperimentalVMOptions"
   )
 
   def mvnDeps = Seq(
