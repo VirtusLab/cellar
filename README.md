@@ -527,7 +527,7 @@ signatureBench/compare.sh scala3            # also: java, scala2
 signatureBench/compare.sh java my-branch
 ```
 
-It benchmarks the base in a temporary worktree with this checkout's benchmark, so both sides differ only in the printer, and caches that run per base commit. It writes `out/signatureBench/compare/<language>-report.html` with every signature whose printing changed, prints how many were fixed or regressed, and exits 1 on a regression. The steps are also available on their own: `signatureBench.run <language> --json run.json` and `signatureBench.run diff before.json after.json report.html`.
+It benchmarks the base in a temporary worktree with this checkout's benchmark, so both sides differ only in the printer, and caches that run per base commit. It writes `out/signatureBench/compare/<language>-report.html` with every signature whose printing changed, prints how many were fixed or regressed, and exits 1 on a regression. Every pull request runs this comparison in CI against its base, for all three languages: the counts appear in the job summary and the HTML reports as `<language>-report.html` artifacts that open in the browser from the run page. The steps are also available on their own: `signatureBench.run <language> --json run.json` and `signatureBench.run diff before.json after.json report.html`.
 
 ### Installing a local build with Nix
 
