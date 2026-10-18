@@ -520,6 +520,14 @@ Compares the signatures cellar prints with the declarations in published sources
 ./mill signatureBench.run scala3                                    # also: scala2
 ```
 
+To see what a printer change does, run the benchmark with `--json` before and after the change, then diff the two runs into an HTML report of every signature whose printing changed:
+
+```sh
+./mill signatureBench.run scala3 --json /tmp/before.json
+./mill signatureBench.run scala3 --json /tmp/after.json
+./mill signatureBench.run diff /tmp/before.json /tmp/after.json /tmp/report.html
+```
+
 ### Installing a local build with Nix
 
 ```sh

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signature Diff</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* A review queue: summary of what changed, filters, then one source/before/after hunk per signature. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #1d2330; --muted: #5d6677; --line: #dde1e8; --accent: #2b5fd9;
+  --del-bg: #fde8e8; --del-fg: #a3262b; --add-bg: #e3f5e7; --add-fg: #1d6b34; --warn: #9a6400; --warn-bg: #fdf1dc;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-code: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151b; --surface: #1a1e26; --fg: #e3e7ee; --muted: #98a1b2; --line: #2c323d; --accent: #7aa2ff;
+    --del-bg: #3a1d20; --del-fg: #ff9b9f; --add-bg: #17331f; --add-fg: #8fe0a6; --warn: #f0b85a; --warn-bg: #3a2c12;
+    color-scheme: dark;
+  }
+}
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 64px; display: grid; gap: 24px; }
+h1 { font-size: 1.6rem; font-weight: 600; margin: 0; text-wrap: balance; }
+.lede { color: var(--muted); margin: 6px 0 0; }
+.label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+code { font-family: var(--font-code); font-size: 0.84rem; }
+.summary { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 24px; }
+@media (max-width: 760px) { .summary { grid-template-columns: 1fr; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; min-width: 0; }
+.cats { display: grid; gap: 4px; margin-top: 10px; }
+.cat { display: grid; grid-template-columns: minmax(0, 12rem) minmax(0, 1fr) 4.5rem; gap: 12px; align-items: center; background: none;
+  border: 0; padding: 4px 6px; border-radius: 6px; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.cat:hover { background: var(--bg); }
+.cat[aria-pressed="true"] { background: var(--bg); box-shadow: inset 0 0 0 1px var(--accent); }
+.bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--accent); }
+.n { text-align: right; font-family: var(--font-code); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.totals { display: grid; gap: 10px; margin-top: 10px; }
+.total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.total:last-child { border-bottom: 0; }
+.total b { font-family: var(--font-code); font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.total.bad b { color: var(--del-fg); }
+.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; position: sticky; top: 0; z-index: 2; background: var(--bg);
+  padding-block: 10px; border-bottom: 1px solid var(--line); }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field.grow { flex: 1 1 16rem; }
+select, input { font: inherit; font-size: 0.9rem; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%; }
+select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.count { color: var(--muted); font-size: 0.85rem; margin-left: auto; padding-bottom: 6px; font-variant-numeric: tabular-nums; }
+.list { display: grid; gap: 12px; }
+.item { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.item header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.owner { font-family: var(--font-code); font-size: 0.82rem; font-weight: 600; overflow-wrap: anywhere; }
+.meta { color: var(--muted); font-size: 0.8rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.chip { font-size: 0.72rem; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.chip.fixed { color: var(--add-fg); background: var(--add-bg); border-color: transparent; }
+.chip.regressed { color: var(--del-fg); background: var(--del-bg); border-color: transparent; }
+.chip.differs { color: var(--warn); background: var(--warn-bg); border-color: transparent; }
+.hunk { overflow-x: auto; }
+.row { display: grid; grid-template-columns: 4.6rem minmax(0, 1fr); font-family: var(--font-code); font-size: 0.82rem; line-height: 1.6; }
+.row .side { padding: 4px 10px; color: var(--muted); font-family: var(--font-ui); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; border-right: 1px solid var(--line); }
+.row .text { padding: 4px 12px; white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.row.src .text { color: var(--muted); }
+.row.before { background: color-mix(in srgb, var(--del-bg) 45%, transparent); }
+.row.after { background: color-mix(in srgb, var(--add-bg) 45%, transparent); }
+del { background: var(--del-bg); color: var(--del-fg); text-decoration: none; border-radius: 2px; }
+ins { background: var(--add-bg); color: var(--add-fg); text-decoration: none; border-radius: 2px; }
+.more { justify-self: center; font: inherit; padding: 8px 18px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.empty { color: var(--muted); padding: 24px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <h1 id="title">Signature Diff</h1>
+    <p class="lede" id="lede"></p>
+  </div>
+  <section class="summary">
+    <div class="panel"><div class="label">By mismatch category · click to filter</div><div class="cats" id="cats"></div></div>
+    <div class="panel"><div class="label">Outcome</div><div class="totals" id="totals"></div></div>
+  </section>
+  <div class="filters">
+    <div class="field"><label class="label" for="f-lib">Library</label><select id="f-lib"></select></div>
+    <div class="field"><label class="label" for="f-cat">Category</label><select id="f-cat"></select></div>
+    <div class="field"><label class="label" for="f-out">Outcome</label><select id="f-out"></select></div>
+    <div class="field grow"><label class="label" for="f-q">Search</label><input id="f-q" type="search" placeholder="owner, name or signature text"></div>
+    <div class="count" id="count"></div>
+  </div>
+  <div class="list" id="list"></div>
+</div>
+<script id="diff-data" type="application/json">/*DATA*/</script>
+<script>
+const DATA = JSON.parse(document.getElementById("diff-data").textContent);
+const PAGE = 60;
+const $ = id => document.getElementById(id);
+let shown = PAGE;
+const all = DATA.changes.map(c => ({ ...c, hay: `${c.owner} ${c.key} ${c.source} ${c.before} ${c.after}`.toLowerCase() }));
+
+function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+function libName(lib) { const p = lib.split(":"); return p.length === 3 ? `${p[1]} ${p[2]}` : lib; }
+
+// Token-level LCS, so the diff marks whole identifiers and punctuation, as a word diff does.
+function tokens(s) { return s.match(/[\p{L}\p{N}_$]+|\s+|./gu) || []; }
+function diff(a, b) {
+  const x = tokens(a), y = tokens(b), n = x.length, m = y.length;
+  const t = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+    t[i][j] = x[i] === y[j] ? t[i + 1][j + 1] + 1 : Math.max(t[i + 1][j], t[i][j + 1]);
+  let i = 0, j = 0, left = "", right = "";
+  while (i < n && j < m) {
+    if (x[i] === y[j]) { left += esc(x[i]); right += esc(y[j]); i++; j++; }
+    else if (t[i + 1][j] >= t[i][j + 1]) left += `<del>${esc(x[i++])}</del>`;
+    else right += `<ins>${esc(y[j++])}</ins>`;
+  }
+  while (i < n) left += `<del>${esc(x[i++])}</del>`;
+  while (j < m) right += `<ins>${esc(y[j++])}</ins>`;
+  return [left.replace(/<\/del><del>/g, ""), right.replace(/<\/ins><ins>/g, "")];
+}
+
+function counted(key) {
+  const c = new Map();
+  for (const e of all) c.set(e[key], (c.get(e[key]) || 0) + 1);
+  return [...c.entries()].sort((a, b) => b[1] - a[1]);
+}
+function options(sel, values, anyLabel) {
+  sel.innerHTML = `<option value="">${anyLabel}</option>` + values.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("");
+}
+
+function filtered() {
+  const lib = $("f-lib").value, cat = $("f-cat").value, out = $("f-out").value, q = $("f-q").value.trim().toLowerCase();
+  return all.filter(e => (!lib || e.library === lib) && (!cat || e.category === cat) && (!out || e.outcome === out) && (!q || e.hay.includes(q)));
+}
+
+function render() {
+  const rows = filtered();
+  $("count").textContent = `${rows.length.toLocaleString()} of ${all.length.toLocaleString()} changed`;
+  for (const b of document.querySelectorAll(".cat")) b.setAttribute("aria-pressed", String(b.dataset.cat === $("f-cat").value));
+  if (!rows.length) { $("list").innerHTML = `<div class="empty">${all.length ? "No changed signatures match these filters." : "No signature changed between these runs."}</div>`; return; }
+  const chip = o => o === "fixed" ? "fixed" : o === "regressed" ? "regressed" : "differs";
+  const html = rows.slice(0, shown).map(e => {
+    const [before, after] = diff(e.before, e.after);
+    return `<article class="item">
+      <header><span class="owner">${esc(e.owner)}</span><span class="meta">${esc(libName(e.library))}</span>
+        <span class="chips"><span class="chip">${esc(e.category)}</span><span class="chip ${chip(e.outcome)}">${esc(e.outcome)}</span></span></header>
+      <div class="hunk">
+        <div class="row src"><span class="side">source</span><span class="text">${esc(e.source)}</span></div>
+        <div class="row before"><span class="side">− before</span><span class="text">${before}</span></div>
+        <div class="row after"><span class="side">+ after</span><span class="text">${after}</span></div>
+      </div></article>`;
+  }).join("");
+  const rest = rows.length - shown;
+  $("list").innerHTML = html + (rest > 0 ? `<button class="more" id="more" type="button">Show ${Math.min(PAGE, rest)} more (${rest.toLocaleString()} left)</button>` : "");
+  const more = $("more"); if (more) more.addEventListener("click", () => { shown += PAGE; render(); });
+}
+
+function summary() {
+  $("title").textContent = `${DATA.language} Signature Diff`;
+  $("lede").innerHTML = `Signatures whose printed form differs between <code>${esc(DATA.before)}</code> and <code>${esc(DATA.after)}</code>, each shown with the declaration in its sources jar.`;
+  const cats = counted("category"), max = cats.length ? cats[0][1] : 1;
+  $("cats").innerHTML = cats.map(([c, n]) => `<button class="cat" type="button" data-cat="${esc(c)}" aria-pressed="false">
+    <span>${esc(c)}</span><span class="bar"><span style="width:${(100 * n / max).toFixed(1)}%"></span></span><span class="n">${n.toLocaleString()}</span></button>`).join("")
+    || `<div class="empty">Nothing changed.</div>`;
+  for (const b of document.querySelectorAll(".cat")) b.addEventListener("click", () => {
+    $("f-cat").value = $("f-cat").value === b.dataset.cat ? "" : b.dataset.cat; shown = PAGE; render();
+  });
+  const by = o => all.filter(e => e.outcome === o).length;
+  $("totals").innerHTML = [
+    ["Fixed", by("fixed"), ""], ["Regressed", by("regressed"), by("regressed") ? "bad" : ""], ["Changed, still differ", by("still differs"), ""],
+    ["Changed, matched both times", by("changed"), ""], ["Unchanged", DATA.unchanged, ""],
+    ["Paired only before / only after", `${DATA.onlyBefore} / ${DATA.onlyAfter}`, ""],
+  ].map(([l, n, cls]) => `<div class="total ${cls}"><span>${l}</span><b>${typeof n === "number" ? n.toLocaleString() : n}</b></div>`).join("");
+}
+
+options($("f-lib"), counted("library").map(([l]) => [l, libName(l)]), "All libraries");
+options($("f-cat"), counted("category").map(([c, n]) => [c, `${c} (${n})`]), "All categories");
+options($("f-out"), counted("outcome").map(([o, n]) => [o, `${o} (${n})`]), "Any outcome");
+for (const id of ["f-lib", "f-cat", "f-out"]) $(id).addEventListener("change", () => { shown = PAGE; render(); });
+let timer; $("f-q").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { shown = PAGE; render(); }, 150); });
+summary(); render();
+</script>
+</body>
+</html>

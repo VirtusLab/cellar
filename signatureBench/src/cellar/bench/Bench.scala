@@ -8,13 +8,18 @@ import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 
 final case class Mismatch(owner: String, expected: String, actual: String, category: String)
 
+/** A source declaration and cellar's rendering of it, as written; `category` is set on a mismatch. */
+final case class Pair(owner: String, key: String, source: String, printed: String, category: Option[String]):
+  def matched: Boolean = category.isEmpty
+
 final case class LibraryResult(
     coordinate: String,
     matched: Int,
     mismatches: List[Mismatch],
     missing: List[Decl],
     extra: List[Decl],
-    knownGaps: Map[String, Int]
+    knownGaps: Map[String, Int],
+    pairs: List[Pair]
 ):
   def compared: Int = matched + mismatches.size
 
@@ -49,10 +54,12 @@ object Bench:
     val want = index(expected.decls)
     val got  = index(printed)
     val pairs = want.keySet.intersect(got.keySet).toList.sorted.map { k =>
-      (want(k), language.normalize(want(k).text), language.normalize(got(k).text))
+      val (e, a) = (language.normalize(want(k).text), language.normalize(got(k).text))
+      Pair(k._1, k._2, want(k).text, got(k).text, Option.when(e != a)(language.classify(e, a)))
     }
     val mismatches = pairs.collect {
-      case (decl, e, a) if e != a => Mismatch(decl.owner, e, a, language.classify(e, a))
+      case p @ Pair(owner, _, _, _, Some(category)) =>
+        Mismatch(owner, language.normalize(p.source), language.normalize(p.printed), category)
     }
     LibraryResult(
       coordinate,
@@ -61,5 +68,6 @@ object Bench:
       missing = (want.keySet -- got.keySet).toList.sorted.map(want),
       extra = (got.keySet -- want.keySet).toList.sorted.map(got).filterNot(language.isGenerated),
       knownGaps = expected.knownGaps ++
-        Option.when(clashing.nonEmpty)("overloads with identical parameter names (not compared)" -> clashing.size)
+        Option.when(clashing.nonEmpty)("overloads with identical parameter names (not compared)" -> clashing.size),
+      pairs = pairs
     )
