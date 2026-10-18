@@ -211,9 +211,7 @@ object cli extends CellarPublishModule with NativeImageModule {
   // the provider the lookup raises `ProviderNotFoundException`, which dotc handles. Nothing in the
   // native binary needs jrt: `JreClasspath` reads the bundled `jre.bin` there instead.
   //
-  // The watchdog interval is raised because on 7 GB macOS arm64 runners the builder sits near its
-  // heap limit and spends 10+ minutes in GC during "Building universe"; the default 10-minute
-  // watchdog mistakes that for a deadlock and aborts the build.
+  // GC-bound builds on 7 GB macOS runners outlast the default 10-minute deadlock watchdog.
   def nativeImageOptions = Seq(
     "--no-fallback",
     "--enable-url-protocols=http,https",

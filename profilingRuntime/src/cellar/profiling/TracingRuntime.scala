@@ -23,8 +23,7 @@ import scala.concurrent.duration.*
 
 object TracingRuntime:
 
-  // An inline call to `ImageInfo` is folded to a constant by native-image, so the JVM-only branches
-  // it guards (Ember OTLP exporter, Pyroscope) are left out of the native binary entirely.
+  // native-image folds this call, so the JVM-only branches it guards stay out of the binary.
   inline def NativeImage: Boolean = ImageInfo.inImageRuntimeCode()
 
   /** Builds a [[Tracer]] for one CLI invocation. Returns a noop tracer when no OTLP
