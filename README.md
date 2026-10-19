@@ -186,10 +186,8 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 | `-v`, `--verbose` | all except `telemetry` | Log progress and warnings to stderr |
 | `--debug` | all except `telemetry` | Log detailed diagnostics and stack traces to stderr |
 
-Private repositories: credentials from `~/.config/coursier/credentials.properties` (or
-`COURSIER_CONFIG_DIR`) and the `COURSIER_CREDENTIALS` environment variable are read the same way
-the coursier CLI, sbt and Mill read them, and applied to every repository whose host matches.
-See the [coursier credentials docs](https://get-coursier.io/docs/other-credentials).
+Private repositories need credentials in coursier's format — see
+[Private repositories](#private-repositories).
 
 Diagnostics are written to stderr, never stdout, so `--verbose` and `--debug` are safe to use
 when piping output into a prompt. Set `CELLAR_LOG=verbose` or `CELLAR_LOG=debug` to get the same
@@ -320,9 +318,54 @@ maven {
 Maven Central and Ivy local stay available, and CLI `-r` values are appended to the configured list.
 Lists replace rather than merge, so a project-level `maven.repositories` overrides the user-level
 list and `repositories = []` clears it for that project. Configuration holds URLs only —
-credentials come from coursier, as described above.
+credentials come from coursier, see [Private repositories](#private-repositories).
 
 Or via environment: `CELLAR_SBT_BINARY=sbtn cellar get --module core cats.Monad`
+
+### Private repositories
+
+Project-aware commands get the classpath from your build tool, so they use whatever credentials
+the build already has.
+
+External commands resolve with coursier and read only coursier's credentials — the same ones the
+coursier CLI, scala-cli and Metals use. cellar never reads another tool's credentials
+(`~/.sbt/.credentials`, `~/.m2/settings.xml`, `~/.gradle/gradle.properties`). Coursier looks in:
+
+1. `COURSIER_CREDENTIALS` (or `-Dcoursier.credentials`): inline entries, or a path to a
+   properties file. When set, the files in 2. are ignored.
+2. `credentials.properties` and `credentials/*.properties` in the coursier config directory:
+   `~/.config/coursier` on Linux, `~/Library/Application Support/Coursier` on macOS, or
+   `COURSIER_CONFIG_DIR`.
+3. `repositories.credentials` in the scala-cli config (`scala-cli config repositories.credentials …`).
+
+`credentials.properties`:
+
+```properties
+company.host=artifactory.company.com
+company.username=alice
+company.password=s3cret
+# Optional:
+company.realm=Artifactory Realm
+company.https-only=true
+```
+
+Inline, one entry per line: `artifactory.company.com alice:s3cret`, or
+`artifactory.company.com(Artifactory Realm) alice:s3cret` with a realm.
+
+Credentials apply to every request to a matching host, but are sent only after the server
+answers `401`; a repository that rejects anonymous requests some other way never gets them.
+
+Coming from sbt, an `~/.sbt/.credentials` file maps one-to-one:
+
+| sbt `.credentials` | coursier `credentials.properties` |
+|--------------------|-----------------------------------|
+| `realm=…`          | `<name>.realm=…`                  |
+| `host=…`           | `<name>.host=…`                   |
+| `user=…`           | `<name>.username=…`               |
+| `password=…`       | `<name>.password=…`               |
+
+A failed resolution lists every location coursier tried; a missing or wrong credential shows there
+as `unauthorized: <url> (<realm>)`.
 
 Trust a TLS-intercepting proxy's CA. The native binary ignores `JAVA_TOOL_OPTIONS`, so set the
 trust store in `~/.cellar/cellar.conf` (same format as scala-cli's `java.properties`):
