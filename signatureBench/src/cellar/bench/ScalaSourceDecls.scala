@@ -117,15 +117,18 @@ final class ScalaSourceDecls(scala2: Boolean):
       val extendsStr = if parents.isEmpty then "" else parents.mkString(" extends ", " with ", "")
       emit(path, "class", s"${visibility(mods)}${implicitness(mods)}$modifiers$kind $name$tparams$extendsStr")
 
-    // A case class's first parameter list and `val`/`var` parameters are fields.
+    // A case class's first parameter list and `val`/`var` parameters are fields. A field from an
+    // implicit clause is an implicit val, since the compiler flags the clause's parameters, and so
+    // their accessors, implicit.
     private def fields(path: String, ctor: Ctor.Primary, isCase: Boolean): Unit =
       ctor.paramClauses.toList.zipWithIndex.foreach { (clause, i) =>
+        val implicitness = if clausePrefix(clause) == "implicit " then "implicit " else ""
         clause.values.foreach { p =>
           val isVar = p.mods.exists(_.isInstanceOf[Mod.VarParam])
           val isVal = p.mods.exists(_.isInstanceOf[Mod.ValParam]) || (isCase && i == 0 && clause.mod.isEmpty)
           if (isVal || isVar) && visible(p.mods) then
             p.decltpe.foreach { tpe =>
-              emit(path, s"term:${p.name.value}", s"${visibility(p.mods)}${if isVar then "var" else "val"} ${p.name.value}: ${tpe.syntax}")
+              emit(path, s"term:${p.name.value}", s"${visibility(p.mods)}$implicitness${if isVar then "var" else "val"} ${p.name.value}: ${tpe.syntax}")
             }
         }
       }
@@ -160,15 +163,19 @@ final class ScalaSourceDecls(scala2: Boolean):
     private def renderGroups(groups: List[scala.meta.Member.ParamClauseGroup]): String =
       groups.map(g => g.tparamClause.syntax + g.paramClauses.map(renderClause).mkString).mkString
 
-    private def renderClause(clause: Term.ParamClause): String =
+    /** `"implicit "`, `"using "` or `""`, as the clause opens. */
+    private def clausePrefix(clause: Term.ParamClause): String =
       // Scala 2 syntax marks a clause implicit on its first parameter rather than on the clause.
       val firstMods = clause.values.headOption.toList.flatMap(_.mods)
-      val prefix = clause.mod match
+      clause.mod match
         case Some(_: Mod.Using)                               => "using "
         case Some(_: Mod.Implicit)                            => "implicit "
         case _ if firstMods.exists(_.isInstanceOf[Mod.Implicit]) => "implicit "
         case _ if firstMods.exists(_.isInstanceOf[Mod.Using])    => "using "
         case _                                                => ""
+
+    private def renderClause(clause: Term.ParamClause): String =
+      val prefix = clausePrefix(clause)
       val params = clause.values.map { p =>
         val tpe     = p.decltpe.map(_.syntax).getOrElse("")
         val default = p.default.map(d => s" = ${printableDefault(d.pos.text)}").getOrElse("")
