@@ -3,13 +3,13 @@ package cellar
 import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
-import weaver.{Expectations, SimpleIOSuite}
+import weaver.Expectations
 
 /** End-to-end integration tests against locally published fixture artifacts.
   *
   * Prerequisites: `./mill publishFixtures` must have been run.
   */
-object IntegrationTest extends SimpleIOSuite:
+object IntegrationTest extends SequentialIOSuite:
 
   private def safeRun(f: IO[ExitCode])(using Console[IO]): IO[ExitCode] =
     f.handleErrorWith(e => Console[IO].errorln(e.getMessage).as(ExitCode.Error))

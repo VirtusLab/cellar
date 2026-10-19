@@ -3,9 +3,8 @@ package cellar
 import cats.effect.IO
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 import tastyquery.Contexts.Context
-import weaver.SimpleIOSuite
 
-object GetFormatterTest extends SimpleIOSuite:
+object GetFormatterTest extends SequentialIOSuite:
 
   private def withCtx[A](body: Context => IO[A]): IO[A] =
     for

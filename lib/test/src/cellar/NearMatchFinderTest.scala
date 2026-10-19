@@ -3,9 +3,8 @@ package cellar
 import cats.effect.IO
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 import tastyquery.Contexts.Context
-import weaver.SimpleIOSuite
 
-object NearMatchFinderTest extends SimpleIOSuite:
+object NearMatchFinderTest extends SequentialIOSuite:
 
   private def withCtxAndCp[A](
       body: (Context, tastyquery.Classpaths.Classpath) => IO[A]

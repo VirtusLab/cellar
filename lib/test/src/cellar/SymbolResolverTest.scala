@@ -4,9 +4,8 @@ import cats.effect.IO
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 import tastyquery.Contexts.Context
 import tastyquery.Symbols.{ClassSymbol, TermSymbol}
-import weaver.SimpleIOSuite
 
-object SymbolResolverTest extends SimpleIOSuite:
+object SymbolResolverTest extends SequentialIOSuite:
 
   private def withCtx[A](body: Context => IO[A]): IO[A] =
     for

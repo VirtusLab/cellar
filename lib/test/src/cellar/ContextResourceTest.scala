@@ -2,9 +2,8 @@ package cellar
 
 import cats.effect.IO
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
-import weaver.SimpleIOSuite
 
-object ContextResourceTest extends SimpleIOSuite:
+object ContextResourceTest extends SequentialIOSuite:
 
   test("make with valid jrePaths and no jars succeeds"):
     JreClasspath.jrtPath().flatMap { jrePaths =>

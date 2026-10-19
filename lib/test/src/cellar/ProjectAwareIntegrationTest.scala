@@ -5,7 +5,7 @@ import cats.effect.std.Console
 import cats.syntax.all.*
 import cellar.process.ProcessRunner
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
-import weaver.{Expectations, SimpleIOSuite}
+import weaver.Expectations
 
 import java.nio.file.Files
 import fs2.io.file.{Files => Fs2Files, Path}
@@ -15,7 +15,7 @@ import fs2.io.file.{Files => Fs2Files, Path}
   * Tests require build tools (scala-cli, mill) on PATH.
   * Tests that require unavailable tools are ignored via `requireTool`.
   */
-object ProjectAwareIntegrationTest extends SimpleIOSuite:
+object ProjectAwareIntegrationTest extends SequentialIOSuite:
 
   private def safeRun(f: IO[ExitCode])(using Console[IO]): IO[ExitCode] =
     f.handleErrorWith(e => Console[IO].errorln(e.getMessage).as(ExitCode.Error))
