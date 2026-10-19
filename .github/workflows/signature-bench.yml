@@ -13,6 +13,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      statuses: write
     strategy:
       fail-fast: false
       matrix:
@@ -60,6 +61,23 @@ jobs:
             echo
             echo "The \`${{ matrix.language }}-report.html\` artifact holds the HTML report of every changed signature."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # A commit status's description shows beside it in the PR's checks list, where a job only shows
+      # its result. A check run would do the same but lands under another workflow, because a job's
+      # token cannot choose the check suite. A fork's token cannot write statuses.
+      - name: Report the counts on the PR
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ steps.compare.outputs.status }}
+        run: |
+          line=$(grep -E '^[[:alnum:]]+: [0-9]+ changed' compare.log || true)
+          counts=${line#*: }
+          gh api "repos/${{ github.repository }}/statuses/${{ github.event.pull_request.head.sha }}" --silent \
+            -f context="Signature counts (${{ matrix.language }})" \
+            -f state="$([[ $STATUS == 0 ]] && echo success || echo failure)" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            -f description="${counts:-The benchmark did not finish}"
 
       # Unzipped, so the report opens from the run page instead of downloading as an archive.
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
