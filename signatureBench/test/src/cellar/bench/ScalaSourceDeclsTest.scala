@@ -4,8 +4,8 @@ import munit.FunSuite
 
 class ScalaSourceDeclsTest extends FunSuite:
 
-  private def decls(source: String): SourceSide =
-    ScalaSourceDecls(scala2 = false).read(Iterator("p/Api.scala" -> source))
+  private def decls(source: String, scala2: Boolean = false): SourceSide =
+    ScalaSourceDecls(scala2).read(Iterator("p/Api.scala" -> source))
 
   private def text(source: String, key: String): String =
     decls(source).decls.find(_.key == key).map(_.text).getOrElse(fail(s"no $key in ${decls(source).decls}"))
@@ -26,3 +26,11 @@ class ScalaSourceDeclsTest extends FunSuite:
   test("an anonymous given is counted as a gap"):
     val side = decls("package p\nobject O:\n  given Ordering[Int] = ???\n")
     assertEquals(side.knownGaps, Map("anonymous or template givens (not compared)" -> 1))
+
+  test("a field from an implicit clause is an implicit val"):
+    val source = "package p\ncase class C[O](o: O)(implicit val ct: Ordering[O])\n"
+    assertEquals(decls(source).decls.find(_.key == "term:ct").map(_.text), Some("implicit val ct: Ordering[O]"))
+
+  test("a field from a Scala 2 implicit clause is an implicit val"):
+    val source = "package p\ncase class C[O](o: O)(implicit val ct: Ordering[O])\n"
+    assertEquals(decls(source, scala2 = true).decls.find(_.key == "term:ct").map(_.text), Some("implicit val ct: Ordering[O]"))
