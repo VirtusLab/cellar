@@ -2,7 +2,7 @@ package cellar
 
 import tastyquery.Contexts.Context
 import tastyquery.Modifiers.{OpenLevel, TermSymbolKind, Visibility}
-import tastyquery.Names.nme
+import tastyquery.Names.{SimpleName, UniqueName, UnsignedTermName, nme}
 import tastyquery.Symbols.{
   ClassSymbol,
   ClassTypeParamSymbol,
@@ -126,25 +126,33 @@ object TypePrinter:
 
       case t: Type => printType(t)
 
-  private val Evidence = """evidence\$\d+""".r
+  /** Whether parameter `name` of `clause` is a context bound's evidence, as dotty's signature help
+   *  decides it: an implicit or using parameter named with the `evidence$` unique-name kind
+   *  (`ContextBoundParamName`). A Scala 2 pickle has no name kinds, so there it is a plain
+   *  `evidence$N`.
+   */
+  private def isEvidence(name: UnsignedTermName, clause: MethodType): Boolean =
+    (clause.isImplicit || clause.isContextual) && (name match
+      case UniqueName(_, "evidence$", _) => true
+      case SimpleName(s)                 => Scala2Evidence.matches(s)
+      case _                             => false)
 
-  /** `[A: Monoid, F[_]]` and the evidence parameters those context bounds stand for. The compilers
-   *  name a context bound's evidence `evidence$N` and pass it in an implicit or using clause, typed
-   *  by the bound applied to the one type parameter.
+  private val Scala2Evidence = """evidence\$\d+""".r
+
+  /** `[A: Monoid, F[_]]` and the names of the evidence parameters those context bounds stand for:
+   *  evidence typed by a type class applied to just one of `poly`'s type parameters.
    */
   private def printPolyParams(poly: PolyType)(using Context): (String, Set[String]) =
     def evidenceIn(tpe: TypeOrMethodic): List[(String, Int, String)] =
       tpe match
         case m: MethodType =>
-          val here =
-            if !(m.isImplicit || m.isContextual) then Nil
-            else
-              m.paramNames.zip(m.paramTypes).collect {
-                case (n, app: AppliedType) if Evidence.matches(n.toString) =>
-                  app.args match
-                    case List(ref: TypeParamRef) if ref.binder eq poly => Some((n.toString, ref.paramNum, printType(app.tycon)))
-                    case _                                             => None
-              }.flatten
+          val here = m.paramNames.zip(m.paramTypes).flatMap {
+            case (n, app: AppliedType) if isEvidence(n, m) =>
+              app.args match
+                case List(ref: TypeParamRef) if ref.binder eq poly => Some((n.toString, ref.paramNum, printType(app.tycon)))
+                case _                                             => None
+            case _ => None
+          }
           here ++ evidenceIn(m.resultType)
         // An extension's evidence follows the method's own type parameters.
         case p: PolyType => evidenceIn(p.resultType)
