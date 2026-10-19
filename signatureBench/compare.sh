@@ -18,7 +18,15 @@ mkdir -p "$out"
 # Runs a step with its output in a log, shown only when the step fails.
 quietly() {
   local log=$1; shift
-  "$@" > "$log" 2>&1 || { cat "$log"; exit 2; }
+  "$@" > "$log" 2>&1 || { local status=$?; cat "$log"; echo "exit status $status: $*"; exit 2; }
+}
+
+# Sets variable $1 to the benchmark's launcher in checkout $2, built with Mill options $4...;
+# `./mill run` would report every failure of the benchmark as exit 1, hiding the JVM's own status.
+launcher() {
+  local var=$1 dir=$2 log=$3; shift 3
+  (cd "$dir" && quietly "$log" ./mill "$@" show signatureBench.launcher)
+  printf -v "$var" '%s' "$(sed -nE 's/^"ref:[^:]*:[^:]*:(.*)"$/\1/p' "$log")"
 }
 
 sha=$(git -C "$root" rev-parse --verify "$base^{commit}")
@@ -41,14 +49,16 @@ if [[ ! -f $base_json ]]; then
        skip && /^}/ { skip = 0; next }
        !skip' "$tmp/base/build.mill" > "$tmp/build.mill"
   mv "$tmp/build.mill" "$tmp/base/build.mill"
-  (cd "$tmp/base" && quietly "$out/$lang-base.log" ./mill --no-daemon signatureBench.run "$lang" --json "$base_json.part")
+  launcher base_run "$tmp/base" "$out/$lang-base-build.log" --no-daemon
+  quietly "$out/$lang-base.log" "$base_run" "$lang" --json "$base_json.part"
   mv "$base_json.part" "$base_json"
 fi
 
 echo "benchmarking the working tree..."
-(cd "$root" && quietly "$out/$lang-head.log" ./mill signatureBench.run "$lang" --json "$out/$lang-head.json")
+launcher head_run "$root" "$out/$lang-head-build.log"
+quietly "$out/$lang-head.log" "$head_run" "$lang" --json "$out/$lang-head.json"
 
-(cd "$root" && quietly "$out/$lang-diff.log" ./mill signatureBench.run diff "$base_json" "$out/$lang-head.json" "$out/$lang-report.html")
+quietly "$out/$lang-diff.log" "$head_run" diff "$base_json" "$out/$lang-head.json" "$out/$lang-report.html"
 summary=$(grep -E '^[[:alnum:]]+: [0-9]+ changed' "$out/$lang-diff.log" || true)
 [[ -n $summary ]] || { cat "$out/$lang-diff.log"; echo "no summary in the diff output"; exit 2; }
 echo "$summary"
