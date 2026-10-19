@@ -120,12 +120,6 @@ object lib extends CellarPublishModule {
   }
 }
 
-/** Compares cellar's printed signatures with the declarations in published sources jars. */
-object signatureBench extends CommonScalaModule {
-  def moduleDeps = Seq(lib)
-  def mainClass  = Some("cellar.bench.Main")
-}
-
 object profilingRuntime extends CellarPublishModule {
   def artifactName   = "cellar-profiling-runtime"
   def pomSettings    = cellarPom("Cellar profiling and tracing runtime (Pyroscope + OTLP)")

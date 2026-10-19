@@ -8,13 +8,18 @@ import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 
 final case class Mismatch(owner: String, expected: String, actual: String, category: String)
 
+/** A source declaration and cellar's rendering of it, as written; `category` is set on a mismatch. */
+final case class Pair(owner: String, key: String, source: String, printed: String, category: Option[String]):
+  def matched: Boolean = category.isEmpty
+
 final case class LibraryResult(
     coordinate: String,
     matched: Int,
     mismatches: List[Mismatch],
     missing: List[Decl],
     extra: List[Decl],
-    knownGaps: Map[String, Int]
+    knownGaps: Map[String, Int],
+    pairs: List[Pair]
 ):
   def compared: Int = matched + mismatches.size
 
@@ -42,20 +47,27 @@ object Bench:
       .flatMap(resolved.sourcesJars.get)
 
   private def compare(language: Language, coordinate: String, expected: SourceSide, printed: List[Decl]): LibraryResult =
-    def index(decls: List[Decl]) = decls.groupMapReduce(d => (d.owner, d.key))(identity)((first, _) => first)
+    // Overloads whose parameters share their names have no key that tells them apart.
+    def ambiguous(decls: List[Decl]) = decls.groupBy(d => (d.owner, d.key)).filter(_._2.sizeIs > 1).keySet
+    val clashing = ambiguous(expected.decls) ++ ambiguous(printed)
+    def index(decls: List[Decl]) = decls.filterNot(d => clashing((d.owner, d.key))).map(d => (d.owner, d.key) -> d).toMap
     val want = index(expected.decls)
     val got  = index(printed)
     val pairs = want.keySet.intersect(got.keySet).toList.sorted.map { k =>
-      (want(k), language.normalize(want(k).text), language.normalize(got(k).text))
+      val (e, a) = (language.normalize(want(k).text), language.normalize(got(k).text))
+      Pair(k._1, k._2, want(k).text, got(k).text, Option.when(e != a)(language.classify(e, a)))
     }
     val mismatches = pairs.collect {
-      case (decl, e, a) if e != a => Mismatch(decl.owner, e, a, language.classify(e, a))
+      case p @ Pair(owner, _, _, _, Some(category)) =>
+        Mismatch(owner, language.normalize(p.source), language.normalize(p.printed), category)
     }
     LibraryResult(
       coordinate,
       matched = pairs.size - mismatches.size,
       mismatches = mismatches,
       missing = (want.keySet -- got.keySet).toList.sorted.map(want),
-      extra = (got.keySet -- want.keySet).toList.sorted.map(got),
-      knownGaps = expected.knownGaps
+      extra = (got.keySet -- want.keySet).toList.sorted.map(got).filterNot(language.isGenerated),
+      knownGaps = expected.knownGaps ++
+        Option.when(clashing.nonEmpty)("overloads with identical parameter names (not compared)" -> clashing.size),
+      pairs = pairs
     )

@@ -1,0 +1,82 @@
+name: Signature benchmark
+
+# Benchmarks the PR's printer against its base and reports every signature whose printing changed,
+# so a review sees what a printer change does to real libraries, not only the code. Runs for PRs
+# into any branch, so a stacked PR reports only its own changes.
+on:
+  pull_request:
+
+jobs:
+  compare:
+    name: Signatures (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [java, scala2, scala3]
+
+    steps:
+      # compare.sh checks the base commit out in a worktree, so it needs the history.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # The benchmarked libraries and their sources jars, and the base run, which compare.sh
+      # keys by base commit and benchmark version.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/coursier
+            ~/.cache/cellar-signature-bench
+          key: signature-bench-${{ matrix.language }}-${{ github.event.pull_request.base.sha }}
+          restore-keys: signature-bench-${{ matrix.language }}-
+
+      - name: Compare with the base
+        id: compare
+        run: |
+          set +e
+          signatureBench/compare.sh ${{ matrix.language }} ${{ github.event.pull_request.base.sha }} | tee compare.log
+          echo "status=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Summarise
+        if: always()
+        run: |
+          line=$(grep -E '^[[:alnum:]]+: [0-9]+ changed' compare.log || true)
+          # An annotation shows on the PR's checks, so a change is visible even when the check passes.
+          if [[ -n $line && $line != *": 0 changed"* ]]; then
+            echo "::notice title=Signatures (${{ matrix.language }})::$line"
+          fi
+          {
+            echo "### ${{ matrix.language }}"
+            echo "${line:-The benchmark did not finish; see the step log.}"
+            echo
+            echo "The \`${{ matrix.language }}-report.html\` artifact holds the HTML report of every changed signature."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Unzipped, so the report opens from the run page instead of downloading as an archive.
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: always()
+        with:
+          path: out/signatureBench/compare/${{ matrix.language }}-report.html
+          archive: false
+          if-no-files-found: ignore
+
+      - name: Fail on regressions
+        if: steps.compare.outputs.status == '1'
+        run: |
+          echo "::error::Signatures that matched their source on the base no longer do; see the report."
+          exit 1
+
+      - name: Fail when the benchmark did not finish
+        if: steps.compare.outputs.status != '0' && steps.compare.outputs.status != '1'
+        run: |
+          echo "::error::The benchmark failed before it could compare; see the 'Compare with the base' log."
+          exit 1
