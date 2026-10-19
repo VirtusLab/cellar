@@ -89,14 +89,11 @@ object lib extends CellarPublishModule {
   }
 
 
-  object test extends ScalaTests with TestModule.Munit {
+  object test extends ScalaTests with TestModule.Weaver {
     // Every test class boots its own tasty-query Context; one forked JVM per class saturates
     // the whole machine and starts failing under load, so run them in a single JVM.
     def testParallelism = false
-    def mvnDeps = super.mvnDeps() ++ Seq(
-      mvn"org.scalameta::munit:1.3.6",
-      mvn"org.typelevel::munit-cats-effect:2.2.1"
-    )
+    def weaverVersion = "0.13.0"
     def forkArgs = Task {
       // Publish fixtures to ~/.m2 before running tests
       fixtureJava.publishM2LocalCached()
@@ -131,11 +128,8 @@ object profilingRuntime extends CellarPublishModule {
     mvn"org.graalvm.sdk:nativeimage:25.0.4.1.1"
   )
 
-  object test extends ScalaTests with TestModule.Munit {
-    def mvnDeps = super.mvnDeps() ++ Seq(
-      mvn"org.scalameta::munit:1.3.6",
-      mvn"org.typelevel::munit-cats-effect:2.2.1"
-    )
+  object test extends ScalaTests with TestModule.Weaver {
+    def weaverVersion = "0.13.0"
   }
 }
 
@@ -236,11 +230,8 @@ object cli extends CellarPublishModule with NativeImageModule {
     Assembly.Rule.ExcludePattern("jre.bin")
   ) ++ Assembly.defaultRules
 
-  object test extends ScalaTests with TestModule.Munit {
-    def mvnDeps = super.mvnDeps() ++ Seq(
-      mvn"org.scalameta::munit:1.3.6",
-      mvn"org.typelevel::munit-cats-effect:2.2.1"
-    )
+  object test extends ScalaTests with TestModule.Weaver {
+    def weaverVersion = "0.13.0"
   }
 }
 

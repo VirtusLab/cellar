@@ -1,16 +1,15 @@
 package cellar
 
 import cats.effect.IO
-import munit.CatsEffectSuite
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 import tastyquery.Contexts.Context
 import tastyquery.Symbols.{ClassSymbol, TermSymbol}
 
-class SymbolResolverTest extends CatsEffectSuite:
+object SymbolResolverTest extends SequentialIOSuite:
 
   private def withCtx[A](body: Context => IO[A]): IO[A] =
-    TestFixtures.assumeFixturesAvailable()
     for
+      _        <- TestFixtures.assumeFixturesAvailable
       jrePaths <- JreClasspath.jrtPath()
       jars     <- CoursierFetchClient.fetchClasspath(
                     TestFixtures.scala3Coord, Seq(TestFixtures.localM2Repo))
@@ -18,8 +17,8 @@ class SymbolResolverTest extends CatsEffectSuite:
     yield result
 
   private def withScala2Ctx[A](body: Context => IO[A]): IO[A] =
-    TestFixtures.assumeFixturesAvailable()
     for
+      _        <- TestFixtures.assumeFixturesAvailable
       jrePaths <- JreClasspath.jrtPath()
       jars     <- CoursierFetchClient.fetchClasspath(
                     TestFixtures.scala2Coord, Seq(TestFixtures.localM2Repo))
@@ -30,8 +29,8 @@ class SymbolResolverTest extends CatsEffectSuite:
     withCtx { ctx =>
       given Context = ctx
       SymbolResolver.resolve("cellar.fixture.scala3.CellarADT").map {
-        case LookupResult.Found(syms) => assert(syms.nonEmpty)
-        case other                    => fail(s"Expected Found, got $other")
+        case LookupResult.Found(syms) => expect(syms.nonEmpty)
+        case other                    => failure(s"Expected Found, got $other")
       }
     }
 
@@ -39,8 +38,8 @@ class SymbolResolverTest extends CatsEffectSuite:
     withCtx { ctx =>
       given Context = ctx
       SymbolResolver.resolve("cellar.fixture.scala3").map {
-        case LookupResult.IsPackage => ()
-        case other                  => fail(s"Expected IsPackage, got $other")
+        case LookupResult.IsPackage => success
+        case other                  => failure(s"Expected IsPackage, got $other")
       }
     }
 
@@ -48,8 +47,8 @@ class SymbolResolverTest extends CatsEffectSuite:
     withCtx { ctx =>
       given Context = ctx
       SymbolResolver.resolve("cellar.fixture.scala3.DoesNotExist99999").map {
-        case LookupResult.NotFound => ()
-        case other                 => fail(s"Expected NotFound, got $other")
+        case LookupResult.NotFound => success
+        case other                 => failure(s"Expected NotFound, got $other")
       }
     }
 
@@ -57,8 +56,8 @@ class SymbolResolverTest extends CatsEffectSuite:
     withCtx { ctx =>
       given Context = ctx
       SymbolResolver.resolve("cellar.fixture.scala3.CellarA").map {
-        case LookupResult.Found(syms) => assert(syms.nonEmpty)
-        case other                    => fail(s"Expected Found, got $other")
+        case LookupResult.Found(syms) => expect(syms.nonEmpty)
+        case other                    => failure(s"Expected Found, got $other")
       }
     }
 
@@ -68,9 +67,9 @@ class SymbolResolverTest extends CatsEffectSuite:
       // CellarTC has a `render` method
       SymbolResolver.resolve("cellar.fixture.scala3.CellarTC.render").map {
         case LookupResult.Found(syms) =>
-          assert(syms.nonEmpty)
-          assert(syms.forall(_.name.toString == "render"))
-        case other => fail(s"Expected Found for render, got $other")
+          expect(syms.nonEmpty) and
+            expect(syms.forall(_.name.toString == "render"))
+        case other => failure(s"Expected Found for render, got $other")
       }
     }
 
@@ -79,9 +78,9 @@ class SymbolResolverTest extends CatsEffectSuite:
       given Context = ctx
       SymbolResolver.resolve("cellar.fixture.scala3.CellarADT.nonExistentXYZ").map {
         case LookupResult.PartialMatch(resolved, missing) =>
-          assert(resolved.contains("CellarADT"), s"Expected resolved to contain CellarADT, got $resolved")
-          assertEquals(missing, "nonExistentXYZ")
-        case other => fail(s"Expected PartialMatch, got $other")
+          expect(resolved.contains("CellarADT"), s"Expected resolved to contain CellarADT, got $resolved") and
+            expect.eql("nonExistentXYZ", missing)
+        case other => failure(s"Expected PartialMatch, got $other")
       }
     }
 
@@ -90,8 +89,8 @@ class SymbolResolverTest extends CatsEffectSuite:
       given Context = ctx
       SymbolResolver.resolve("cellar.fixture.scala3.CellarOuter.InnerTrait").map {
         case LookupResult.Found(syms) =>
-          assert(syms.nonEmpty)
-        case other => fail(s"Expected Found for nested type, got $other")
+          expect(syms.nonEmpty)
+        case other => failure(s"Expected Found for nested type, got $other")
       }
     }
 
@@ -100,9 +99,9 @@ class SymbolResolverTest extends CatsEffectSuite:
       given Context = ctx
       SymbolResolver.resolve("cellar.fixture.scala3.CellarOuter.InnerTrait.innerMethod").map {
         case LookupResult.Found(syms) =>
-          assert(syms.nonEmpty)
-          assert(syms.exists(_.name.toString == "innerMethod"))
-        case other => fail(s"Expected Found for 2-level nested member, got $other")
+          expect(syms.nonEmpty) and
+            expect(syms.exists(_.name.toString == "innerMethod"))
+        case other => failure(s"Expected Found for 2-level nested member, got $other")
       }
     }
 
@@ -112,9 +111,9 @@ class SymbolResolverTest extends CatsEffectSuite:
       // midMethod is declared on CellarMid, should be found via CellarLeaf's linearization
       SymbolResolver.resolve("cellar.fixture.scala3.CellarLeaf.midMethod").map {
         case LookupResult.Found(syms) =>
-          assert(syms.nonEmpty)
-          assert(syms.exists(_.name.toString == "midMethod"))
-        case other => fail(s"Expected Found for inherited method, got $other")
+          expect(syms.nonEmpty) and
+            expect(syms.exists(_.name.toString == "midMethod"))
+        case other => failure(s"Expected Found for inherited method, got $other")
       }
     }
 
@@ -124,8 +123,8 @@ class SymbolResolverTest extends CatsEffectSuite:
       // InnerTrait is declared on CellarOuter, should be found via CellarLeaf's linearization
       SymbolResolver.resolve("cellar.fixture.scala3.CellarLeaf.InnerTrait").map {
         case LookupResult.Found(syms) =>
-          assert(syms.nonEmpty)
-        case other => fail(s"Expected Found for inherited nested type, got $other")
+          expect(syms.nonEmpty)
+        case other => failure(s"Expected Found for inherited nested type, got $other")
       }
     }
 
@@ -134,14 +133,15 @@ class SymbolResolverTest extends CatsEffectSuite:
       given Context = ctx
       // `cellar.fixture.scala3.CellarTC$` should resolve to `object CellarTC`,
       // not the trait of the same name.
-      SymbolResolver.resolve("cellar.fixture.scala3.CellarTC$").map {
+      SymbolResolver.resolve("cellar.fixture.scala3.CellarTC$").flatMap {
         case LookupResult.Found(syms) =>
-          assert(syms.nonEmpty)
-          syms.head match
-            case cls: tastyquery.Symbols.ClassSymbol =>
-              assert(cls.isModuleClass, s"Expected module class, got $cls")
-            case other => fail(s"Expected ClassSymbol, got $other")
-        case other => fail(s"Expected Found for trailing-\\$$ FQN, got $other")
+          expect(syms.nonEmpty).failFast[IO].as {
+            syms.head match
+              case cls: tastyquery.Symbols.ClassSymbol =>
+                expect(cls.isModuleClass, s"Expected module class, got $cls")
+              case other => failure(s"Expected ClassSymbol, got $other")
+          }
+        case other => IO.pure(failure(s"Expected Found for trailing-\\$$ FQN, got $other"))
       }
     }
 
@@ -151,9 +151,9 @@ class SymbolResolverTest extends CatsEffectSuite:
       // `apply` lives on `object CellarWithCompanion`, not on the trait.
       SymbolResolver.resolve("cellar.fixture.scala3.CellarWithCompanion.apply").map {
         case LookupResult.Found(syms) =>
-          assert(syms.nonEmpty)
-          assert(syms.exists(_.name.toString == "apply"))
-        case other => fail(s"Expected Found for companion apply, got $other")
+          expect(syms.nonEmpty) and
+            expect(syms.exists(_.name.toString == "apply"))
+        case other => failure(s"Expected Found for companion apply, got $other")
       }
     }
 
@@ -163,8 +163,8 @@ class SymbolResolverTest extends CatsEffectSuite:
       // `CompanionNested` is a trait declared inside `object CellarWithCompanion`.
       SymbolResolver.resolve("cellar.fixture.scala3.CellarWithCompanion.CompanionNested").map {
         case LookupResult.Found(syms) =>
-          assert(syms.nonEmpty)
-        case other => fail(s"Expected Found for companion-nested type, got $other")
+          expect(syms.nonEmpty)
+        case other => failure(s"Expected Found for companion-nested type, got $other")
       }
     }
 
@@ -174,9 +174,9 @@ class SymbolResolverTest extends CatsEffectSuite:
       // Exercises the intermediate companion fallback in findClassMember.
       SymbolResolver.resolve("cellar.fixture.scala3.CellarWithCompanion.CompanionNested.nestedMethod").map {
         case LookupResult.Found(syms) =>
-          assert(syms.nonEmpty)
-          assert(syms.exists(_.name.toString == "nestedMethod"))
-        case other => fail(s"Expected Found for nested member via companion, got $other")
+          expect(syms.nonEmpty) and
+            expect(syms.exists(_.name.toString == "nestedMethod"))
+        case other => failure(s"Expected Found for nested member via companion, got $other")
       }
     }
 
@@ -186,8 +186,8 @@ class SymbolResolverTest extends CatsEffectSuite:
       // `instanceMethod` is on the trait, not the companion — must still resolve to the trait's decl.
       SymbolResolver.resolve("cellar.fixture.scala3.CellarWithCompanion.instanceMethod").map {
         case LookupResult.Found(syms) =>
-          assert(syms.exists(_.name.toString == "instanceMethod"))
-        case other => fail(s"Expected Found for instance member, got $other")
+          expect(syms.exists(_.name.toString == "instanceMethod"))
+        case other => failure(s"Expected Found for instance member, got $other")
       }
     }
 
@@ -196,9 +196,9 @@ class SymbolResolverTest extends CatsEffectSuite:
       given Context = ctx
       SymbolResolver.resolve("cellar.fixture.scala3.CellarWithCompanion.nonExistentXYZ").map {
         case LookupResult.PartialMatch(resolved, missing) =>
-          assert(resolved.contains("CellarWithCompanion"), s"Expected resolved to contain CellarWithCompanion, got $resolved")
-          assertEquals(missing, "nonExistentXYZ")
-        case other => fail(s"Expected PartialMatch, got $other")
+          expect(resolved.contains("CellarWithCompanion"), s"Expected resolved to contain CellarWithCompanion, got $resolved") and
+            expect.eql("nonExistentXYZ", missing)
+        case other => failure(s"Expected PartialMatch, got $other")
       }
     }
 
@@ -217,11 +217,11 @@ class SymbolResolverTest extends CatsEffectSuite:
       given Context = ctx
       SymbolResolver.resolve("myapp.hello").map {
         case LookupResult.Found(syms) =>
-          assert(
+          expect(
             syms.exists(s => s.isInstanceOf[tastyquery.Symbols.TermSymbol] && s.name.toString == "hello"),
             s"Expected to find the top-level def, got $syms"
           )
-        case other => fail(s"Expected Found, got $other")
+        case other => failure(s"Expected Found, got $other")
       }
     }
 
@@ -230,8 +230,8 @@ class SymbolResolverTest extends CatsEffectSuite:
       given Context = ctx
       SymbolResolver.resolve("myapp.Hello").map {
         case LookupResult.Found(syms) =>
-          assert(syms.exists(_.name.toString == "Hello"), s"Expected to find Hello, got $syms")
-        case other => fail(s"Expected Found, got $other")
+          expect(syms.exists(_.name.toString == "Hello"), s"Expected to find Hello, got $syms")
+        case other => failure(s"Expected Found, got $other")
       }
     }
 
@@ -240,8 +240,8 @@ class SymbolResolverTest extends CatsEffectSuite:
       given Context = ctx
       SymbolResolver.resolve("myapp.Hello.fromInt").map {
         case LookupResult.Found(syms) =>
-          assert(syms.exists(_.name.toString == "fromInt"), s"Expected to find fromInt, got $syms")
-        case other => fail(s"Expected Found, got $other")
+          expect(syms.exists(_.name.toString == "fromInt"), s"Expected to find fromInt, got $syms")
+        case other => failure(s"Expected Found, got $other")
       }
     }
 
@@ -258,9 +258,9 @@ class SymbolResolverTest extends CatsEffectSuite:
       given Context = ctx
       SymbolResolver.resolve("cellar.fixture.scala2.CellarADT.CellarAA").map {
         case LookupResult.Found(syms) =>
-          assert(syms.nonEmpty, s"Expected non-empty Found, got $syms")
-          assert(syms.exists(_.name.toString.stripSuffix("$") == "CellarAA"), s"Expected CellarAA symbol, got $syms")
-        case other => fail(s"Expected Found for CellarAA, got $other")
+          expect(syms.nonEmpty, s"Expected non-empty Found, got $syms") and
+            expect(syms.exists(_.name.toString.stripSuffix("$") == "CellarAA"), s"Expected CellarAA symbol, got $syms")
+        case other => failure(s"Expected Found for CellarAA, got $other")
       }
     }
 
@@ -269,9 +269,9 @@ class SymbolResolverTest extends CatsEffectSuite:
       given Context = ctx
       SymbolResolver.resolve("cellar.fixture.scala2.CellarADT.CellarAB").map {
         case LookupResult.Found(syms) =>
-          assert(syms.nonEmpty, s"Expected non-empty Found, got $syms")
-          assert(syms.exists(_.name.toString == "CellarAB"), s"Expected CellarAB symbol, got $syms")
-        case other => fail(s"Expected Found for CellarAB, got $other")
+          expect(syms.nonEmpty, s"Expected non-empty Found, got $syms") and
+            expect(syms.exists(_.name.toString == "CellarAB"), s"Expected CellarAB symbol, got $syms")
+        case other => failure(s"Expected Found for CellarAB, got $other")
       }
     }
 
@@ -282,11 +282,11 @@ class SymbolResolverTest extends CatsEffectSuite:
         case LookupResult.Found(syms) =>
           // The companion is represented once, by its module class -- not also by
           // the module val that findStaticTerm returns for the same object.
-          assertEquals(syms.size, 2, s"Expected trait + companion, got $syms")
-          assert(!syms.exists { case t: TermSymbol => t.isModuleVal; case _ => false },
-            s"Module val should have been widened to its module class: $syms")
           val moduleClasses = syms.collect { case c: ClassSymbol if c.isModuleClass => c }
-          assertEquals(moduleClasses.size, 1, s"Expected exactly one module class, got $syms")
-        case other => fail(s"Expected Found, got $other")
+          expect(clue(syms.size) == 2, s"Expected trait + companion, got $syms") and
+            expect(!syms.exists { case t: TermSymbol => t.isModuleVal; case _ => false },
+              s"Module val should have been widened to its module class: $syms") and
+            expect(clue(moduleClasses.size) == 1, s"Expected exactly one module class, got $syms")
+        case other => failure(s"Expected Found, got $other")
       }
     }

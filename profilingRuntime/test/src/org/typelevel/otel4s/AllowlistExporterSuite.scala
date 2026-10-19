@@ -3,17 +3,17 @@ package org.typelevel.otel4s
 import cats.Foldable
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
-import munit.CatsEffectSuite
 import org.typelevel.otel4s.sdk.TelemetryResource
 import org.typelevel.otel4s.sdk.common.InstrumentationScope
 import org.typelevel.otel4s.sdk.data.LimitedData
 import org.typelevel.otel4s.sdk.trace.data.{EventData, LinkData, SpanData, StatusData}
 import org.typelevel.otel4s.sdk.trace.exporter.SpanExporter
 import org.typelevel.otel4s.trace.{SpanContext, SpanKind}
+import weaver.SimpleIOSuite
 
 import scala.concurrent.duration.*
 
-class AllowlistExporterSuite extends CatsEffectSuite:
+object AllowlistExporterSuite extends SimpleIOSuite:
 
   private final class CaptureExporter(ref: Ref[IO, List[SpanData]]) extends SpanExporter.Unsealed[IO]:
     val name: String                                              = "Capture"
@@ -64,14 +64,14 @@ class AllowlistExporterSuite extends CatsEffectSuite:
     val span = mkSpan(spanAttrs = Attributes(Attribute("keep", "yes"), Attribute("drop", "no")))
     runExport(Set("keep"))(span).map { out =>
       val names = out.attributes.elements.toList.map(_.key.name).sorted
-      assertEquals(names, List("keep"))
+      expect.eql(List("keep"), names)
     }
 
   test("strips all events from each span"):
     val event = EventData("sensitive-event", 0.seconds, attrs(Attribute("payload", "secret")))
     val span  = mkSpan(events = Vector(event))
     runExport(Set("keep"))(span).map { out =>
-      assertEquals(out.events.elements.toVector, Vector.empty)
+      expect(clue(out.events.elements.toVector).isEmpty)
     }
 
   test("filters resource attributes by allowlist"):
@@ -79,7 +79,7 @@ class AllowlistExporterSuite extends CatsEffectSuite:
     val span          = mkSpan(resourceAttrs = resourceAttrs)
     runExport(Set("installation.id", "command.name"))(span).map { out =>
       val names = out.resource.attributes.toList.map(_.key.name).sorted
-      assertEquals(names, List("installation.id"))
+      expect.eql(List("installation.id"), names)
     }
 
   test("strips exception events containing user data such as coordinates"):
@@ -87,14 +87,14 @@ class AllowlistExporterSuite extends CatsEffectSuite:
     val event = EventData.fromException(0.seconds, err, emptyAttrs)
     val span  = mkSpan(events = Vector(event))
     runExport(Set("command.name"))(span).map { out =>
-      assertEquals(out.events.elements.toVector, Vector.empty)
+      expect(clue(out.events.elements.toVector).isEmpty)
     }
 
   test("preserves string, long, and boolean attribute value types"):
     val span = mkSpan(spanAttrs = Attributes(Attribute("s", "text"), Attribute("n", 42L), Attribute("b", true)))
     runExport(Set("s", "n", "b"))(span).map { out =>
       val kept = out.attributes.elements.toList.map(a => a.key.name -> a.value).toMap
-      assertEquals(kept("s"), "text")
-      assertEquals(kept("n"), 42L)
-      assertEquals(kept("b"), true)
+      expect(clue(kept("s")) == "text") and
+        expect(clue(kept("n")) == 42L) and
+        expect(clue(kept("b")) == true)
     }

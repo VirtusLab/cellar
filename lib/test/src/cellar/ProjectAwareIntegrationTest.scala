@@ -4,8 +4,8 @@ import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
 import cats.syntax.all.*
 import cellar.process.ProcessRunner
-import munit.CatsEffectSuite
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
+import weaver.Expectations
 
 import java.nio.file.Files
 import fs2.io.file.{Files => Fs2Files, Path}
@@ -13,14 +13,12 @@ import fs2.io.file.{Files => Fs2Files, Path}
 /** Integration tests for project-aware commands.
   *
   * Tests require build tools (scala-cli, mill) on PATH.
-  * Tests that require unavailable tools are skipped via `assume`.
+  * Tests that require unavailable tools are ignored via `requireTool`.
   */
-class ProjectAwareIntegrationTest extends CatsEffectSuite:
+object ProjectAwareIntegrationTest extends SequentialIOSuite:
 
   private def safeRun(f: IO[ExitCode])(using Console[IO]): IO[ExitCode] =
     f.handleErrorWith(e => Console[IO].errorln(e.getMessage).as(ExitCode.Error))
-
-  override def munitIOTimeout = scala.concurrent.duration.Duration(300, "s")
 
   private lazy val millBinary: String =
     Option(System.getProperty("cellar.test.millBinary")).getOrElse("mill")
@@ -31,35 +29,38 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
   private def isBinaryAvailable(binary: String): IO[Boolean] =
     (Fs2Files[IO].isRegularFile(Path(binary)), isOnPath(binary)).mapN(_ || _)
 
-  private def withTempDir(test: Path => IO[Unit]): IO[Unit] =
+  private def requireTool(available: IO[Boolean], reason: String): IO[Unit] =
+    available.flatMap(IO.unlessA(_)(ignore[IO](reason)))
+
+  private def withTempDir(test: Path => IO[Expectations]): IO[Expectations] =
     Fs2Files[IO].tempDirectory.use(test)
 
   // --- ProcessRunner tests ---
 
   test("ProcessRunner: echo captures stdout"):
     process.ProcessRunner.run("echo", List("hello")).map { result =>
-      assertEquals(result.exitCode, 0)
-      assertEquals(result.stdout.trim, "hello")
-      assert(result.stderr.isEmpty)
+      expect.eql(0, result.exitCode) and
+        expect.eql("hello", result.stdout.trim) and
+        expect(result.stderr.isEmpty)
     }
 
   test("ProcessRunner: non-zero exit captures stderr"):
     process.ProcessRunner.run("sh", List("-c", "echo err >&2; exit 1")).map { result =>
-      assertEquals(result.exitCode, 1)
-      assert(result.stderr.contains("err"))
+      expect.eql(1, result.exitCode) and
+        expect(result.stderr.contains("err"))
     }
 
   test("ProcessRunner: command not found"):
     process.ProcessRunner.run("nonexistent-command-xyz", Nil).attempt.map { result =>
-      assert(result.isLeft)
-      assert(result.left.exists(_.getMessage.contains("nonexistent-command-xyz")))
+      expect(result.isLeft) and
+        expect(result.left.exists(_.getMessage.contains("nonexistent-command-xyz")))
     }
 
   test("ProcessRunner: working directory"):
     process.ProcessRunner.run("pwd", Nil, Some(Path("/tmp"))).map { result =>
-      assertEquals(result.exitCode, 0)
-      // /tmp may be a symlink to /private/tmp on macOS
-      assert(result.stdout.trim.endsWith("/tmp"))
+      expect.eql(0, result.exitCode) and
+        // /tmp may be a symlink to /private/tmp on macOS
+        expect(result.stdout.trim.endsWith("/tmp"))
     }
 
   // --- BuildToolDetector tests ---
@@ -68,7 +69,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
     withTempDir { dir =>
       Fs2Files[IO].createFile(dir.resolve("build.mill")) >>
         build.BuildToolDetector.detectKind(dir).map { kind =>
-          assertEquals(kind, build.BuildToolKind.Mill)
+          expect(clue(kind) == build.BuildToolKind.Mill)
         }
     }
 
@@ -76,7 +77,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
     withTempDir { dir =>
       Fs2Files[IO].createFile(dir.resolve("build.sc")) >>
         build.BuildToolDetector.detectKind(dir).map { kind =>
-          assertEquals(kind, build.BuildToolKind.Mill)
+          expect(clue(kind) == build.BuildToolKind.Mill)
         }
     }
 
@@ -84,7 +85,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
     withTempDir { dir =>
       Fs2Files[IO].createFile(dir.resolve("build.sbt")) >>
         build.BuildToolDetector.detectKind(dir).map { kind =>
-          assertEquals(kind, build.BuildToolKind.Sbt)
+          expect(clue(kind) == build.BuildToolKind.Sbt)
         }
     }
 
@@ -92,14 +93,14 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
     withTempDir { dir =>
       Fs2Files[IO].createDirectories(dir.resolve(".scala-build")) >>
         build.BuildToolDetector.detectKind(dir).map { kind =>
-          assertEquals(kind, build.BuildToolKind.ScalaCli)
+          expect(clue(kind) == build.BuildToolKind.ScalaCli)
         }
     }
 
   test("BuildToolDetector: fallback to scala-cli on empty dir"):
     withTempDir { dir =>
       build.BuildToolDetector.detectKind(dir).map { kind =>
-        assertEquals(kind, build.BuildToolKind.ScalaCli)
+        expect(clue(kind) == build.BuildToolKind.ScalaCli)
       }
     }
 
@@ -108,7 +109,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
       Fs2Files[IO].createFile(dir.resolve("build.mill")) >>
       Fs2Files[IO].createFile(dir.resolve("build.sbt")) >>
       build.BuildToolDetector.detectKind(dir).map { kind =>
-        assertEquals(kind, build.BuildToolKind.Mill)
+        expect(clue(kind) == build.BuildToolKind.Mill)
       }
     }
 
@@ -117,7 +118,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
       Fs2Files[IO].createFile(dir.resolve("build.sbt")) >>
       Fs2Files[IO].createDirectories(dir.resolve(".scala-build")) >>
       build.BuildToolDetector.detectKind(dir).map { kind =>
-        assertEquals(kind, build.BuildToolKind.Sbt)
+        expect(clue(kind) == build.BuildToolKind.Sbt)
       }
     }
 
@@ -127,53 +128,53 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
     val input = """["ref:abc123:/path/to/classes", "/path/to/dep.jar"]"""
     build.ClasspathOutputParser.parseJsonArray(input, checkExists = false) map {
       case Right(paths) =>
-        assertEquals(paths.map(_.toString), List("/path/to/classes", "/path/to/dep.jar"))
-      case Left(err) => fail(err)
+        expect.eql(List("/path/to/classes", "/path/to/dep.jar"), paths.map(_.toString))
+      case Left(err) => failure(err)
     }
 
   test("ClasspathOutputParser: JSON empty array"):
     build.ClasspathOutputParser.parseJsonArray("[]", checkExists = false) map {
-      case Left(err) => assert(err.contains("empty"))
-      case Right(_)  => fail("Should fail on empty array")
+      case Left(err) => expect(err.contains("empty"))
+      case Right(_)  => failure("Should fail on empty array")
     }
 
   test("ClasspathOutputParser: JSON malformed"):
     build.ClasspathOutputParser.parseJsonArray("not json", checkExists = false) map {
-      case Left(_)  => () // expected
-      case Right(_) => fail("Should fail on malformed input")
+      case Left(_)  => success // expected
+      case Right(_) => failure("Should fail on malformed input")
     }
 
-  test("ClasspathOutputParser: colon-separated"):
+  pureTest("ClasspathOutputParser: colon-separated"):
     build.ClasspathOutputParser.parseColonSeparated("/a/b.jar:/c/d.jar\n") match
-      case Right(paths) => assertEquals(paths.map(_.toString), List("/a/b.jar", "/c/d.jar"))
-      case Left(err)    => fail(err)
+      case Right(paths) => expect.eql(List("/a/b.jar", "/c/d.jar"), paths.map(_.toString))
+      case Left(err)    => failure(err)
 
-  test("ClasspathOutputParser: colon-separated single entry"):
+  pureTest("ClasspathOutputParser: colon-separated single entry"):
     build.ClasspathOutputParser.parseColonSeparated("/a/b.jar\n") match
-      case Right(paths) => assertEquals(paths.size, 1)
-      case Left(err)    => fail(err)
+      case Right(paths) => expect.eql(1, paths.size)
+      case Left(err)    => failure(err)
 
-  test("ClasspathOutputParser: colon-separated empty"):
+  pureTest("ClasspathOutputParser: colon-separated empty"):
     build.ClasspathOutputParser.parseColonSeparated("\n") match
-      case Left(_)  => () // expected
-      case Right(_) => fail("Should fail on empty")
+      case Left(_)  => success // expected
+      case Right(_) => failure("Should fail on empty")
 
-  test("ClasspathOutputParser: colon-separated with whitespace"):
+  pureTest("ClasspathOutputParser: colon-separated with whitespace"):
     build.ClasspathOutputParser.parseColonSeparated(" /a/b.jar : /c/d.jar ") match
-      case Right(paths) => assertEquals(paths.map(_.toString), List("/a/b.jar", "/c/d.jar"))
-      case Left(err)    => fail(err)
+      case Right(paths) => expect.eql(List("/a/b.jar", "/c/d.jar"), paths.map(_.toString))
+      case Left(err)    => failure(err)
 
   // --- ScalaCliBuildTool tests ---
 
   test("ScalaCliBuildTool: rejects --module"):
     build.ScalaCliBuildTool(Path(".")).extractClasspath(Some("foo"), testScope = false).attempt.map { result =>
-      assert(result.isLeft)
-      assert(result.left.exists(_.getMessage.contains("--module is not supported")))
+      expect(result.isLeft) and
+        expect(result.left.exists(_.getMessage.contains("--module is not supported")))
     }
 
   test("ScalaCliBuildTool: fingerprintFiles returns empty"):
     build.ScalaCliBuildTool(Path(".")).fingerprintFiles.map { files =>
-      assert(files.isEmpty)
+      expect(files.isEmpty)
     }
 
   // --- MillBuildTool tests ---
@@ -181,15 +182,15 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
   test("MillBuildTool: rejects missing --module"):
     build.MillBuildTool(Path("."), Config.global.mill)
       .extractClasspath(None, testScope = false).attempt.map { result =>
-        assert(result.isLeft)
-        assert(result.left.exists(_.getMessage.contains("--module is required for Mill")))
+        expect(result.isLeft) and
+          expect(result.left.exists(_.getMessage.contains("--module is required for Mill")))
     }
 
   test("MillBuildTool: rejects --test scope"):
     build.MillBuildTool(Path("."), Config.global.mill)
       .validateTestScope(testScope = true).attempt.map { result =>
-        assert(result.isLeft)
-        assert(result.left.exists(_.getMessage.contains("--test is not supported for Mill")))
+        expect(result.isLeft) and
+          expect(result.left.exists(_.getMessage.contains("--test is not supported for Mill")))
     }
 
   // --- SbtBuildTool tests ---
@@ -197,8 +198,8 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
   test("SbtBuildTool: rejects missing --module"):
     build.SbtBuildTool(Path("."), Config.global.sbt).extractClasspath(None, testScope = false)
       .attempt.map { result =>
-        assert(result.isLeft)
-        assert(result.left.exists(_.getMessage.contains("--module is required for sbt")))
+        expect(result.isLeft) and
+          expect(result.left.exists(_.getMessage.contains("--module is required for sbt")))
     }
 
   // --- BuildFingerprint tests ---
@@ -210,7 +211,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         (for
           h1 <- build.BuildFingerprint.compute(List(file), "mod")
           h2 <- build.BuildFingerprint.compute(List(file), "mod")
-        yield assertEquals(h1, h2))
+        yield expect.eql(h1, h2))
     }
 
   test("BuildFingerprint: content sensitivity"):
@@ -221,7 +222,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         h1 <- build.BuildFingerprint.compute(List(file), "mod")
         _  <- IO.blocking(Files.writeString(file.toNioPath, "world"))
         h2 <- build.BuildFingerprint.compute(List(file), "mod")
-      yield assertNotEquals(h1, h2)
+      yield expect(clue(h1) != clue(h2))
     }
 
   test("BuildFingerprint: module sensitivity"):
@@ -231,7 +232,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         _  <- IO.blocking(Files.writeString(file.toNioPath, "hello"))
         h1 <- build.BuildFingerprint.compute(List(file), "modA")
         h2 <- build.BuildFingerprint.compute(List(file), "modB")
-      yield assertNotEquals(h1, h2)
+      yield expect(clue(h1) != clue(h2))
     }
 
   test("BuildFingerprint: file order independence"):
@@ -243,7 +244,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         _ <- IO.blocking { Files.writeString(b.toNioPath, "bbb") }
         h1 <- build.BuildFingerprint.compute(List(a, b), "mod")
         h2 <- build.BuildFingerprint.compute(List(b, a), "mod")
-      yield assertEquals(h1, h2)
+      yield expect.eql(h1, h2)
     }
 
   test("BuildFingerprint: missing file skipped"):
@@ -252,13 +253,13 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
       val missing = dir.resolve("nope.txt")
       IO.blocking(Files.writeString(existing.toNioPath, "data")) >>
         build.BuildFingerprint.compute(List(existing, missing), "mod").map { hash =>
-          assertEquals(hash.length, 64) // valid SHA-256 hex
+          expect.eql(64, hash.length) // valid SHA-256 hex
         }
     }
 
   test("BuildFingerprint: empty file list"):
     build.BuildFingerprint.compute(Nil, "mod").map { hash =>
-      assertEquals(hash.length, 64)
+      expect.eql(64, hash.length)
     }
 
   // --- ClasspathCache tests ---
@@ -274,13 +275,13 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         _ <- Fs2Files[IO].createFile(p2)
         _ <- cache.put("testhash", List(p1, p2))
         r <- cache.get("testhash")
-      yield assertEquals(r, Some(List(p1, p2)))
+      yield expect(clue(r) == Some(List(p1, p2)))
     }
 
   test("ClasspathCache: miss"):
     withTempDir { dir =>
       build.ClasspathCache(dir).get("nonexistent").map { r =>
-        assertEquals(r, None)
+        expect(clue(r) == None)
       }
     }
 
@@ -293,13 +294,13 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         _ <- cache.put("hash2", List(p1))
         _ <- Fs2Files[IO].delete(p1)
         r <- cache.get("hash2")
-      yield assertEquals(r, None)
+      yield expect(clue(r) == None)
     }
 
   // --- End-to-end scala-cli tests (requires scala-cli on PATH) ---
 
   test("E2E scala-cli: get resolves project symbol"):
-    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
+    requireTool(isOnPath("scala-cli"), "scala-cli not on PATH") >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -311,14 +312,14 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
           |""".stripMargin
       )) >>
         handlers.ProjectGetHandler.run("example.MyClass", module = None, cwd = Some(dir)).map { code =>
-          assertEquals(code, ExitCode.Success, s"Stderr: ${console.errBuf}")
-          assert(console.outBuf.toString.contains("MyClass"), s"Output: ${console.outBuf}")
-          assert(console.outBuf.toString.contains("hello"), s"Output: ${console.outBuf}")
+          expect(clue(code) == ExitCode.Success, s"Stderr: ${console.errBuf}") and
+            expect(console.outBuf.toString.contains("MyClass"), s"Output: ${console.outBuf}") and
+            expect(console.outBuf.toString.contains("hello"), s"Output: ${console.outBuf}")
         }
     }
 
   test("E2E scala-cli: get resolves symbol from dependency"):
-    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
+    requireTool(isOnPath("scala-cli"), "scala-cli not on PATH") >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -332,13 +333,13 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
           |""".stripMargin
       )) >>
         handlers.ProjectGetHandler.run("cats.Monad", module = None, cwd = Some(dir)).map { code =>
-          assertEquals(code, ExitCode.Success)
-          assert(console.outBuf.toString.contains("Monad"), s"Output: ${console.outBuf}")
+          expect(clue(code) == ExitCode.Success) and
+            expect(console.outBuf.toString.contains("Monad"), s"Output: ${console.outBuf}")
         }
     }
 
   test("E2E scala-cli: get shows a dependency's default values and docs from its sources jar"):
-    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
+    requireTool(isOnPath("scala-cli"), "scala-cli not on PATH") >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -349,15 +350,15 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
           |""".stripMargin
       )) >>
         handlers.ProjectGetHandler.run("munit.Assertions.assertEquals", module = None, cwd = Some(dir)).map { code =>
-          assertEquals(code, ExitCode.Success, s"Stderr: ${console.errBuf}")
           val out = console.outBuf.toString
-          assert(out.contains("clue: => Any = \"values are not the same\""), s"Output: $out")
-          assert(out.contains("Asserts that two elements are equal"), s"Output: $out")
+          expect(clue(code) == ExitCode.Success, s"Stderr: ${console.errBuf}") and
+            expect(out.contains("clue: => Any = \"values are not the same\""), s"Output: $out") and
+            expect(out.contains("Asserts that two elements are equal"), s"Output: $out")
         }
     }
 
   test("E2E scala-cli: --test resolves symbol from test-only dependency"):
-    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
+    requireTool(isOnPath("scala-cli"), "scala-cli not on PATH") >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -370,17 +371,19 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
           |  def run: Unit = ()
           |""".stripMargin
       )) >>
-        safeRun(handlers.ProjectGetHandler.run("munit.FunSuite", module = None, cwd = Some(dir))).map { code =>
-          assertEquals(code, ExitCode.Error, "test-only dep must not be on the compile classpath")
-        } >>
-        handlers.ProjectGetHandler.run("munit.FunSuite", module = None, cwd = Some(dir), testScope = true).map { code =>
-          assertEquals(code, ExitCode.Success, s"Stderr: ${console.errBuf}")
-          assert(console.outBuf.toString.contains("FunSuite"), s"Output: ${console.outBuf}")
-        }
+        (
+          safeRun(handlers.ProjectGetHandler.run("munit.FunSuite", module = None, cwd = Some(dir))).map { code =>
+            expect(clue(code) == ExitCode.Error, "test-only dep must not be on the compile classpath")
+          },
+          handlers.ProjectGetHandler.run("munit.FunSuite", module = None, cwd = Some(dir), testScope = true).map { code =>
+            expect(clue(code) == ExitCode.Success, s"Stderr: ${console.errBuf}") and
+              expect(console.outBuf.toString.contains("FunSuite"), s"Output: ${console.outBuf}")
+          }
+        ).mapN(_ and _)
     }
 
   test("E2E scala-cli: list lists members of project class"):
-    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
+    requireTool(isOnPath("scala-cli"), "scala-cli not on PATH") >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -393,15 +396,15 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
           |""".stripMargin
       )) >>
         handlers.ProjectListHandler.run("example.MyClass", module = None, limit = 50, cwd = Some(dir)).map { code =>
-          assertEquals(code, ExitCode.Success)
           val out = console.outBuf.toString
-          assert(out.contains("hello"), s"Output: $out")
-          assert(out.contains("goodbye"), s"Output: $out")
+          expect(clue(code) == ExitCode.Success) and
+            expect(out.contains("hello"), s"Output: $out") and
+            expect(out.contains("goodbye"), s"Output: $out")
         }
     }
 
   test("E2E scala-cli: search finds symbols across project"):
-    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
+    requireTool(isOnPath("scala-cli"), "scala-cli not on PATH") >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -413,13 +416,13 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
           |""".stripMargin
       )) >>
         handlers.ProjectSearchHandler.run("UniqueTestClassName123", module = None, limit = 50, cwd = Some(dir)).map { code =>
-          assertEquals(code, ExitCode.Success)
-          assert(console.outBuf.toString.contains("UniqueTestClassName123"), s"Output: ${console.outBuf}")
+          expect(clue(code) == ExitCode.Success) and
+            expect(console.outBuf.toString.contains("UniqueTestClassName123"), s"Output: ${console.outBuf}")
         }
     }
 
   test("E2E scala-cli: --module produces error"):
-    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
+    requireTool(isOnPath("scala-cli"), "scala-cli not on PATH") >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -431,13 +434,13 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         handlers.ProjectGetHandler.run("example.Foo", module = Some("bar"), cwd = Some(dir))
           .handleErrorWith { e => Console[IO].errorln(e.getMessage).as(ExitCode.Error) }
           .map { code =>
-            assertEquals(code, ExitCode.Error)
-            assert(console.errBuf.toString.contains("--module is not supported"), s"Stderr: ${console.errBuf}")
+            expect(clue(code) == ExitCode.Error) and
+              expect(console.errBuf.toString.contains("--module is not supported"), s"Stderr: ${console.errBuf}")
           }
     }
 
   test("E2E scala-cli: compilation failure surfaces build tool error"):
-    isOnPath("scala-cli").map(assume(_, "scala-cli not on PATH")) >>
+    requireTool(isOnPath("scala-cli"), "scala-cli not on PATH") >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -449,8 +452,8 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
           |""".stripMargin
       )) >>
         safeRun(handlers.ProjectGetHandler.run("example.Bad", module = None, cwd = Some(dir))).map { code =>
-          assertEquals(code, ExitCode.Error)
-          assert(console.errBuf.toString.contains("Compilation failed"), s"Stderr: ${console.errBuf}")
+          expect(clue(code) == ExitCode.Error) and
+            expect(console.errBuf.toString.contains("Compilation failed"), s"Stderr: ${console.errBuf}")
         }
     }
 
@@ -471,13 +474,13 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
             testScope = true
           )
         ).map { code =>
-          assertEquals(code, ExitCode.Error)
-          assert(console.errBuf.toString.contains("--test is not supported for Mill"), s"Stderr: ${console.errBuf}")
+          expect(clue(code) == ExitCode.Error) and
+            expect(console.errBuf.toString.contains("--test is not supported for Mill"), s"Stderr: ${console.errBuf}")
         }
     }
 
   test("E2E Mill: get resolves project symbol"):
-    isBinaryAvailable(millBinary).map(assume(_, s"$millBinary not found")) >>
+    requireTool(isBinaryAvailable(millBinary), s"$millBinary not found") >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -501,14 +504,14 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         )
       } >>
         handlers.ProjectGetHandler.run("example.MillClass", module = Some("app"), cwd = Some(dir), config = Config.global.copy(mill = MillConfig(millBinary))).map { code =>
-          assertEquals(code, ExitCode.Success, s"Stderr: ${console.errBuf}\nStdout: ${console.outBuf}")
-          assert(console.outBuf.toString.contains("MillClass"), s"Output: ${console.outBuf}")
-          assert(console.outBuf.toString.contains("greet"), s"Output: ${console.outBuf}")
+          expect(clue(code) == ExitCode.Success, s"Stderr: ${console.errBuf}\nStdout: ${console.outBuf}") and
+            expect(console.outBuf.toString.contains("MillClass"), s"Output: ${console.outBuf}") and
+            expect(console.outBuf.toString.contains("greet"), s"Output: ${console.outBuf}")
         }
     }
 
   test("E2E Mill: --module required"):
-    isBinaryAvailable(millBinary).map(assume(_, s"$millBinary not found")) >>
+    requireTool(isBinaryAvailable(millBinary), s"$millBinary not found") >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -516,15 +519,15 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         handlers.ProjectGetHandler.run("example.Foo", module = None, cwd = Some(dir), config = Config.global.copy(mill = MillConfig(millBinary)))
           .handleErrorWith { e => Console[IO].errorln(e.getMessage).as(ExitCode.Error) }
           .map { code =>
-            assertEquals(code, ExitCode.Error)
-            assert(console.errBuf.toString.contains("--module is required for Mill"), s"Stderr: ${console.errBuf}")
+            expect(clue(code) == ExitCode.Error) and
+              expect(console.errBuf.toString.contains("--module is required for Mill"), s"Stderr: ${console.errBuf}")
           }
     }
 
   // --- End-to-end sbt tests (requires sbt on PATH) ---
 
   test("E2E sbt: get resolves project symbol"):
-    isOnPath("sbt").map(assume(_, "sbt not on PATH")) >>
+    requireTool(isOnPath("sbt"), "sbt not on PATH") >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -546,13 +549,13 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         )
       } >>
         handlers.ProjectGetHandler.run("example.SbtClass", module = Some("cellar-test"), cwd = Some(dir)).map { code =>
-          assertEquals(code, ExitCode.Success, s"Stderr: ${console.errBuf}")
-          assert(console.outBuf.toString.contains("SbtClass"), s"Output: ${console.outBuf}")
+          expect(clue(code) == ExitCode.Success, s"Stderr: ${console.errBuf}") and
+            expect(console.outBuf.toString.contains("SbtClass"), s"Output: ${console.outBuf}")
         }
     }
 
   test("E2E sbt: --module required"):
-    isOnPath("sbt").map(assume(_, "sbt not on PATH")) >>
+    requireTool(isOnPath("sbt"), "sbt not on PATH") >>
     withTempDir { dir =>
       val console = CapturingConsole()
       given Console[IO] = console
@@ -560,7 +563,7 @@ class ProjectAwareIntegrationTest extends CatsEffectSuite:
         handlers.ProjectGetHandler.run("example.Foo", module = None, cwd = Some(dir))
           .handleErrorWith { e => Console[IO].errorln(e.getMessage).as(ExitCode.Error) }
           .map { code =>
-            assertEquals(code, ExitCode.Error)
-            assert(console.errBuf.toString.contains("--module is required for sbt"), s"Stderr: ${console.errBuf}")
+            expect(clue(code) == ExitCode.Error) and
+              expect(console.errBuf.toString.contains("--module is required for sbt"), s"Stderr: ${console.errBuf}")
           }
     }

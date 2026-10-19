@@ -1,15 +1,14 @@
 package cellar
 
 import cats.effect.IO
-import munit.CatsEffectSuite
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 import tastyquery.Contexts.Context
 
-class GetFormatterTest extends CatsEffectSuite:
+object GetFormatterTest extends SequentialIOSuite:
 
   private def withCtx[A](body: Context => IO[A]): IO[A] =
-    TestFixtures.assumeFixturesAvailable()
     for
+      _        <- TestFixtures.assumeFixturesAvailable
       jrePaths <- JreClasspath.jrtPath()
       jars     <- CoursierFetchClient.fetchClasspath(
                     TestFixtures.scala3Coord, Seq(TestFixtures.localM2Repo))
@@ -22,8 +21,8 @@ class GetFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarADT")
         val output = GetFormatter.formatSymbol(cls)
-        assert(output.contains("## "), s"Expected heading in: $output")
-        assert(output.contains("trait"), s"Expected 'trait' in: $output")
+        expect(output.contains("## "), s"Expected heading in: $output") and
+          expect(output.contains("trait"), s"Expected 'trait' in: $output")
       }
     }
 
@@ -33,7 +32,7 @@ class GetFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarADT")
         val output = GetFormatter.formatSymbol(cls)
-        assert(output.contains("**Known subtypes:**"), s"Expected subtypes in: $output")
+        expect(output.contains("**Known subtypes:**"), s"Expected subtypes in: $output")
       }
     }
 
@@ -43,7 +42,7 @@ class GetFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarADT")
         val output = GetFormatter.formatSymbol(cls)
-        assert(output.contains("CellarA"), s"Expected CellarA in subtypes: $output")
+        expect(output.contains("CellarA"), s"Expected CellarA in subtypes: $output")
       }
     }
 
@@ -53,7 +52,7 @@ class GetFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarA")
         val output = GetFormatter.formatSymbol(cls)
-        assert(!output.contains("**Known subtypes:**"), s"Unexpected subtypes: $output")
+        expect(!output.contains("**Known subtypes:**"), s"Unexpected subtypes: $output")
       }
     }
 
@@ -63,7 +62,7 @@ class GetFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarADT")
         val output = GetFormatter.formatSymbol(cls)
-        assert(output.contains("```scala"), s"Expected code fence in: $output")
+        expect(output.contains("```scala"), s"Expected code fence in: $output")
       }
     }
 
@@ -73,7 +72,7 @@ class GetFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarTC")
         val output = GetFormatter.formatSymbol(cls)
-        assert(output.contains("render"), s"Expected 'render' in members: $output")
+        expect(output.contains("render"), s"Expected 'render' in members: $output")
       }
     }
 
@@ -83,8 +82,8 @@ class GetFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarTC")
         val output = GetFormatter.formatSymbol(cls)
-        assert(!output.contains("notify"), s"Unexpected Object method in: $output")
-        assert(!output.contains("finalize"), s"Unexpected Object method in: $output")
+        expect(!output.contains("notify"), s"Unexpected Object method in: $output") and
+          expect(!output.contains("finalize"), s"Unexpected Object method in: $output")
       }
     }
 
@@ -95,7 +94,7 @@ class GetFormatterTest extends CatsEffectSuite:
         val cls1   = ctx.findStaticClass("cellar.fixture.scala3.CellarA")
         val cls2   = ctx.findStaticClass("cellar.fixture.scala3.CellarADT")
         val output = GetFormatter.formatGetResult("test", List(cls1, cls2))
-        assert(output.contains("---"), s"Expected separator in: $output")
+        expect(output.contains("---"), s"Expected separator in: $output")
       }
     }
 
@@ -105,7 +104,7 @@ class GetFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarA")
         val output = GetFormatter.formatGetResult("test", List(cls))
-        assert(!output.contains("---"), s"Unexpected separator: $output")
+        expect(!output.contains("---"), s"Unexpected separator: $output")
       }
     }
 
@@ -116,7 +115,7 @@ class GetFormatterTest extends CatsEffectSuite:
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarOverloaded")
         val output = GetFormatter.formatSymbol(cls)
         val processCount = output.linesIterator.count(_.contains("def process("))
-        assertEquals(processCount, 3, s"Expected 3 process overloads in:\n$output")
+        expect(clue(processCount) == 3, s"Expected 3 process overloads in:\n$output")
       }
     }
 
@@ -127,13 +126,13 @@ class GetFormatterTest extends CatsEffectSuite:
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarOverloadedChild")
         val output = GetFormatter.formatSymbol(cls)
         val actionCount = output.linesIterator.count(_.contains("def action("))
-        assertEquals(actionCount, 2, s"Expected 2 action overloads in:\n$output")
+        expect(clue(actionCount) == 2, s"Expected 2 action overloads in:\n$output")
       }
     }
 
   private def withJavaCtx[A](body: Context => IO[A]): IO[A] =
-    TestFixtures.assumeFixturesAvailable()
     for
+      _        <- TestFixtures.assumeFixturesAvailable
       jrePaths <- JreClasspath.jrtPath()
       jars     <- CoursierFetchClient.fetchClasspath(
                     TestFixtures.javaCoord, Seq(TestFixtures.localM2Repo))
@@ -141,8 +140,8 @@ class GetFormatterTest extends CatsEffectSuite:
     yield result
 
   private def withScala2Ctx[A](body: Context => IO[A]): IO[A] =
-    TestFixtures.assumeFixturesAvailable()
     for
+      _        <- TestFixtures.assumeFixturesAvailable
       jrePaths <- JreClasspath.jrtPath()
       jars     <- CoursierFetchClient.fetchClasspath(
                     TestFixtures.scala2Coord, Seq(TestFixtures.localM2Repo))
@@ -156,7 +155,7 @@ class GetFormatterTest extends CatsEffectSuite:
         val cls    = ctx.findStaticClass("cellar.fixture.java.CellarJavaClass")
         val output = GetFormatter.formatSymbol(cls)
         val formatCount = output.linesIterator.count(_.contains("String format("))
-        assertEquals(formatCount, 3, s"Expected 3 format overloads in:\n$output")
+        expect(clue(formatCount) == 3, s"Expected 3 format overloads in:\n$output")
       }
     }
 
@@ -166,9 +165,9 @@ class GetFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarTC")
         val output = GetFormatter.formatSymbol(cls)
-        assert(output.contains("**Companion members:**"), s"Expected companion section in: $output")
-        assert(output.contains("def apply"), s"Expected 'def apply' signature in companion: $output")
-        assert(output.contains("CellarTC[A]"), s"Expected return type in companion signature: $output")
+        expect(output.contains("**Companion members:**"), s"Expected companion section in: $output") and
+          expect(output.contains("def apply"), s"Expected 'def apply' signature in companion: $output") and
+          expect(output.contains("CellarTC[A]"), s"Expected return type in companion signature: $output")
       }
     }
 
@@ -179,7 +178,7 @@ class GetFormatterTest extends CatsEffectSuite:
         val cls    = ctx.findStaticClass("cellar.fixture.scala2.CellarOverloaded")
         val output = GetFormatter.formatSymbol(cls)
         val processCount = output.linesIterator.count(_.contains("def process("))
-        assertEquals(processCount, 3, s"Expected 3 process overloads in:\n$output")
+        expect(clue(processCount) == 3, s"Expected 3 process overloads in:\n$output")
       }
     }
 
@@ -190,11 +189,11 @@ class GetFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls    = ctx.findStaticClass("cellar.fixture.scala2.CellarADT")
         val output = GetFormatter.formatSymbol(cls)
-        assert(output.contains("**Known subtypes:**"), s"Expected subtypes section in:\n$output")
-        // Names must use source-level dotted notation, not JVM $ encoding
-        assert(output.contains("CellarADT.CellarAA"), s"Expected clean CellarAA name in:\n$output")
-        assert(output.contains("CellarADT.CellarAB"), s"Expected clean CellarAB name in:\n$output")
-        assert(!output.contains("CellarADT$"), s"Expected no JVM-mangled names in:\n$output")
+        expect(output.contains("**Known subtypes:**"), s"Expected subtypes section in:\n$output") and
+          // Names must use source-level dotted notation, not JVM $ encoding
+          expect(output.contains("CellarADT.CellarAA"), s"Expected clean CellarAA name in:\n$output") and
+          expect(output.contains("CellarADT.CellarAB"), s"Expected clean CellarAB name in:\n$output") and
+          expect(!output.contains("CellarADT$"), s"Expected no JVM-mangled names in:\n$output")
       }
     }
 
@@ -207,12 +206,12 @@ class GetFormatterTest extends CatsEffectSuite:
           // The trait section already prints the companion's members, so a separate section for
           // the module class would repeat the whole API, mirrored.
           val headingCount = output.linesIterator.count(_.startsWith("## cellar.fixture.scala2.CellarADT"))
-          assertEquals(headingCount, 1, s"Expected the companion collapsed into one heading in:\n$output")
-          // Collapsing must not lose them: they move under the trait's "Companion members".
-          assert(output.contains("CellarAA"), s"Expected companion member CellarAA in:\n$output")
-          assert(output.contains("CellarAB"), s"Expected companion member CellarAB in:\n$output")
-          assert(!output.contains("CellarADT$"), s"Expected no JVM-mangled names in:\n$output")
-        case other => fail(s"Expected Found, got $other")
+          expect(clue(headingCount) == 1, s"Expected the companion collapsed into one heading in:\n$output") and
+            // Collapsing must not lose them: they move under the trait's "Companion members".
+            expect(output.contains("CellarAA"), s"Expected companion member CellarAA in:\n$output") and
+            expect(output.contains("CellarAB"), s"Expected companion member CellarAB in:\n$output") and
+            expect(!output.contains("CellarADT$"), s"Expected no JVM-mangled names in:\n$output")
+        case other => failure(s"Expected Found, got $other")
       }
     }
 
@@ -223,8 +222,8 @@ class GetFormatterTest extends CatsEffectSuite:
       SymbolResolver.resolve("cellar.fixture.scala3.CellarTC").map {
         case LookupResult.Found(syms) =>
           val output = GetFormatter.formatGetResult("cellar.fixture.scala3.CellarTC", syms)
-          assert(output.contains("## cellar.fixture.scala3.CellarTC"), s"module dropped:\n$output")
-        case other => fail(s"Expected Found, got $other")
+          expect(output.contains("## cellar.fixture.scala3.CellarTC"), s"module dropped:\n$output")
+        case other => failure(s"Expected Found, got $other")
       }
     }
 
@@ -237,8 +236,8 @@ class GetFormatterTest extends CatsEffectSuite:
       SymbolResolver.resolve("cellar.fixture.scala3.Celsius").map {
         case LookupResult.Found(syms) =>
           val output = GetFormatter.formatGetResult("cellar.fixture.scala3.Celsius", syms)
-          assert(output.contains("apply"), s"Expected 'apply' in standalone object output:\n$output")
-        case other => fail(s"Expected Found, got $other")
+          expect(output.contains("apply"), s"Expected 'apply' in standalone object output:\n$output")
+        case other => failure(s"Expected Found, got $other")
       }
     }
 
@@ -251,7 +250,7 @@ class GetFormatterTest extends CatsEffectSuite:
         // A Java type has no companion `apply`, so the constructors are the only
         // listing that shows how it is built. CellarJavaClass declares exactly one,
         // and a constructor is never inherited, so exactly one must be listed.
-        assertEquals(output.linesIterator.count(_.startsWith("CellarJavaClass(")), 1, s"Output:\n$output")
+        expect(clue(output.linesIterator.count(_.startsWith("CellarJavaClass("))) == 1, s"Output:\n$output")
       }
     }
 
@@ -262,8 +261,8 @@ class GetFormatterTest extends CatsEffectSuite:
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarSugar")
         val output = GetFormatter.formatSymbol(cls)
         val lines  = output.linesIterator.filter(_.contains("withDefault")).toList
-        assertEquals(lines, List("abstract def withDefault(a: Int, b: String = ...): String"), s"Output:\n$output")
-        assert(!output.contains("$default$"), s"Output:\n$output")
+        expect(clue(lines) == List("abstract def withDefault(a: Int, b: String = ...): String"), s"Output:\n$output") and
+          expect(!output.contains("$default$"), s"Output:\n$output")
       }
     }
 
@@ -274,8 +273,8 @@ class GetFormatterTest extends CatsEffectSuite:
         val cls    = ctx.findStaticClass("cellar.fixture.scala2.CellarSugar")
         val output = GetFormatter.formatSymbol(cls)
         val lines  = output.linesIterator.filter(_.contains("withDefault")).toList
-        assertEquals(lines, List("abstract def withDefault(a: Int, b: String = ...): String"), s"Output:\n$output")
-        assert(!output.contains("$default$"), s"Output:\n$output")
+        expect(clue(lines) == List("abstract def withDefault(a: Int, b: String = ...): String"), s"Output:\n$output") and
+          expect(!output.contains("$default$"), s"Output:\n$output")
       }
     }
 
@@ -287,8 +286,8 @@ class GetFormatterTest extends CatsEffectSuite:
         // parent must survive alongside it being dropped.
         val trt = ctx.findStaticClass("cellar.fixture.scala2.CellarInstances")
         val obj = ctx.findStaticModuleClass("cellar.fixture.scala2.CellarInstances")
-        assertEquals(TypePrinter.printSymbolSignature(trt), "trait CellarInstances")
-        assertEquals(TypePrinter.printSymbolSignature(obj), "object CellarInstances extends CellarInstances")
+        expect.eql("trait CellarInstances", TypePrinter.printSymbolSignature(trt)) and
+          expect.eql("object CellarInstances extends CellarInstances", TypePrinter.printSymbolSignature(obj))
       }
     }
 
@@ -302,8 +301,8 @@ class GetFormatterTest extends CatsEffectSuite:
         val obj = ctx.findStaticModuleClass("cellar.fixture.scala2.CellarInstances")
         val traitOut = GetFormatter.formatSymbol(trt)
         val objOut   = GetFormatter.formatSymbol(obj)
-        assert(!traitOut.contains("<init>"), s"Trait output:\n$traitOut")
-        assert(!objOut.contains("<init>"), s"Object output:\n$objOut")
+        expect(!traitOut.contains("<init>"), s"Trait output:\n$traitOut") and
+          expect(!objOut.contains("<init>"), s"Object output:\n$objOut")
       }
     }
 
@@ -315,9 +314,9 @@ class GetFormatterTest extends CatsEffectSuite:
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarLeaf")
         val full   = GetFormatter.formatSymbol(cls)
         val hidden = GetFormatter.formatSymbol(cls, hideInherited = true)
-        assert(full.contains("midMethod"), s"Expected midMethod in full output: $full")
-        assert(hidden.contains("leafMethod"), s"Expected leafMethod in hidden output: $hidden")
-        assert(!hidden.contains("midMethod"), s"Unexpected midMethod in hidden output: $hidden")
+        expect(full.contains("midMethod"), s"Expected midMethod in full output: $full") and
+          expect(hidden.contains("leafMethod"), s"Expected leafMethod in hidden output: $hidden") and
+          expect(!hidden.contains("midMethod"), s"Unexpected midMethod in hidden output: $hidden")
       }
     }
 
@@ -328,11 +327,11 @@ class GetFormatterTest extends CatsEffectSuite:
         // CellarLeaf → CellarMid → CellarOuter
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarLeaf")
         val output = GetFormatter.formatSymbol(cls, groupInherited = true)
-        assert(output.contains("// Declared on CellarLeaf"), s"Expected declared section in:\n$output")
-        assert(output.contains("// Inherited from CellarMid"), s"Expected CellarMid section in:\n$output")
-        assert(output.contains("// Inherited from CellarOuter"), s"Expected CellarOuter section in:\n$output")
-        assert(output.contains("leafMethod"), s"Expected leafMethod in:\n$output")
-        assert(output.contains("midMethod"), s"Expected midMethod in:\n$output")
+        expect(output.contains("// Declared on CellarLeaf"), s"Expected declared section in:\n$output") and
+          expect(output.contains("// Inherited from CellarMid"), s"Expected CellarMid section in:\n$output") and
+          expect(output.contains("// Inherited from CellarOuter"), s"Expected CellarOuter section in:\n$output") and
+          expect(output.contains("leafMethod"), s"Expected leafMethod in:\n$output") and
+          expect(output.contains("midMethod"), s"Expected midMethod in:\n$output")
       }
     }
 
@@ -342,9 +341,9 @@ class GetFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarLeaf")
         val output = GetFormatter.formatSymbol(cls, hideInherited = true, groupInherited = true)
-        assert(output.contains("leafMethod"), s"Expected leafMethod in:\n$output")
-        assert(!output.contains("midMethod"), s"Unexpected midMethod in:\n$output")
-        assert(!output.contains("Inherited from"), s"Unexpected section header in:\n$output")
+        expect(output.contains("leafMethod"), s"Expected leafMethod in:\n$output") and
+          expect(!output.contains("midMethod"), s"Unexpected midMethod in:\n$output") and
+          expect(!output.contains("Inherited from"), s"Unexpected section header in:\n$output")
       }
     }
 
@@ -357,10 +356,10 @@ class GetFormatterTest extends CatsEffectSuite:
         val limited = GetFormatter.formatSymbol(cls, limit = Some(2))
         // Full output has at least 3 process overloads + unique
         val fullCount = full.linesIterator.count(l => l.contains("def process(") || l.contains("def unique"))
-        assert(fullCount >= 3, s"Expected >= 3 members in full, got $fullCount in:\n$full")
-        // Limited output has exactly 2 member lines in the code block
-        assert(limited.contains("… "), s"Expected truncation note in: $limited")
-        assert(limited.contains("more members"), s"Expected 'more members' in: $limited")
+        expect(fullCount >= 3, s"Expected >= 3 members in full, got $fullCount in:\n$full") and
+          // Limited output has exactly 2 member lines in the code block
+          expect(limited.contains("… "), s"Expected truncation note in: $limited") and
+          expect(limited.contains("more members"), s"Expected 'more members' in: $limited")
       }
     }
 
@@ -372,8 +371,8 @@ class GetFormatterTest extends CatsEffectSuite:
         val full    = GetFormatter.formatSymbol(cls)
         val limited = GetFormatter.formatSymbol(cls, limit = Some(1))
         val companionOf = (out: String) => out.split("""\*\*Companion members:\*\*""")(1).takeWhile(_ != '#')
-        assert(companionOf(full).linesIterator.count(_.startsWith("def ")) >= 1, s"Expected companion members in:\n$full")
-        assert(companionOf(limited).contains("more members"), s"Expected truncation note in companion section of:\n$limited")
+        expect(companionOf(full).linesIterator.count(_.startsWith("def ")) >= 1, s"Expected companion members in:\n$full") and
+          expect(companionOf(limited).contains("more members"), s"Expected truncation note in companion section of:\n$limited")
       }
     }
 
@@ -385,8 +384,8 @@ class GetFormatterTest extends CatsEffectSuite:
         val grouped  = GetFormatter.formatSymbol(cls, groupInherited = true)
         val flat     = GetFormatter.formatSymbol(cls)
         val companionOf = (out: String) => out.split("""\*\*Companion members:\*\*""")(1).takeWhile(_ != '#')
-        assert(companionOf(grouped).contains("// Declared on"), s"Expected section header in companion of:\n$grouped")
-        assert(!companionOf(flat).contains("// Declared on"), s"Unexpected section header in companion of:\n$flat")
+        expect(companionOf(grouped).contains("// Declared on"), s"Expected section header in companion of:\n$grouped") and
+          expect(!companionOf(flat).contains("// Declared on"), s"Unexpected section header in companion of:\n$flat")
       }
     }
 
@@ -397,7 +396,7 @@ class GetFormatterTest extends CatsEffectSuite:
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarWithCompanion")
         val output = GetFormatter.formatSymbol(cls, hideInherited = true, groupInherited = true)
         val companion = output.split("""\*\*Companion members:\*\*""")(1).takeWhile(_ != '#')
-        assert(!companion.contains("// Declared on"), s"Unexpected section header in companion of:\n$output")
+        expect(!companion.contains("// Declared on"), s"Unexpected section header in companion of:\n$output")
       }
     }
 
@@ -416,13 +415,13 @@ class GetFormatterTest extends CatsEffectSuite:
       SymbolResolver.resolve("myapp.hello").map {
         case LookupResult.Found(syms) =>
           val output = GetFormatter.formatGetResult("myapp.hello", syms)
-          assert(!output.contains("$package$"), s"Expected no $$package$$ in:\n$output")
-          assert(output.contains("## myapp.hello"), s"Expected '## myapp.hello' heading in:\n$output")
-          assert(output.contains("**Origin:** myapp"), s"Expected origin 'myapp' in:\n$output")
-          assert(output.contains("def hello: Unit"), s"Expected 'def hello: Unit' in:\n$output")
-          // @main wrapper class is implementation detail — must not appear
-          assert(!output.contains("class hello"), s"Unexpected '@main' wrapper class in:\n$output")
-        case other => fail(s"Expected Found, got $other")
+          expect(!output.contains("$package$"), s"Expected no $$package$$ in:\n$output") and
+            expect(output.contains("## myapp.hello"), s"Expected '## myapp.hello' heading in:\n$output") and
+            expect(output.contains("**Origin:** myapp"), s"Expected origin 'myapp' in:\n$output") and
+            expect(output.contains("def hello: Unit"), s"Expected 'def hello: Unit' in:\n$output") and
+            // @main wrapper class is implementation detail — must not appear
+            expect(!output.contains("class hello"), s"Unexpected '@main' wrapper class in:\n$output")
+        case other => failure(s"Expected Found, got $other")
       }
     }
 
@@ -432,10 +431,10 @@ class GetFormatterTest extends CatsEffectSuite:
       SymbolResolver.resolve("myapp.Hello").map {
         case LookupResult.Found(syms) =>
           val output = GetFormatter.formatGetResult("myapp.Hello", syms)
-          assert(!output.contains("$package$"), s"Expected no $$package$$ in:\n$output")
-          assert(output.contains("opaque type Hello = Int"), s"Expected opaque-type signature in:\n$output")
-          assert(!output.contains("symbol["), s"Unexpected raw symbol[] sentinel in:\n$output")
-        case other => fail(s"Expected Found, got $other")
+          expect(!output.contains("$package$"), s"Expected no $$package$$ in:\n$output") and
+            expect(output.contains("opaque type Hello = Int"), s"Expected opaque-type signature in:\n$output") and
+            expect(!output.contains("symbol["), s"Unexpected raw symbol[] sentinel in:\n$output")
+        case other => failure(s"Expected Found, got $other")
       }
     }
 
@@ -445,9 +444,9 @@ class GetFormatterTest extends CatsEffectSuite:
       SymbolResolver.resolve("myapp.Hello.fromInt").map {
         case LookupResult.Found(syms) =>
           val output = GetFormatter.formatGetResult("myapp.Hello.fromInt", syms)
-          assert(!output.contains("$package$"), s"Expected no $$package$$ in:\n$output")
-          assert(output.contains("## myapp.Hello.fromInt"), s"Expected '## myapp.Hello.fromInt' heading in:\n$output")
-          assert(output.contains("**Origin:** myapp.Hello"), s"Expected origin 'myapp.Hello' in:\n$output")
-        case other => fail(s"Expected Found, got $other")
+          expect(!output.contains("$package$"), s"Expected no $$package$$ in:\n$output") and
+            expect(output.contains("## myapp.Hello.fromInt"), s"Expected '## myapp.Hello.fromInt' heading in:\n$output") and
+            expect(output.contains("**Origin:** myapp.Hello"), s"Expected origin 'myapp.Hello' in:\n$output")
+        case other => failure(s"Expected Found, got $other")
       }
     }
