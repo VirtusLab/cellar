@@ -2,7 +2,7 @@ package cellar
 
 import tastyquery.Contexts.Context
 import tastyquery.Modifiers.{OpenLevel, TermSymbolKind, Visibility}
-import tastyquery.Names.nme
+import tastyquery.Names.{SimpleName, UniqueName, UnsignedTermName, nme}
 import tastyquery.Symbols.{
   ClassSymbol,
   ClassTypeParamSymbol,
@@ -92,9 +92,14 @@ object TypePrinter:
       tpe: TypeOrMethodic,
       paramSymss: List[ParamSymbolsClause] = Nil,
       javaNames: Option[List[String]] = None,
-      defaultValues: Map[String, String] = Map.empty
+      defaultValues: Map[String, String] = Map.empty,
+      elided: Set[String] = Set.empty
   )(using ctx: Context): String =
     tpe match
+      case t: MethodType if t.paramNames.nonEmpty && t.paramNames.forall(n => elided(n.toString)) =>
+        printMethodic(t.resultType, paramSymss.drop(1), None, defaultValues, elided) match
+          case rest if t.resultType.isInstanceOf[Type] => s": $rest"
+          case rest                                    => rest
       case t: MethodType =>
         val prefix =
           if t.isContextual then "using "
@@ -104,22 +109,60 @@ object TypePrinter:
           case Some(Left(syms)) => syms.map(_.isParamWithDefault)
           case _                => Nil
         val names = javaNames.filter(_.length == t.paramNames.length).getOrElse(t.paramNames.map(_.toString))
-        val params = names.zip(t.paramTypes).zipWithIndex.map { case ((n, tp), i) =>
+        val params = names.zip(t.paramTypes).zipWithIndex.collect { case ((n, tp), i) if !elided(n) =>
           val default =
             if defaults.lift(i).contains(true) then s" = ${defaultValues.get(n).map(printDefault).getOrElse("...")}" else ""
           s"$n: ${printType(tp)}$default"
         }
         val paramStr = s"($prefix${params.mkString(", ")})"
         val rest = t.resultType match
-          case _: MethodType | _: PolyType => printMethodic(t.resultType, paramSymss.drop(1), None, defaultValues)
-          case r                           => s": ${printMethodic(r, Nil, None, Map.empty)}"
+          case _: MethodType | _: PolyType => printMethodic(t.resultType, paramSymss.drop(1), None, defaultValues, elided)
+          case r                           => s": ${printMethodic(r, Nil, None, Map.empty, Set.empty)}"
         s"$paramStr$rest"
 
       case t: PolyType =>
-        val typeParams = t.paramNames.zip(t.paramTypeBounds).map(printTypeParam)
-        s"[${typeParams.mkString(", ")}]${printMethodic(t.resultType, paramSymss.drop(1), javaNames, defaultValues)}"
+        val (typeParams, evidence) = printPolyParams(t)
+        s"$typeParams${printMethodic(t.resultType, paramSymss.drop(1), javaNames, defaultValues, elided ++ evidence)}"
 
       case t: Type => printType(t)
+
+  /** Whether parameter `name` of `clause` is a context bound's evidence, as dotty's signature help
+   *  decides it: an implicit or using parameter named with the `evidence$` unique-name kind
+   *  (`ContextBoundParamName`). A Scala 2 pickle has no name kinds, so there it is a plain
+   *  `evidence$N`.
+   */
+  private def isEvidence(name: UnsignedTermName, clause: MethodType): Boolean =
+    (clause.isImplicit || clause.isContextual) && (name match
+      case UniqueName(_, "evidence$", _) => true
+      case SimpleName(s)                 => Scala2Evidence.matches(s)
+      case _                             => false)
+
+  private val Scala2Evidence = """evidence\$\d+""".r
+
+  /** `[A: Monoid, F[_]]` and the names of the evidence parameters those context bounds stand for:
+   *  evidence typed by a type class applied to just one of `poly`'s type parameters.
+   */
+  private def printPolyParams(poly: PolyType)(using Context): (String, Set[String]) =
+    def evidenceIn(tpe: TypeOrMethodic): List[(String, Int, String)] =
+      tpe match
+        case m: MethodType =>
+          val here = m.paramNames.zip(m.paramTypes).flatMap {
+            case (n, app: AppliedType) if isEvidence(n, m) =>
+              app.args match
+                case List(ref: TypeParamRef) if ref.binder eq poly => Some((n.toString, ref.paramNum, printType(app.tycon)))
+                case _                                             => None
+            case _ => None
+          }
+          here ++ evidenceIn(m.resultType)
+        // An extension's evidence follows the method's own type parameters.
+        case p: PolyType => evidenceIn(p.resultType)
+        case _           => Nil
+    val evidence = evidenceIn(poly.resultType)
+    val bounds   = evidence.groupMap(_._2)(_._3)
+    val params = poly.paramNames.zip(poly.paramTypeBounds).zipWithIndex.map { case ((n, b), i) =>
+      printTypeParam(n, b) + bounds.getOrElse(i, Nil).map(tc => s": $tc").mkString
+    }
+    (s"[${params.mkString(", ")}]", evidence.map(_._1).toSet)
 
   /** `<FromJavaObject>` is the internal name for Java's Object as seen from Scala. It is a real
    *  TypeRef, not a fallback, so it would otherwise print verbatim, angle brackets and all.
@@ -313,14 +356,15 @@ object TypePrinter:
       tpe: TypeOrMethodic,
       paramSymss: List[ParamSymbolsClause],
       javaNames: Option[List[String]],
-      defaultValues: Map[String, String]
+      defaultValues: Map[String, String],
+      elided: Set[String] = Set.empty
   )(using ctx: Context): String =
     tpe match
       case t: Type => s": ${printType(t)}"
       case t: PolyType =>
-        val typeParams = t.paramNames.zip(t.paramTypeBounds).map(printTypeParam)
-        s"[${typeParams.mkString(", ")}]${printTopLevelMethodic(t.resultType, paramSymss.drop(1), javaNames, defaultValues)}"
-      case t: MethodType => printMethodic(t, paramSymss, javaNames, defaultValues)
+        val (typeParams, evidence) = printPolyParams(t)
+        s"$typeParams${printTopLevelMethodic(t.resultType, paramSymss.drop(1), javaNames, defaultValues, elided ++ evidence)}"
+      case t: MethodType => printMethodic(t, paramSymss, javaNames, defaultValues, elided)
 
   private def printClassTypeParams(params: List[ClassTypeParamSymbol])(using ctx: Context): String =
     if params.isEmpty then ""
