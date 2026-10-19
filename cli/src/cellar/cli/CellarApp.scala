@@ -120,7 +120,7 @@ object CellarApp extends ProfilingIOApp:
     regularCmds.map(cmd =>
       firstRunNotice.flatMap {
         case Some(code) => IO.pure(code)
-        case None       => cmd
+        case None       => UpdateCheck.around(cmd)
       }
     ) orElse TelemetrySubcommand.opts
 
