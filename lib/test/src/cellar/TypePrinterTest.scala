@@ -319,6 +319,22 @@ object TypePrinterTest extends SequentialIOSuite:
       }
     }
 
+  test("printSymbolSignature keeps a higher-kinded type param's lower bound"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val widen = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "widen").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(widen)
+
+        // then
+        expect.eql("abstract def widen[F2[x] >: List[x]](fa: F2[Int]): F2[Int]", sig)
+      }
+    }
+
   test("printSymbolSignature renders higher-kinded class type params (Scala 3)"):
     withCtx { ctx =>
       IO.blocking {

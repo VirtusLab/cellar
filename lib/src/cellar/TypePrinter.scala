@@ -379,18 +379,32 @@ object TypePrinter:
       case _               => ""
     s"$variance${printTypeParam(param.name, param.declaredBounds)}"
 
+  /** `F2[x] >: F[x] <: G[x]`, laid out as dotty's `PlainPrinter.decomposeLambdas`: the bounds of a
+   *  higher-kinded parameter are lambdas over its parameters, so those print once, from the upper
+   *  bound, and each bound prints as its lambda's result.
+   */
   private def printTypeParam(name: tastyquery.Names.TypeName, bounds: TypeBounds)(using ctx: Context): String =
     bounds match
       case b: AbstractTypeBounds =>
-        b.high match
-          case tl: TypeLambda => s"$name${printHkParams(tl)}"
-          case _ =>
-            val lo = if printType(b.low) == "Nothing" then "" else s" >: ${printType(b.low)}"
-            val hi = if printType(b.high) == "Any" then "" else s" <: ${printType(b.high)}"
-            s"$name$lo$hi"
+        val lo      = printType(lambdaResult(b.low))
+        val hi      = printType(lambdaResult(b.high))
+        val loStr   = if lo == "Nothing" then "" else s" >: $lo"
+        val hiStr   = if hi == "Any" then "" else s" <: $hi"
+        val tparams = b.high match
+          case tl: TypeLambda => printHkParams(tl, mentionedIn = s"$loStr$hiStr")
+          case _              => ""
+        s"$name$tparams$loStr$hiStr"
       case _ => name.toString
 
-  private def printHkParams(tl: TypeLambda)(using ctx: Context): String =
+  private def lambdaResult(tpe: Type): Type =
+    tpe match
+      case tl: TypeLambda => tl.resultType
+      case other          => other
+
+  /** `[x, _ <: B]`: a parameter keeps its name only where its own or a sibling's bounds, or the
+   *  enclosing parameter's bounds (`mentionedIn`), refer to it.
+   */
+  private def printHkParams(tl: TypeLambda, mentionedIn: String)(using ctx: Context): String =
     val rendered = tl.paramNames.zip(tl.paramTypeBounds).map { (name, bounds) =>
       val (lo, hi) = bounds match
         case b: AbstractTypeBounds =>
@@ -400,17 +414,12 @@ object TypePrinter:
         case _ => ("", "")
       (name.toString, lo, hi)
     }
-    // A parameter must be named (not `_`) when it is referenced elsewhere in the lambda:
-    // in a bound (self-referential, e.g. `A <: Comparable[A]`) or in the constructor
-    // bound (the lambda's result, e.g. `F[A] <: Iterable[A]`).
-    val resultStr = printType(tl.resultType)
-    val context   = (resultStr :: rendered.flatMap((_, lo, hi) => List(lo, hi))).mkString(" ")
+    val context = (mentionedIn :: rendered.flatMap((_, lo, hi) => List(lo, hi))).mkString(" ")
     val params = rendered.map { (name, lo, hi) =>
       val head = if isMentioned(context, name) then name else "_"
       s"$head$lo$hi"
     }
-    val constructorBound = if resultStr == "Any" then "" else s" <: $resultStr"
-    s"[${params.mkString(", ")}]$constructorBound"
+    s"[${params.mkString(", ")}]"
 
   private def isMentioned(context: String, name: String): Boolean =
     context.matches(s"(?s).*\\b${java.util.regex.Pattern.quote(name)}\\b.*")
