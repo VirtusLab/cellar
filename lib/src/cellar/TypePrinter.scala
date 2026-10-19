@@ -1,7 +1,7 @@
 package cellar
 
 import tastyquery.Contexts.Context
-import tastyquery.Modifiers.{OpenLevel, TermSymbolKind}
+import tastyquery.Modifiers.{OpenLevel, TermSymbolKind, Visibility}
 import tastyquery.Names.nme
 import tastyquery.Symbols.{
   ClassSymbol,
@@ -176,10 +176,10 @@ object TypePrinter:
         val parents =
           cls.parents.filterNot(p => cls.isEnum && isEnumBase(p)).map(printParent).filterNot(universalParents.contains)
         val extendsStr = if parents.isEmpty then "" else s" extends ${parents.mkString(" with ")}"
-        s"${classModifiers(cls)}$kind $name$typeParams$extendsStr"
+        s"${visibilityModifier(cls)}${classModifiers(cls)}$kind $name$typeParams$extendsStr"
 
       case term: TermSymbol =>
-        val keyword = termModifiers(term) + termKeyword(term)
+        val keyword = visibilityModifier(term) + termModifiers(term) + termKeyword(term)
         if term.isModuleVal then s"$keyword ${term.name}"
         else if term.isEnumCase then s"case ${term.name} extends ${printMethodic(term.declaredType)}"
         else
@@ -188,13 +188,14 @@ object TypePrinter:
           s"$keyword ${term.name}${printTopLevelMethodic(term.declaredType, term.paramSymss, javaNames, defaults)}"
 
       case tm: TypeMemberSymbol =>
+        val visibility = visibilityModifier(tm)
         tm.typeDef match
           case TypeMemberDefinition.OpaqueTypeAlias(_, alias) =>
-            s"opaque type ${tm.name} = ${printType(alias)}"
+            s"${visibility}opaque type ${tm.name} = ${printType(alias)}"
           case TypeMemberDefinition.TypeAlias(alias) =>
-            s"type ${tm.name} = ${printType(alias)}"
+            s"${visibility}type ${tm.name} = ${printType(alias)}"
           case TypeMemberDefinition.AbstractType(bounds) =>
-            s"type ${tm.name}${printBoundsSuffix(bounds)}"
+            s"${visibility}type ${tm.name}${printBoundsSuffix(bounds)}"
 
       case other => other.toString
 
@@ -269,6 +270,21 @@ object TypePrinter:
       // A trait is abstract by definition.
       val abstractness = if cls.isAbstractClass && !cls.isTrait then List("abstract") else Nil
       (openness ++ abstractness ++ caseness).map(_ + " ").mkString
+
+  /** Space-terminated. Listings drop plain `private` members, so only the qualified and protected
+   *  forms, which leave a member callable from somewhere outside its class, reach here.
+   */
+  private def visibilityModifier(sym: TermOrTypeSymbol): String =
+    sym.visibility match
+      case Visibility.Protected              => "protected "
+      case Visibility.ProtectedThis          => "protected[this] "
+      case Visibility.ScopedProtected(scope) => s"protected[${scopeName(scope)}] "
+      case Visibility.ScopedPrivate(scope)   => s"private[${scopeName(scope)}] "
+      case _                                 => ""
+
+  // A scope that is an object is its module class, named `Foo$` on the JVM.
+  private def scopeName(scope: tastyquery.Symbols.DeclaringSymbol): String =
+    scope.name.toString.stripSuffix("$")
 
   /** Space-terminated, like [[classModifiers]]. */
   private def termModifiers(sym: TermSymbol)(using Context): String =

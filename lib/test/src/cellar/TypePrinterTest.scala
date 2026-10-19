@@ -131,6 +131,22 @@ class TypePrinterTest extends CatsEffectSuite:
       }
     }
 
+  test("printSymbolSignature names an object scope as the object"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val origin = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarScope").declarations
+          .find(_.name.toString == "origin").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(origin)
+
+        // then
+        assertEquals(sig, "private[CellarScope] def origin: Int")
+      }
+    }
+
   test("printSymbolSignature renders lazy vals and vars (Scala 3)"):
     withCtx { ctx =>
       IO.blocking {
@@ -139,6 +155,8 @@ class TypePrinterTest extends CatsEffectSuite:
         val sig   = (name: String) => TypePrinter.printSymbolSignature(decls.find(_.name.toString == name).get)
         assertEquals(sig("lazyValue"), "lazy val lazyValue: Int")
         assertEquals(sig("mutable"), "var mutable: Int")
+        assertEquals(sig("guarded"), "protected def guarded: Int")
+        assertEquals(sig("internal"), "private[scala3] def internal: Int")
       }
     }
 
@@ -151,6 +169,8 @@ class TypePrinterTest extends CatsEffectSuite:
         assert(sigs.contains("lazy val lazyValue: Int"), sigs.mkString("\n"))
         assert(sigs.contains("var mutable: Int"), sigs.mkString("\n"))
         assert(sigs.contains("implicit object ImplicitObject"), sigs.mkString("\n"))
+        assert(sigs.contains("protected def guarded: Int"), sigs.mkString("\n"))
+        assert(sigs.contains("private[scala2] def internal: Int"), sigs.mkString("\n"))
       }
     }
 
