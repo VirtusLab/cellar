@@ -140,7 +140,7 @@ function render() {
   $("count").textContent = `${rows.length.toLocaleString()} of ${all.length.toLocaleString()} changed`;
   for (const b of document.querySelectorAll(".cat")) b.setAttribute("aria-pressed", String(b.dataset.cat === $("f-cat").value));
   if (!rows.length) { $("list").innerHTML = `<div class="empty">${all.length ? "No changed signatures match these filters." : "No signature changed between these runs."}</div>`; return; }
-  const chip = o => o === "fixed" ? "fixed" : o === "regressed" ? "regressed" : "differs";
+  const chip = o => o === "fixed" ? "fixed" : o === "regressed" || o === "no longer paired" ? "regressed" : "differs";
   const html = rows.slice(0, shown).map(e => {
     const [before, after] = diff(e.before, e.after);
     return `<article class="item">
@@ -169,7 +169,8 @@ function summary() {
   });
   const by = o => all.filter(e => e.outcome === o).length;
   $("totals").innerHTML = [
-    ["Fixed", by("fixed"), ""], ["Regressed", by("regressed"), by("regressed") ? "bad" : ""], ["Changed, still differ", by("still differs"), ""],
+    ["Fixed", by("fixed"), ""], ["Regressed", by("regressed"), by("regressed") ? "bad" : ""], ["No longer paired", by("no longer paired"), by("no longer paired") ? "bad" : ""],
+    ["Changed, still differ", by("still differs"), ""],
     ["Changed, matched both times", by("changed"), ""], ["Unchanged", DATA.unchanged, ""],
     ["Paired only before / only after", `${DATA.onlyBefore} / ${DATA.onlyAfter}`, ""],
   ].map(([l, n, cls]) => `<div class="total ${cls}"><span>${l}</span><b>${typeof n === "number" ? n.toLocaleString() : n}</b></div>`).join("");

@@ -3,8 +3,11 @@
 # and writes an HTML report of every signature whose printing changed.
 #
 # Usage: signatureBench/compare.sh <java|scala2|scala3> [base-ref]   (base-ref defaults to origin/main)
-# Exits 1 when a signature that matched its source at the base no longer does.
+# Exits 1 when a signature that matched its source at the base no longer does, and 2 when a step
+# fails.
 set -euo pipefail
+# Any other failure must not read as a regression.
+trap 'exit 2' ERR
 
 lang=${1:?usage: signatureBench/compare.sh <java|scala2|scala3> [base-ref]}
 base=${2:-origin/main}
@@ -21,7 +24,7 @@ quietly() {
 sha=$(git -C "$root" rev-parse --verify "$base^{commit}")
 # Both sides run this checkout's benchmark, so the base result depends on it as much as on the
 # base printer; the cache key covers both.
-bench=$(cd "$root" && find signatureBench -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+bench=$(cd "$root" && find signatureBench -type f -print0 | LC_ALL=C sort -z | xargs -0 git hash-object | git hash-object --stdin | cut -c1-16)
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/cellar-signature-bench"
 mkdir -p "$cache"
 base_json="$cache/$sha-$bench-$lang.json"
@@ -46,9 +49,10 @@ echo "benchmarking the working tree..."
 (cd "$root" && quietly "$out/$lang-head.log" ./mill signatureBench.run "$lang" --json "$out/$lang-head.json")
 
 (cd "$root" && quietly "$out/$lang-diff.log" ./mill signatureBench.run diff "$base_json" "$out/$lang-head.json" "$out/$lang-report.html")
-summary=$(grep -E '^[[:alnum:]]+: [0-9]+ changed' "$out/$lang-diff.log")
+summary=$(grep -E '^[[:alnum:]]+: [0-9]+ changed' "$out/$lang-diff.log" || true)
+[[ -n $summary ]] || { cat "$out/$lang-diff.log"; echo "no summary in the diff output"; exit 2; }
 echo "$summary"
 echo "report: $out/$lang-report.html"
 
-regressed=$(sed -E 's/.*regressed: ([0-9]+).*/\1/' <<< "$summary")
-[[ $regressed == 0 ]]
+count() { sed -E "s/.*$1: ([0-9]+).*/\\1/" <<< "$summary"; }
+[[ $(count regressed) == 0 && $(count "no longer paired") == 0 ]] || exit 1

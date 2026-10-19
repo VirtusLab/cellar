@@ -3,6 +3,7 @@ package cellar.bench
 import cellar.{DetectedLanguage, PublicApiFilter, TypePrinter}
 import fs2.io.file.Path
 import tastyquery.Contexts.Context
+import tastyquery.Modifiers.TermSymbolKind
 import tastyquery.Symbols.{ClassSymbol, PackageSymbol, TermOrTypeSymbol, TermSymbol, TypeMemberSymbol}
 
 import scala.util.Try
@@ -15,8 +16,9 @@ final class ScalaLanguage(val name: String, scala2: Boolean, val defaultLibrarie
     val classes = owners.flatMap(packageOf).flatMap(pkg => nestedClasses(pkg.declarations)).map(c => classPath(c) -> c).toMap
     owners.toList.flatMap { owner =>
       classes.get(owner).toList.flatMap { cls =>
+        val vars    = cls.declarations.collect { case t: TermSymbol if t.kind == TermSymbolKind.Var => t.name.toString }.toSet
         val members = cls.declarations.collect {
-          case t: TermSymbol if PublicApiFilter.isPublic(t) && !t.isModuleVal && !isAccessorNoise(t) =>
+          case t: TermSymbol if PublicApiFilter.isPublic(t) && !t.isModuleVal && !isAccessorNoise(t, vars) =>
             Decl(owner, termKey(t), print(t))
           case t: TypeMemberSymbol if PublicApiFilter.isPublic(t) =>
             Decl(owner, s"type:${t.name}", print(t))
@@ -33,9 +35,11 @@ final class ScalaLanguage(val name: String, scala2: Boolean, val defaultLibrarie
   private def print(sym: TermOrTypeSymbol)(using Context): String =
     TypePrinter.printSymbolSignatureSafe(sym, DetectedLanguage.Scala3)
 
-  // A constructor is the class's parameters, and a `var`'s setter is the `var` itself.
-  private def isAccessorNoise(t: TermSymbol): Boolean =
-    t.name.toString == "<init>" || t.name.toString.endsWith("_=")
+  // A constructor is the class's parameters, and a `var`'s setter is the `var` itself; a setter
+  // the source writes as a `def` has no `var` beside it, so it stays.
+  private def isAccessorNoise(t: TermSymbol, vars: Set[String]): Boolean =
+    val name = t.name.toString
+    name == "<init>" || (name.endsWith("_=") && vars(name.stripSuffix("_=")))
 
   private def termKey(t: TermSymbol): String =
     // Context-bound evidence is compiler-named, and may share a clause with written parameters.

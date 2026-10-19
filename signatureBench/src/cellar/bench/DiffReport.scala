@@ -15,6 +15,9 @@ object DiffReport:
     case Regressed    extends Outcome("regressed")
     case StillDiffers extends Outcome("still differs")
     case Changed      extends Outcome("changed")
+    // Matched its source before, and is no longer compared: the member vanished, its key changed,
+    // or it now collides with an overload.
+    case Unpaired     extends Outcome("no longer paired")
 
   final case class Change(
       library: String,
@@ -45,7 +48,11 @@ object DiffReport:
         Change(k._1, k._2, k._3, a.source, b.printed, a.printed, outcome, a.category.orElse(b.category).getOrElse("none"))
       }
     }
-    Diff(after.language, changes, shared.size - changes.size, (was.keySet -- shared).size, (now.keySet -- shared).size)
+    val unpaired = (was.keySet -- shared).toList.sorted.filter(was(_).matched).map { k =>
+      val b = was(k)
+      Change(k._1, k._2, k._3, b.source, b.printed, "", Outcome.Unpaired, "not paired")
+    }
+    Diff(after.language, changes ++ unpaired, shared.size - changes.size, (was.keySet -- shared).size, (now.keySet -- shared).size)
 
   private final case class ChangeData(
       library: String,

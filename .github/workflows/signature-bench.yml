@@ -70,7 +70,13 @@ jobs:
           if-no-files-found: ignore
 
       - name: Fail on regressions
-        if: steps.compare.outputs.status != '0'
+        if: steps.compare.outputs.status == '1'
         run: |
           echo "::error::Signatures that matched their source on the base no longer do; see the report."
+          exit 1
+
+      - name: Fail when the benchmark did not finish
+        if: steps.compare.outputs.status != '0' && steps.compare.outputs.status != '1'
+        run: |
+          echo "::error::The benchmark failed before it could compare; see the 'Compare with the base' log."
           exit 1

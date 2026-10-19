@@ -7,7 +7,7 @@ import java.util.zip.ZipFile
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 import scala.meta.prettyprinters.XtensionSyntax
-import scala.meta.{Ctor, Decl as MDecl, Defn, Init, Mod, Name, Pat, Pkg, Stat, Term, Tree, Type}
+import scala.meta.{Ctor, Decl as MDecl, Defn, Init, Mod, Name, Pat, Pkg, Term, Tree, Type}
 import scala.util.Using
 
 /** The expected rendering of every non-private declaration in a Scala sources jar, written as
@@ -21,16 +21,21 @@ final class ScalaSourceDecls(scala2: Boolean):
   private val gaps = mutable.LinkedHashMap.empty[String, Int].withDefaultValue(0)
 
   def read(sourcesJar: Path): SourceSide =
-    val out = List.newBuilder[Decl]
     Using.resource(ZipFile(sourcesJar.toNioPath.toFile)) { zip =>
-      zip.entries.asScala.filter(_.getName.endsWith(".scala")).foreach { entry =>
-        val text = String(zip.getInputStream(entry).readAllBytes(), "UTF-8")
-        ScalaSources.parseSource(text, scala2) match
-          case Some(source) =>
-            val stem = entry.getName.substring(entry.getName.lastIndexOf('/') + 1).stripSuffix(".scala")
-            Visitor(out, stem).stats(Scope("", None), source.stats)
-          case None => gaps("files that did not parse") += 1
-      }
+      read(zip.entries.asScala.filter(_.getName.endsWith(".scala")).map { entry =>
+        entry.getName -> String(zip.getInputStream(entry).readAllBytes(), "UTF-8")
+      })
+    }
+
+  /** Sources as (entry name, text) pairs. */
+  private[bench] def read(files: Iterator[(String, String)]): SourceSide =
+    val out = List.newBuilder[Decl]
+    files.foreach { (entry, text) =>
+      ScalaSources.parseSource(text, scala2) match
+        case Some(source) =>
+          val stem = entry.substring(entry.lastIndexOf('/') + 1).stripSuffix(".scala")
+          Visitor(out, stem).stats(Scope("", None), source.stats)
+        case None => gaps("files that did not parse") += 1
     }
     SourceSide(out.result(), gaps.toMap)
 
@@ -44,41 +49,41 @@ final class ScalaSourceDecls(scala2: Boolean):
 
     private def stat(scope: Scope, tree: Tree): Unit =
       tree match
-        case p: Pkg        => stats(Scope(s"${scope.pkg}${p.ref.syntax}.", None), p.body.stats)
-        case p: Pkg.Object => body(Scope(s"${scope.pkg}${p.name.value}.", Some(s"${scope.pkg}${p.name.value}.package$$")), p.templ.body.stats)
+        case p: Pkg        => stats(Scope(s"${scope.pkg}${refName(p.ref)}.", None), p.body.stats)
+        case p: Pkg.Object => stats(Scope(s"${scope.pkg}${p.name.value}.", Some(s"${scope.pkg}${p.name.value}.package$$")), p.templ.body.stats)
         case c: Defn.Class if visible(c.mods) =>
           val isCase = c.mods.exists(_.isInstanceOf[Mod.Case])
           val path   = classPath(scope, c.name.value)
           header(path, c.mods, "class", c.name.value, c.tparamClause.syntax, c.templ.inits, isCase)
           fields(path, c.ctor, isCase)
-          body(scope.copy(owner = Some(path)), c.templ.body.stats)
+          stats(scope.copy(owner = Some(path)), c.templ.body.stats)
         case t: Defn.Trait if visible(t.mods) =>
           val path = classPath(scope, t.name.value)
           header(path, t.mods, "trait", t.name.value, t.tparamClause.syntax, t.templ.inits, isCase = false)
-          body(scope.copy(owner = Some(path)), t.templ.body.stats)
+          stats(scope.copy(owner = Some(path)), t.templ.body.stats)
         case o: Defn.Object if visible(o.mods) =>
           val path = classPath(scope, s"${o.name.value}$$")
           header(path, o.mods, "object", o.name.value, "", o.templ.inits, o.mods.exists(_.isInstanceOf[Mod.Case]))
-          body(scope.copy(owner = Some(path)), o.templ.body.stats)
+          stats(scope.copy(owner = Some(path)), o.templ.body.stats)
         case e: Defn.Enum if visible(e.mods) =>
           val path = classPath(scope, e.name.value)
           header(path, e.mods, "enum", e.name.value, e.tparamClause.syntax, e.templ.inits, isCase = false)
-          body(scope.copy(owner = Some(path)), e.templ.body.stats.filterNot(_.isInstanceOf[Defn.EnumCase]))
-        case d: Defn.Def if visible(d.mods)   => method(scope, d.mods, d.name.value, d.paramClauseGroups, d.decltpe, abstractly = false, Nil)
-        case d: MDecl.Def if visible(d.mods)  => method(scope, d.mods, d.name.value, d.paramClauseGroups, Some(d.decltpe), abstractly = true, Nil)
-        case d: Defn.Macro if visible(d.mods) => method(scope, d.mods, d.name.value, d.paramClauseGroups, d.decltpe, abstractly = false, Nil)
+          stats(scope.copy(owner = Some(path)), e.templ.body.stats)
+        case d: Defn.Def if visible(d.mods)   => method(scope, d.mods, d.name.value, d.paramClauseGroups, d.decltpe, abstractly = false)
+        case d: MDecl.Def if visible(d.mods)  => method(scope, d.mods, d.name.value, d.paramClauseGroups, Some(d.decltpe), abstractly = true)
+        case d: Defn.Macro if visible(d.mods) => method(scope, d.mods, d.name.value, d.paramClauseGroups, d.decltpe, abstractly = false)
+        // The receiver's clauses, type parameters included, come first in the compiled method.
         case e: Defn.ExtensionGroup =>
-          val receiver = e.paramClauseGroup.toList.flatMap(_.paramClauses)
           val defs = e.body match
             case d: Defn.Def   => List(d)
             case b: Term.Block => b.stats.collect { case d: Defn.Def => d }
             case _             => Nil
           defs.filter(d => visible(d.mods)).foreach { d =>
-            method(scope, d.mods, d.name.value, d.paramClauseGroups, d.decltpe, abstractly = false, receiver)
+            method(scope, d.mods, d.name.value, e.paramClauseGroup.toList ++ d.paramClauseGroups, d.decltpe, abstractly = false)
           }
-        case g: Defn.GivenAlias if visible(g.mods) && g.name.value.nonEmpty =>
-          given_(scope, g)
-        case _: (Defn.GivenAlias | Defn.Given) => gaps("anonymous or template givens (not compared)") += 1
+        case g: Defn.GivenAlias if visible(g.mods) && g.name.value.nonEmpty => given_(scope, g)
+        case g: Defn.GivenAlias if visible(g.mods) => gaps("anonymous or template givens (not compared)") += 1
+        case g: Defn.Given if visible(g.mods)      => gaps("anonymous or template givens (not compared)") += 1
         case v: Defn.Val if visible(v.mods)  => value(scope, v.mods, if v.mods.exists(_.isInstanceOf[Mod.Lazy]) then "lazy val" else "val", v.pats, v.decltpe, abstractly = false)
         case v: Defn.Var if visible(v.mods)  => value(scope, v.mods, "var", v.pats, v.decltpe, abstractly = false)
         case v: MDecl.Val if visible(v.mods) => value(scope, v.mods, "val", v.pats, Some(v.decltpe), abstractly = true)
@@ -90,8 +95,6 @@ final class ScalaSourceDecls(scala2: Boolean):
           val bounds = t.bounds.syntax
           emit(memberOwner(scope), s"type:${t.name.value}", s"${visibility(t.mods)}type ${t.name.value}${t.tparamClause.syntax}${if bounds.isEmpty then "" else s" $bounds"}")
         case _ => ()
-
-    private def body(scope: Scope, trees: List[Stat]): Unit = stats(scope, trees)
 
     private def header(path: String, mods: List[Mod], kind: String, name: String, tparams: String, inits: List[Init], isCase: Boolean): Unit =
       val universal = Set("AnyRef", "Any", "Object", "java.lang.Object", "scala.AnyRef", "scala.Any")
@@ -133,23 +136,18 @@ final class ScalaSourceDecls(scala2: Boolean):
         name: String,
         groups: List[scala.meta.Member.ParamClauseGroup],
         decltpe: Option[Type],
-        abstractly: Boolean,
-        receiver: List[Term.ParamClause]
+        abstractly: Boolean
     ): Unit =
       decltpe match
         case None => gaps("declarations with an inferred type (not compared)") += 1
         case Some(tpe) =>
-          val tparams = groups.map(_.tparamClause.syntax).mkString
-          val clauses = receiver ++ groups.flatMap(_.paramClauses)
           val keyword = if has[Mod.Inline](mods) then "inline def" else "def"
-          val text    = s"${termModifiers(mods, abstractly)}$keyword $name$tparams${clauses.map(renderClause).mkString}: ${tpe.syntax}"
-          emit(memberOwner(scope), termKey(name, clauses), text)
+          val text    = s"${termModifiers(mods, abstractly)}$keyword $name${renderGroups(groups)}: ${tpe.syntax}"
+          emit(memberOwner(scope), termKey(name, groups.flatMap(_.paramClauses)), text)
 
     private def given_(scope: Scope, g: Defn.GivenAlias): Unit =
-      val tparams = g.paramClauseGroups.map(_.tparamClause.syntax).mkString
-      val clauses = g.paramClauseGroups.flatMap(_.paramClauses)
-      val text    = s"${visibility(g.mods)}given ${g.name.value}$tparams${clauses.map(renderClause).mkString}: ${g.decltpe.syntax}"
-      emit(memberOwner(scope), termKey(g.name.value, clauses), text)
+      val text = s"${visibility(g.mods)}given ${g.name.value}${renderGroups(g.paramClauseGroups)}: ${g.decltpe.syntax}"
+      emit(memberOwner(scope), termKey(g.name.value, g.paramClauseGroups.flatMap(_.paramClauses)), text)
 
     private def value(scope: Scope, mods: List[Mod], keyword: String, pats: List[Pat], decltpe: Option[Type], abstractly: Boolean): Unit =
       (pats, decltpe) match
@@ -157,6 +155,10 @@ final class ScalaSourceDecls(scala2: Boolean):
           emit(memberOwner(scope), s"term:${name.value}", s"${termModifiers(mods, abstractly)}$keyword ${name.value}: ${tpe.syntax}")
         case (List(Pat.Var(_)), None) => gaps("declarations with an inferred type (not compared)") += 1
         case _                         => gaps("pattern definitions (not compared)") += 1
+
+    // Each group's type parameters stay ahead of its own clauses, as in `def f[A](a: A)[B](b: B)`.
+    private def renderGroups(groups: List[scala.meta.Member.ParamClauseGroup]): String =
+      groups.map(g => g.tparamClause.syntax + g.paramClauses.map(renderClause).mkString).mkString
 
     private def renderClause(clause: Term.ParamClause): String =
       // Scala 2 syntax marks a clause implicit on its first parameter rather than on the clause.
@@ -199,6 +201,13 @@ final class ScalaSourceDecls(scala2: Boolean):
         case n                 => s"$word[${n.syntax}] "
 
     private def emit(owner: String, key: String, text: String): Unit = out += Decl(owner, key, text): Unit
+
+  // `p.ref.syntax` would keep backticks and comments that the binary's package name lacks.
+  private def refName(ref: Term.Ref): String =
+    ref match
+      case Term.Select(qual: Term.Ref, name) => s"${refName(qual)}.${name.value}"
+      case name: Term.Name                   => name.value
+      case other                             => other.pos.text
 
   /** Pairs by name plus each clause's parameter names; anonymous `using` clauses name nothing. */
   private def termKey(name: String, clauses: List[Term.ParamClause]): String =
