@@ -16,7 +16,9 @@ object JavaLanguage extends Language:
     "com.fasterxml.jackson.core:jackson-databind:2.18.2",
     "io.netty:netty-buffer:4.1.115.Final",
     "org.junit.jupiter:junit-jupiter-api:5.11.4",
-    "org.slf4j:slf4j-api:2.0.16"
+    "org.slf4j:slf4j-api:2.0.16",
+    // Built for Java 25, with records and sealed interfaces.
+    "io.micronaut:micronaut-core:5.2.16"
   )
 
   def sourceDecls(sourcesJar: Path): SourceSide = JavaSourceDecls.read(sourcesJar)
