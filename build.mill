@@ -134,7 +134,7 @@ object profilingRuntime extends CellarPublishModule {
     mvn"org.typelevel::otel4s-sdk-trace:0.19.4",
     mvn"org.typelevel::otel4s-sdk-exporter:0.19.4",
     mvn"io.pyroscope:agent:2.9.2",
-    mvn"org.graalvm.sdk:nativeimage:25.0.2"
+    mvn"org.graalvm.sdk:nativeimage:25.0.4.1.1"
   )
 
   object test extends ScalaTests with TestModule.Munit {
