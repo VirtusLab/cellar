@@ -77,7 +77,9 @@ object TypePrinter:
       case t: MatchType      => s"${printType(t.scrutinee)} match { ... }"
       case t: FlexibleType   => printType(t.nonNullableType)
       case t: TypeLambda =>
-        val params = t.paramNames.zip(t.paramTypeBounds).map(printTypeParam)
+        // Its parameters may be referenced, as placeholders are (`[_$1] =>> F[A, _$1]`), so they
+        // keep their names.
+        val params = t.paramNames.zip(t.paramTypeBounds).map((n, b) => printTypeParam(n.toString, b))
         s"[${params.mkString(", ")}] =>> ${printType(t.resultType)}"
       // Without this, Nothing falls through to the class-name fallback below and prints as
       // "NothingType" — which also defeats the unbounded-lower-bound elision in printTypeParam,
@@ -160,7 +162,7 @@ object TypePrinter:
     val evidence = evidenceIn(poly.resultType)
     val bounds   = evidence.groupMap(_._2)(_._3)
     val params = poly.paramNames.zip(poly.paramTypeBounds).zipWithIndex.map { case ((n, b), i) =>
-      printTypeParam(n, b) + bounds.getOrElse(i, Nil).map(tc => s": $tc").mkString
+      printTypeParam(printTypeParamName(n), b) + bounds.getOrElse(i, Nil).map(tc => s": $tc").mkString
     }
     (s"[${params.mkString(", ")}]", evidence.map(_._1).toSet)
 
@@ -238,7 +240,7 @@ object TypePrinter:
           case TypeMemberDefinition.TypeAlias(alias) =>
             s"${visibility}type ${tm.name}${printAliasRhs(alias)}"
           case TypeMemberDefinition.AbstractType(bounds) =>
-            s"${visibility}type ${printTypeParam(tm.name, bounds)}"
+            s"${visibility}type ${printTypeParam(tm.name.toString, bounds)}"
 
       case other => other.toString
 
@@ -258,7 +260,8 @@ object TypePrinter:
    * case this exists to fix). Reaching the variance at all needs reflection, and it would not help.
    *
    * So: in argument position the expansion is the compiler's doing, and contracting reads back as
-   * the source did; as the whole right-hand side of an alias it is the author's, and is left alone.
+   * the source did; as the whole right-hand side of an alias it is the author's, and
+   * [[printAliasRhs]] prints its parameters as the alias's own.
    */
   private def printTypeArgument(arg: TypeOrWildcard)(using ctx: Context): String =
     arg match
@@ -284,15 +287,15 @@ object TypePrinter:
         Option.when(passesThrough)(printType(app.tycon))
       case _ => None
 
-  /** TASTy stores `type F[A] = G[A]` and `type F = [A] =>> G[A]` alike; the former is how
-   *  aliases are almost always written, so a lambda's parameters print as the alias's.
+  /** TASTy stores `type F[A] = G[A]` and `type F = [A] =>> G[A]` alike; as dotty's
+   *  `PlainPrinter.decomposeLambdas` does, a lambda's parameters print as the alias's own. A lambda
+   *  over wildcards is placeholder syntax, `type F = Either[A, _]`, whose parameters the alias
+   *  never named.
    */
   private def printAliasRhs(alias: Type)(using Context): String =
     alias match
-      case tl: TypeLambda =>
-        val params = tl.paramNames.zip(tl.paramTypeBounds).map(printTypeParam)
-        s"[${params.mkString(", ")}] = ${printType(tl.resultType)}"
-      case other => s" = ${printType(other)}"
+      case tl: TypeLambda if !tl.paramNames.exists(isWildcardName) => s"${printHkParams(tl)} = ${printType(tl.resultType)}"
+      case other                                                   => s" = ${printType(other)}"
 
   /** Space-terminated, so it prepends to the kind keyword as-is; empty when there is nothing to say. */
   private def classModifiers(cls: ClassSymbol): String =
@@ -374,23 +377,38 @@ object TypePrinter:
       case "Covariant"     => "+"
       case "Contravariant" => "-"
       case _               => ""
-    s"$variance${printTypeParam(param.name, param.declaredBounds)}"
+    s"$variance${printTypeParam(printTypeParamName(param.name), param.declaredBounds)}"
 
   /** `F2[x] >: F[x] <: G[x]`, laid out as dotty's `PlainPrinter.decomposeLambdas`: the bounds of a
    *  higher-kinded parameter are lambdas over its parameters, so those print once, from the upper
    *  bound, and each bound prints as its lambda's result.
    */
-  private def printTypeParam(name: tastyquery.Names.TypeName, bounds: TypeBounds)(using ctx: Context): String =
+  private def printTypeParam(name: String, bounds: TypeBounds)(using ctx: Context): String =
     bounds match
       case b: AbstractTypeBounds =>
         val (lo, hi) = (lambdaResult(b.low), lambdaResult(b.high))
         val loStr    = if isExactlyNothing(lo) then "" else s" >: ${printType(lo)}"
         val hiStr    = if isTrivialUpperBound(hi) then "" else s" <: ${printType(hi)}"
         val tparams = b.high match
-          case tl: TypeLambda => printHkParams(tl, mentionedIn = s"$loStr$hiStr")
+          case tl: TypeLambda => printHkParams(tl)
           case _              => ""
         s"$name$tparams$loStr$hiStr"
-      case _ => name.toString
+      case _ => name
+
+  /** `_` for the name a wildcard type parameter is given, as dotty's `RefinedPrinter.nameString`
+   *  prints its `WildcardParamName` (`_$N`); any other name as declared. A Scala 2 pickle has no
+   *  name kinds: there it is scalac's `freshTypeName("_$$")`, a plain `_$$N`.
+   */
+  private def printTypeParamName(name: tastyquery.Names.TypeName): String =
+    if isWildcardName(name) then "_" else name.toString
+
+  private def isWildcardName(name: tastyquery.Names.TypeName): Boolean =
+    name.toTermName match
+      case UniqueName(_, "_$", _)                      => true
+      case SimpleName(s) if Scala2Wildcard.matches(s) => true
+      case _                                           => false
+
+  private val Scala2Wildcard = """_\$\$\d+""".r
 
   private def lambdaResult(tpe: Type): Type =
     tpe match
@@ -415,28 +433,9 @@ object TypePrinter:
       case ref: TypeRef => ref.optSymbol.contains(defn.AnyClass)
       case _            => false)
 
-  /** `[x, _ <: B]`: a parameter keeps its name only where its own or a sibling's bounds, or the
-   *  enclosing parameter's bounds (`mentionedIn`), refer to it.
-   */
-  private def printHkParams(tl: TypeLambda, mentionedIn: String)(using ctx: Context): String =
-    val rendered = tl.paramNames.zip(tl.paramTypeBounds).map { (name, bounds) =>
-      val (lo, hi) = bounds match
-        case b: AbstractTypeBounds =>
-          val lo = if isExactlyNothing(b.low) then "" else s" >: ${printType(b.low)}"
-          val hi = if isTrivialUpperBound(b.high) then "" else s" <: ${printType(b.high)}"
-          (lo, hi)
-        case _ => ("", "")
-      (name.toString, lo, hi)
-    }
-    val context = (mentionedIn :: rendered.flatMap((_, lo, hi) => List(lo, hi))).mkString(" ")
-    val params = rendered.map { (name, lo, hi) =>
-      val head = if isMentioned(context, name) then name else "_"
-      s"$head$lo$hi"
-    }
-    s"[${params.mkString(", ")}]"
-
-  private def isMentioned(context: String, name: String): Boolean =
-    context.matches(s"(?s).*\\b${java.util.regex.Pattern.quote(name)}\\b.*")
+  /** `[x, G[_] <: B]`: each of the lambda's parameters as a type parameter, like dotty's `paramsText`. */
+  private def printHkParams(tl: TypeLambda)(using ctx: Context): String =
+    s"[${tl.paramNames.zip(tl.paramTypeBounds).map((n, b) => printTypeParam(printTypeParamName(n), b)).mkString(", ")}]"
 
   private def printTypeOrWildcard(tow: TypeOrWildcard)(using ctx: Context): String =
     tow match

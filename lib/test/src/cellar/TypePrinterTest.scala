@@ -376,6 +376,17 @@ object TypePrinterTest extends SequentialIOSuite:
   // The mirror of the test above: an author who writes the lambda out is making a different
   // declaration from `type HandWrittenEta = List` (its parameter is invariant), so contracting
   // here would print two distinct sources identically. Contraction is argument-position only.
+  test("printSymbolSignature prints an abstract type member's type parameters on its name"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded")
+        def sig(name: String) = TypePrinter.printSymbolSignature(cls.declarations.find(_.name.toString == name).get)
+        expect.eql("type Abstract[_]", sig("Abstract")) and
+          expect.eql("type ToLong[X <: Double] <: Long", sig("ToLong"))
+      }
+    }
+
   test("printSymbolSignature keeps a hand-written eta-expansion in an alias"):
     withCtx { ctx =>
       IO.blocking {
@@ -407,7 +418,7 @@ object TypePrinterTest extends SequentialIOSuite:
         val cls     = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded")
         val bounded = cls.declarations.find(_.name.toString == "bounded").get
         val sig     = TypePrinter.printSymbolSignature(bounded)
-        expect.eql("abstract def bounded[F[_ <: AnyRef]](fa: F[String]): F[String]", sig)
+        expect.eql("abstract def bounded[F[X <: AnyRef]](fa: F[String]): F[String]", sig)
       }
     }
 
@@ -462,7 +473,7 @@ object TypePrinterTest extends SequentialIOSuite:
         val cls     = ctx.findStaticClass("cellar.fixture.scala2.CellarHigherKinded")
         val bounded = cls.declarations.find(_.name.toString == "bounded").get
         val sig     = TypePrinter.printSymbolSignature(bounded)
-        expect.eql("abstract def bounded[F[_ <: AnyRef]](fa: F[String]): F[String]", sig)
+        expect.eql("abstract def bounded[F[X <: AnyRef]](fa: F[String]): F[String]", sig)
       }
     }
 
