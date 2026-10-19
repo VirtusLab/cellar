@@ -68,7 +68,7 @@ object TypePrinter:
       case t: ThisType       => s"${t.tref.name}.this"
       case t: TermRef        => t.name.toString
       case t: TermParamRef   => t.binder.paramNames(t.paramNum).toString
-      case t: TypeParamRef   => t.binder.paramNames(t.paramNum).toString
+      case t: TypeParamRef   => printTypeParamName(t.binder.paramNames(t.paramNum))
       case t: RepeatedType   => s"${printType(t.elemType)}*"
       case t: TypeRefinement => printType(t.parent)
       case t: TermRefinement => printType(t.parent)
@@ -77,10 +77,7 @@ object TypePrinter:
       case t: MatchType      => s"${printType(t.scrutinee)} match { ... }"
       case t: FlexibleType   => printType(t.nonNullableType)
       case t: TypeLambda =>
-        // Its parameters may be referenced, as placeholders are (`[_$1] =>> F[A, _$1]`), so they
-        // keep their names.
-        val params = t.paramNames.zip(t.paramTypeBounds).map((n, b) => printTypeParam(n.toString, b))
-        s"[${params.mkString(", ")}] =>> ${printType(t.resultType)}"
+        s"${printHkParams(t)} =>> ${printType(t.resultType)}"
       // Without this, Nothing falls through to the class-name fallback below and prints as
       // "NothingType" — which also defeats the unbounded-lower-bound elision in printTypeParam,
       // since that compares against "Nothing".
@@ -162,7 +159,7 @@ object TypePrinter:
     val evidence = evidenceIn(poly.resultType)
     val bounds   = evidence.groupMap(_._2)(_._3)
     val params = poly.paramNames.zip(poly.paramTypeBounds).zipWithIndex.map { case ((n, b), i) =>
-      printTypeParam(printTypeParamName(n), b) + bounds.getOrElse(i, Nil).map(tc => s": $tc").mkString
+      printTypeParam(n, b) + bounds.getOrElse(i, Nil).map(tc => s": $tc").mkString
     }
     (s"[${params.mkString(", ")}]", evidence.map(_._1).toSet)
 
@@ -240,7 +237,7 @@ object TypePrinter:
           case TypeMemberDefinition.TypeAlias(alias) =>
             s"${visibility}type ${tm.name}${printAliasRhs(alias)}"
           case TypeMemberDefinition.AbstractType(bounds) =>
-            s"${visibility}type ${printTypeParam(tm.name.toString, bounds)}"
+            s"${visibility}type ${printTypeParam(tm.name, bounds)}"
 
       case other => other.toString
 
@@ -288,14 +285,12 @@ object TypePrinter:
       case _ => None
 
   /** TASTy stores `type F[A] = G[A]` and `type F = [A] =>> G[A]` alike; as dotty's
-   *  `PlainPrinter.decomposeLambdas` does, a lambda's parameters print as the alias's own. A lambda
-   *  over wildcards is placeholder syntax, `type F = Either[A, _]`, whose parameters the alias
-   *  never named.
+   *  `PlainPrinter.decomposeLambdas` does, a lambda's parameters print as the alias's own.
    */
   private def printAliasRhs(alias: Type)(using Context): String =
     alias match
-      case tl: TypeLambda if !tl.paramNames.exists(isWildcardName) => s"${printHkParams(tl)} = ${printType(tl.resultType)}"
-      case other                                                   => s" = ${printType(other)}"
+      case tl: TypeLambda => s"${printHkParams(tl)} = ${printType(tl.resultType)}"
+      case other          => s" = ${printType(other)}"
 
   /** Space-terminated, so it prepends to the kind keyword as-is; empty when there is nothing to say. */
   private def classModifiers(cls: ClassSymbol): String =
@@ -377,13 +372,13 @@ object TypePrinter:
       case "Covariant"     => "+"
       case "Contravariant" => "-"
       case _               => ""
-    s"$variance${printTypeParam(printTypeParamName(param.name), param.declaredBounds)}"
+    s"$variance${printTypeParam(param.name, param.declaredBounds)}"
 
   /** `F2[x] >: F[x] <: G[x]`, laid out as dotty's `PlainPrinter.decomposeLambdas`: the bounds of a
    *  higher-kinded parameter are lambdas over its parameters, so those print once, from the upper
    *  bound, and each bound prints as its lambda's result.
    */
-  private def printTypeParam(name: String, bounds: TypeBounds)(using ctx: Context): String =
+  private def printTypeParam(name: tastyquery.Names.TypeName, bounds: TypeBounds)(using ctx: Context): String =
     bounds match
       case b: AbstractTypeBounds =>
         val (lo, hi) = (lambdaResult(b.low), lambdaResult(b.high))
@@ -392,21 +387,19 @@ object TypePrinter:
         val tparams = b.high match
           case tl: TypeLambda => printHkParams(tl)
           case _              => ""
-        s"$name$tparams$loStr$hiStr"
-      case _ => name
+        s"${printTypeParamName(name)}$tparams$loStr$hiStr"
+      case _ => printTypeParamName(name)
 
-  /** `_` for the name a wildcard type parameter is given, as dotty's `RefinedPrinter.nameString`
-   *  prints its `WildcardParamName` (`_$N`); any other name as declared. A Scala 2 pickle has no
+  /** `_` for the name a wildcard or placeholder type parameter is given, as dotty's
+   *  `RefinedPrinter.nameString` prints its `WildcardParamName` (`_$N`), both where the parameter is
+   *  declared and where it is referred to; any other name as declared. A Scala 2 pickle has no
    *  name kinds: there it is scalac's `freshTypeName("_$$")`, a plain `_$$N`.
    */
   private def printTypeParamName(name: tastyquery.Names.TypeName): String =
-    if isWildcardName(name) then "_" else name.toString
-
-  private def isWildcardName(name: tastyquery.Names.TypeName): Boolean =
     name.toTermName match
-      case UniqueName(_, "_$", _)                      => true
-      case SimpleName(s) if Scala2Wildcard.matches(s) => true
-      case _                                           => false
+      case UniqueName(_, "_$", _)                      => "_"
+      case SimpleName(s) if Scala2Wildcard.matches(s) => "_"
+      case _                                           => name.toString
 
   private val Scala2Wildcard = """_\$\$\d+""".r
 
@@ -435,7 +428,7 @@ object TypePrinter:
 
   /** `[x, G[_] <: B]`: each of the lambda's parameters as a type parameter, like dotty's `paramsText`. */
   private def printHkParams(tl: TypeLambda)(using ctx: Context): String =
-    s"[${tl.paramNames.zip(tl.paramTypeBounds).map((n, b) => printTypeParam(printTypeParamName(n), b)).mkString(", ")}]"
+    s"[${tl.paramNames.zip(tl.paramTypeBounds).map(printTypeParam).mkString(", ")}]"
 
   private def printTypeOrWildcard(tow: TypeOrWildcard)(using ctx: Context): String =
     tow match

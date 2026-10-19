@@ -65,8 +65,9 @@ final class ScalaLanguage(val name: String, scala2: Boolean, val defaultLibrarie
       case _                  => cls.name.toString
 
   private val qualifier      = """\b_root_\.|\b[A-Za-z][\w$]*\.(?=[A-Za-z_])(?!type\b)""".r
-  // The names the compilers give placeholder parameters: `_$1` (Scala 3), `β$0$` (kind-projector).
-  private val placeholderName = """_\$\d+|[^\[\]\s,]+\$\d+\$"""
+  // The names placeholder parameters print with: `_` (Scala 3, as dotty prints them) or the raw
+  // `_$1`, and `β$0$` (kind-projector).
+  private val placeholderName = """_|_\$\d+|[^\[\]\s,]+\$\d+\$"""
   private val placeholderLam  = s"""\\[((?:$placeholderName)(?:, (?:$placeholderName))*)\\] =>> """.r
   private val placeholder    = """(?<=[\[( ,])[*?](?=[\],)])""".r
 
