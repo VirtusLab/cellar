@@ -77,6 +77,10 @@ sudo mv cellar /usr/local/bin/
 
 Snapshots are not published to Maven Central and are not picked up by `cs install`. See [RELEASING.md](RELEASING.md#development-snapshots) for how they are produced.
 
+### Updates
+
+Once a day cellar asks GitHub for the latest release (a single request to `github.com/VirtusLab/cellar/releases/latest`; nothing about you or your usage is sent). If a newer version exists, it prints the matching upgrade command (`cs update cellar`, `nix profile upgrade cellar`, or the download link) to stderr. Disable with `update-check.enabled = false` or `CELLAR_UPDATE_CHECK_ENABLED=false`; it never runs when `CI` is set.
+
 ## Quick start
 
 ```sh
@@ -274,6 +278,12 @@ otel {
 profiling {
   enabled = false                                 # env: CELLAR_PROFILING_ENABLED
   pyroscope-endpoint = "http://localhost:4040"    # env: CELLAR_PYROSCOPE_ENDPOINT
+}
+
+update-check {
+  # Daily lookup of the latest release; prints an upgrade hint to stderr when
+  # one is available. Always skipped when CI is set.
+  enabled = true              # env: CELLAR_UPDATE_CHECK_ENABLED
 }
 ```
 

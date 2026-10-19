@@ -16,6 +16,8 @@ case class ProfilingConfig(enabled: Boolean, pyroscopeEndpoint: String) derives 
 
 case class OtelConfig(enabled: Boolean, endpoint: String) derives ConfigReader
 
+case class UpdateCheckConfig(enabled: Boolean) derives ConfigReader
+
 /** Extra Maven repository URLs added to Coursier's defaults for every external command. */
 case class MavenConfig(repositories: List[String]) derives ConfigReader
 
@@ -40,7 +42,8 @@ case class Config(
     sbt: SbtConfig,
     starvationChecks: StarvationChecksConfig,
     profiling: ProfilingConfig,
-    otel: OtelConfig
+    otel: OtelConfig,
+    updateCheck: UpdateCheckConfig
 ) derives ConfigReader
 
 object Config {
