@@ -2,39 +2,43 @@ package cellar.cli
 
 import cats.effect.IO
 import fs2.io.file.Files
-import munit.CatsEffectSuite
+import weaver.SimpleIOSuite
 
-class SeenMarkerTest extends CatsEffectSuite:
+object SeenMarkerTest extends SimpleIOSuite:
 
   import TelemetrySubcommand.touchMarker
 
-  private val tempDir = ResourceFunFixture(Files[IO].tempDirectory)
+  private val tempDir = Files[IO].tempDirectory
 
-  tempDir.test("creates the marker and its parent directory"):
-    dir =>
+  test("creates the marker and its parent directory"):
+    tempDir.use { dir =>
       val marker = dir / ".cellar" / ".telemetry-seen"
-      touchMarker(marker) *> Files[IO].exists(marker).assert
+      (touchMarker(marker) *> Files[IO].exists(marker)).map(expect(_))
+    }
 
-  tempDir.test("leaves an existing marker untouched"):
-    dir =>
+  test("leaves an existing marker untouched"):
+    tempDir.use { dir =>
       val marker = dir / ".telemetry-seen"
       Files[IO].writeUtf8(marker)(fs2.Stream.emit("keep")).compile.drain *>
         touchMarker(marker) *>
-        Files[IO].readUtf8(marker).compile.string.assertEquals("keep")
+        Files[IO].readUtf8(marker).compile.string.map(expect.eql("keep", _))
+    }
 
-  tempDir.test("does not truncate the target of a symlinked marker"):
-    dir =>
+  test("does not truncate the target of a symlinked marker"):
+    tempDir.use { dir =>
       val target = dir / "victim.txt"
       val marker = dir / ".telemetry-seen"
       Files[IO].writeUtf8(target)(fs2.Stream.emit("precious")).compile.drain *>
         Files[IO].createSymbolicLink(marker, target) *>
         touchMarker(marker) *>
-        Files[IO].readUtf8(target).compile.string.assertEquals("precious")
+        Files[IO].readUtf8(target).compile.string.map(expect.eql("precious", _))
+    }
 
-  tempDir.test("does not create the target of a dangling symlinked marker"):
-    dir =>
+  test("does not create the target of a dangling symlinked marker"):
+    tempDir.use { dir =>
       val target = dir / "planted.txt"
       val marker = dir / ".telemetry-seen"
       Files[IO].createSymbolicLink(marker, target) *>
         touchMarker(marker) *>
-        Files[IO].exists(target).assertEquals(false)
+        Files[IO].exists(target).map(exists => expect(!exists))
+    }

@@ -2,12 +2,12 @@ package cellar
 
 import cats.effect.{IO, Resource}
 import fs2.io.file.{Files, Path}
-import munit.CatsEffectSuite
 
 import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.util.Using
+import weaver.SimpleIOSuite
 
-class SourceFetcherTest extends CatsEffectSuite:
+object SourceFetcherTest extends SimpleIOSuite:
 
   private def jarWith(files: (String, String)*): Resource[IO, Path] =
     Files[IO].tempFile(None, "sources-", ".jar", None).evalTap { jar =>
@@ -27,7 +27,7 @@ class SourceFetcherTest extends CatsEffectSuite:
 
   test("an entry is not taken for a file whose name merely ends with it"):
     jarWith("Path.scala" -> "path", "ResourcePath.scala" -> "resource").use { jar =>
-      fetched(jar, "ResourcePath.scala").map(r => assertEquals(r, Right("ResourcePath.scala:resource")))
+      fetched(jar, "ResourcePath.scala").map(r => expect(clue(r) == Right("ResourcePath.scala:resource")))
     }
 
   test("the most specific entry wins for a path with a directory prefix"):
@@ -37,7 +37,7 @@ class SourceFetcherTest extends CatsEffectSuite:
         build <- fetched(jar, "/build/src/main/scala/sub/Foo.scala")
         root  <- fetched(jar, "Foo.scala")
       yield
-        assertEquals(exact, Right("sub/Foo.scala:sub"))
-        assertEquals(build, Right("sub/Foo.scala:sub"))
-        assertEquals(root, Right("Foo.scala:root"))
+        expect(clue(exact) == Right("sub/Foo.scala:sub")) and
+          expect(clue(build) == Right("sub/Foo.scala:sub")) and
+          expect(clue(root) == Right("Foo.scala:root"))
     }

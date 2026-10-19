@@ -1,15 +1,15 @@
 package cellar
 
 import cats.effect.IO
-import munit.CatsEffectSuite
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 import tastyquery.Contexts.Context
+import weaver.SimpleIOSuite
 
-class LineFormatterTest extends CatsEffectSuite:
+object LineFormatterTest extends SimpleIOSuite:
 
   private def withCtx[A](body: Context => IO[A]): IO[A] =
-    TestFixtures.assumeFixturesAvailable()
     for
+      _        <- TestFixtures.assumeFixturesAvailable
       jrePaths <- JreClasspath.jrtPath()
       jars     <- CoursierFetchClient.fetchClasspath(
                     TestFixtures.scala3Coord, Seq(TestFixtures.localM2Repo))
@@ -22,7 +22,7 @@ class LineFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls  = ctx.findStaticClass("cellar.fixture.scala3.CellarADT")
         val line = LineFormatter.formatLine(cls)
-        assert(line.startsWith("sealed trait"), s"Expected 'sealed trait' prefix in: $line")
+        expect(line.startsWith("sealed trait"), s"Expected 'sealed trait' prefix in: $line")
       }
     }
 
@@ -32,7 +32,7 @@ class LineFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls  = ctx.findStaticClass("cellar.fixture.scala3.CellarA")
         val line = LineFormatter.formatLine(cls)
-        assert(!line.contains('\n'), s"Embedded newline in: $line")
+        expect(!line.contains('\n'), s"Embedded newline in: $line")
       }
     }
 
@@ -43,9 +43,9 @@ class LineFormatterTest extends CatsEffectSuite:
         val cls     = ctx.findStaticClass("cellar.fixture.scala3.CellarTC")
         val members = cls.declarations
         val renderSym = members.find(_.name.toString == "render")
-        renderSym.foreach { sym =>
+        forEach(renderSym) { sym =>
           val line = LineFormatter.formatLine(sym)
-          assert(line.startsWith("abstract def"), s"Expected 'abstract def' prefix: $line")
+          expect(line.startsWith("abstract def"), s"Expected 'abstract def' prefix: $line")
         }
       }
     }
@@ -56,6 +56,6 @@ class LineFormatterTest extends CatsEffectSuite:
         given Context = ctx
         val cls  = ctx.findStaticClass("java.lang.String")
         val line = LineFormatter.formatLine(cls)
-        assert(line.nonEmpty)
+        expect(line.nonEmpty)
       }
     }

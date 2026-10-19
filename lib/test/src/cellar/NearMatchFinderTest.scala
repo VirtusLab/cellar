@@ -1,17 +1,17 @@
 package cellar
 
 import cats.effect.IO
-import munit.CatsEffectSuite
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 import tastyquery.Contexts.Context
+import weaver.SimpleIOSuite
 
-class NearMatchFinderTest extends CatsEffectSuite:
+object NearMatchFinderTest extends SimpleIOSuite:
 
   private def withCtxAndCp[A](
       body: (Context, tastyquery.Classpaths.Classpath) => IO[A]
   ): IO[A] =
-    TestFixtures.assumeFixturesAvailable()
     for
+      _        <- TestFixtures.assumeFixturesAvailable
       jrePaths <- JreClasspath.jrtPath()
       jars     <- CoursierFetchClient.fetchClasspath(
                     TestFixtures.scala3Coord, Seq(TestFixtures.localM2Repo))
@@ -22,11 +22,11 @@ class NearMatchFinderTest extends CatsEffectSuite:
     withCtxAndCp { (ctx, cp) =>
       given Context = ctx
       NearMatchFinder.findNearMatches("wrong.prefix.CellarADT", cp).map { matches =>
-        assert(matches.nonEmpty, s"Expected near matches for CellarADT, got: $matches")
-        assert(
-          matches.exists(_.endsWith("CellarADT")),
-          s"Expected CellarADT in results: $matches"
-        )
+        expect(matches.nonEmpty, s"Expected near matches for CellarADT, got: $matches") and
+          expect(
+            matches.exists(_.endsWith("CellarADT")),
+            s"Expected CellarADT in results: $matches"
+          )
       }
     }
 
@@ -35,7 +35,7 @@ class NearMatchFinderTest extends CatsEffectSuite:
       given Context = ctx
       NearMatchFinder.findNearMatches("wrong.prefix.cellaraadt", cp).map { matches =>
         // case-insensitive — should find CellarADT or similar
-        assert(matches.length <= 10)
+        expect(matches.length <= 10)
       }
     }
 
@@ -43,7 +43,7 @@ class NearMatchFinderTest extends CatsEffectSuite:
     withCtxAndCp { (ctx, cp) =>
       given Context = ctx
       NearMatchFinder.findNearMatches("object", cp).map { matches =>
-        assert(matches.length <= 10)
+        expect(matches.length <= 10)
       }
     }
 
@@ -51,7 +51,7 @@ class NearMatchFinderTest extends CatsEffectSuite:
     withCtxAndCp { (ctx, cp) =>
       given Context = ctx
       NearMatchFinder.findNearMatches("xyzNeverExistsABC123", cp).map { matches =>
-        assertEquals(matches, Nil)
+        expect.eql(Nil, matches)
       }
     }
 
@@ -60,7 +60,7 @@ class NearMatchFinderTest extends CatsEffectSuite:
       given Context = ctx
       // "cellar.fixture.scala3.CellarA" → simple name "CellarA"
       NearMatchFinder.findNearMatches("bad.package.CellarA", cp).map { matches =>
-        assert(matches.exists(_.endsWith("CellarA")), s"Expected CellarA: $matches")
+        expect(matches.exists(_.endsWith("CellarA")), s"Expected CellarA: $matches")
       }
     }
 
@@ -72,7 +72,7 @@ class NearMatchFinderTest extends CatsEffectSuite:
       withCtxAndCp { (ctx, cp) =>
         given Context = ctx
         NearMatchFinder.findNearMatches(fqn, cp).map { matches =>
-          assert(!matches.contains(fqn), s"Expected $fqn to be excluded from near matches, got: $matches")
+          expect(!matches.contains(fqn), s"Expected $fqn to be excluded from near matches, got: $matches")
         }
       }
   }

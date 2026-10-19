@@ -3,9 +3,9 @@ package cellar
 import cats.effect.IO
 import cats.effect.std.Console
 import fs2.Stream
-import munit.CatsEffectSuite
+import weaver.SimpleIOSuite
 
-class StreamOpsTest extends CatsEffectSuite:
+object StreamOpsTest extends SimpleIOSuite:
 
   // Test console that captures stderr lines
   class CapturingConsole extends Console[IO]:
@@ -24,8 +24,8 @@ class StreamOpsTest extends CatsEffectSuite:
     given Console[IO] = console
     val stream = Stream.emits(1 to 30)
     StreamOps.bounded(stream, 50).map { result =>
-      assertEquals(result.length, 30)
-      assert(console.errLines.isEmpty, "no truncation note expected")
+      expect.eql(30, result.length) and
+        expect(console.errLines.isEmpty, "no truncation note expected")
     }
 
   test("bounded: stream exactly at limit returns full list without truncation"):
@@ -33,8 +33,8 @@ class StreamOpsTest extends CatsEffectSuite:
     given Console[IO] = console
     val stream = Stream.emits(1 to 50)
     StreamOps.bounded(stream, 50).map { result =>
-      assertEquals(result.length, 50)
-      assert(console.errLines.isEmpty)
+      expect.eql(50, result.length) and
+        expect(console.errLines.isEmpty)
     }
 
   test("bounded: stream one over limit returns limit elements with truncation note"):
@@ -42,9 +42,9 @@ class StreamOpsTest extends CatsEffectSuite:
     given Console[IO] = console
     val stream = Stream.emits(1 to 51)
     StreamOps.bounded(stream, 50).map { result =>
-      assertEquals(result.length, 50)
-      assert(console.errLines.nonEmpty)
-      assert(console.errLines.exists(_.contains("truncated")))
+      expect.eql(50, result.length) and
+        expect(console.errLines.nonEmpty) and
+        expect(console.errLines.exists(_.contains("truncated")))
     }
 
   test("bounded: large stream returns only limit elements"):
@@ -52,8 +52,8 @@ class StreamOpsTest extends CatsEffectSuite:
     given Console[IO] = console
     val stream = Stream.emits(1 to 10000)
     StreamOps.bounded(stream, 50).map { result =>
-      assertEquals(result.length, 50)
-      assertEquals(console.errLines.length, 1) // exactly one note
+      expect.eql(50, result.length) and
+        expect.eql(1, console.errLines.length) // exactly one note
     }
 
   test("bounded: limit=0 on non-empty stream returns empty list with truncation"):
@@ -61,8 +61,8 @@ class StreamOpsTest extends CatsEffectSuite:
     given Console[IO] = console
     val stream = Stream.emits(1 to 5)
     StreamOps.bounded(stream, 0).map { result =>
-      assertEquals(result, Nil)
-      assert(console.errLines.nonEmpty)
+      expect.eql(Nil, result) and
+        expect(console.errLines.nonEmpty)
     }
 
   test("bounded: truncation note contains the limit value"):
@@ -70,19 +70,19 @@ class StreamOpsTest extends CatsEffectSuite:
     given Console[IO] = console
     val stream = Stream.emits(1 to 100)
     StreamOps.bounded(stream, 7).map { _ =>
-      assert(console.errLines.exists(_.contains("7")))
+      expect(console.errLines.exists(_.contains("7")))
     }
 
   test("boundedWithFlag: returns false when not truncated"):
     val stream = Stream.emits(1 to 10)
     StreamOps.boundedWithFlag(stream, 50).map { (results, truncated) =>
-      assertEquals(results.length, 10)
-      assertEquals(truncated, false)
+      expect.eql(10, results.length) and
+        expect.eql(false, truncated)
     }
 
   test("boundedWithFlag: returns true when truncated"):
     val stream = Stream.emits(1 to 100)
     StreamOps.boundedWithFlag(stream, 50).map { (results, truncated) =>
-      assertEquals(results.length, 50)
-      assertEquals(truncated, true)
+      expect.eql(50, results.length) and
+        expect.eql(true, truncated)
     }

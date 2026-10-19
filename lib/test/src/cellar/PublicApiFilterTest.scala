@@ -1,15 +1,15 @@
 package cellar
 
 import cats.effect.IO
-import munit.CatsEffectSuite
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 import tastyquery.Contexts.Context
+import weaver.SimpleIOSuite
 
-class PublicApiFilterTest extends CatsEffectSuite:
+object PublicApiFilterTest extends SimpleIOSuite:
 
   private def withScala3Ctx[A](body: Context => IO[A]): IO[A] =
-    TestFixtures.assumeFixturesAvailable()
     for
+      _        <- TestFixtures.assumeFixturesAvailable
       jrePaths <- JreClasspath.jrtPath()
       jars     <- CoursierFetchClient.fetchClasspath(
                     TestFixtures.scala3Coord, Seq(TestFixtures.localM2Repo))
@@ -17,8 +17,8 @@ class PublicApiFilterTest extends CatsEffectSuite:
     yield result
 
   private def withJavaCtx[A](body: Context => IO[A]): IO[A] =
-    TestFixtures.assumeFixturesAvailable()
     for
+      _        <- TestFixtures.assumeFixturesAvailable
       jrePaths <- JreClasspath.jrtPath()
       jars     <- CoursierFetchClient.fetchClasspath(
                     TestFixtures.javaCoord, Seq(TestFixtures.localM2Repo))
@@ -30,7 +30,7 @@ class PublicApiFilterTest extends CatsEffectSuite:
       IO.blocking {
         val cls  = ctx.findStaticClass("cellar.fixture.scala3.CellarADT")
         // CellarADT is a public trait — should pass
-        assert(PublicApiFilter.isPublic(cls))
+        expect(PublicApiFilter.isPublic(cls))
       }
     }
 
@@ -44,7 +44,7 @@ class PublicApiFilterTest extends CatsEffectSuite:
         // At least some members should be filtered out (synthetic ones)
         // Just verify the method doesn't throw
         val _ = members.map(m => PublicApiFilter.isPublic(m))
-        assert(true)
+        success
       }
     }
 
@@ -55,8 +55,8 @@ class PublicApiFilterTest extends CatsEffectSuite:
         val cls     = ctx.findStaticClass("cellar.fixture.scala3.CellarA")
         val members = cls.declarations
         val dollarMembers = members.filter(_.name.toString.startsWith("$"))
-        dollarMembers.foreach { m =>
-          assert(!PublicApiFilter.isPublic(m), s"Expected ${m.name} to be filtered")
+        forEach(dollarMembers) { m =>
+          expect(!PublicApiFilter.isPublic(m), s"Expected ${m.name} to be filtered")
         }
       }
     }
@@ -67,7 +67,7 @@ class PublicApiFilterTest extends CatsEffectSuite:
         given Context = ctx
         val statics = ctx.findStaticModuleClass("cellar.fixture.java.CellarJavaClass")
         val clinits = statics.declarations.filter(_.name.toString == "<clinit>")
-        assert(clinits.nonEmpty, "Fixture must declare a static initializer")
-        clinits.foreach(c => assert(!PublicApiFilter.isPublic(c), "Expected <clinit> to be filtered"))
+        expect(clinits.nonEmpty, "Fixture must declare a static initializer") and
+          forEach(clinits)(c => expect(!PublicApiFilter.isPublic(c), "Expected <clinit> to be filtered"))
       }
     }

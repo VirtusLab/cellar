@@ -1,11 +1,11 @@
 package cellar.profiling
 
 import cats.effect.{ExitCode, IO, IOLocal, Ref}
-import munit.CatsEffectSuite
 import org.typelevel.otel4s.sdk.context.Context
 import org.typelevel.otel4s.trace.Tracer
+import weaver.SimpleIOSuite
 
-class TracingRuntimeSuite extends CatsEffectSuite:
+object TracingRuntimeSuite extends SimpleIOSuite:
 
   private def withLocal[A](f: IOLocal[Context] => IO[A]): IO[A] =
     IOLocal(Context.root).flatMap(f)
@@ -19,8 +19,8 @@ class TracingRuntimeSuite extends CatsEffectSuite:
           }
           .flatMap { exit =>
             ran.get.map { bodyRan =>
-              assertEquals(exit, ExitCode.Success)
-              assertEquals(bodyRan, true)
+              expect(clue(exit) == ExitCode.Success) and
+                expect(bodyRan)
             }
           }
       }
@@ -33,7 +33,7 @@ class TracingRuntimeSuite extends CatsEffectSuite:
           val _ = summon[Tracer[IO]]
           IO.pure(ExitCode.Success)
         }
-        .map(exit => assertEquals(exit, ExitCode.Success))
+        .map(exit => expect(clue(exit) == ExitCode.Success))
     }
 
   test("tracedCommand propagates a non-success ExitCode from the body"):
@@ -42,7 +42,7 @@ class TracingRuntimeSuite extends CatsEffectSuite:
         .tracedCommand(TracingConfig.disabled, local, "test-version", "test-cmd") {
           IO.pure(ExitCode.Error)
         }
-        .map(exit => assertEquals(exit, ExitCode.Error))
+        .map(exit => expect(clue(exit) == ExitCode.Error))
     }
 
   test("tracedCommand handles errors from the body and returns ExitCode.Error"):
@@ -51,5 +51,5 @@ class TracingRuntimeSuite extends CatsEffectSuite:
         .tracedCommand(TracingConfig.disabled, local, "test-version", "test-cmd") {
           IO.raiseError(new RuntimeException("boom"))
         }
-        .map(exit => assertEquals(exit, ExitCode.Error))
+        .map(exit => expect(clue(exit) == ExitCode.Error))
     }

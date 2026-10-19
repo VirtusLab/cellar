@@ -1,6 +1,8 @@
 package cellar
 
+import cats.effect.IO
 import coursier.{MavenRepository, Repository}
+import weaver.Expectations.Helpers.ignore
 
 /** Test fixture coordinates and local-m2 repository accessor.
   *
@@ -37,8 +39,7 @@ object TestFixtures:
   )
 
   /** Skip a test if fixture system properties are not configured. */
-  def assumeFixturesAvailable(): Unit =
-    assume(
-      System.getProperty("cellar.test.localM2") != null,
-      "Fixture system properties not set — run './mill publishFixtures' first"
+  val assumeFixturesAvailable: IO[Unit] =
+    IO.whenA(System.getProperty("cellar.test.localM2") == null)(
+      ignore[IO]("Fixture system properties not set — run './mill publishFixtures' first")
     )

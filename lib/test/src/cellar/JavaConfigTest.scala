@@ -3,9 +3,9 @@ package cellar
 import cats.effect.IO
 import cats.syntax.all.*
 import fs2.io.file.{Files, Path}
-import munit.CatsEffectSuite
+import weaver.SimpleIOSuite
 
-class JavaConfigTest extends CatsEffectSuite:
+object JavaConfigTest extends SimpleIOSuite:
 
   private def loadWith(userConfig: Option[String], projectConfig: Option[String]): IO[Config] =
     Files[IO].tempDirectory.use { dir =>
@@ -19,7 +19,7 @@ class JavaConfigTest extends CatsEffectSuite:
       yield Config.loadFrom(userPath, projectPath)
     }
 
-  test("splits at the first '=' and trims key and value"):
+  pureTest("splits at the first '=' and trims key and value"):
     // given
     val config = JavaConfig(List("javax.net.ssl.trustStore = /tmp/a=b/cacerts", "empty.value="))
 
@@ -27,20 +27,20 @@ class JavaConfigTest extends CatsEffectSuite:
     val parsed = config.parsed
 
     // then
-    assertEquals(parsed, Right(List("javax.net.ssl.trustStore" -> "/tmp/a=b/cacerts", "empty.value" -> "")))
+    expect(clue(parsed) == Right(List("javax.net.ssl.trustStore" -> "/tmp/a=b/cacerts", "empty.value" -> "")))
 
-  test("rejects entries without '=' or with an empty key"):
-    List("javax.net.ssl.trustStore", "=value", " = value", "").foreach { entry =>
+  pureTest("rejects entries without '=' or with an empty key"):
+    forEach(List("javax.net.ssl.trustStore", "=value", " = value", "")) { entry =>
       // when
       val parsed = JavaConfig(List(entry)).parsed
 
       // then
-      assert(parsed.isLeft, s"Expected '$entry' to be rejected, got $parsed")
+      expect(parsed.isLeft, s"Expected '$entry' to be rejected, got $parsed")
     }
 
   test("default configuration sets no properties"):
     // when / then
-    loadWith(None, None).map(config => assertEquals(config.java.properties, Nil))
+    loadWith(None, None).map(config => expect.eql(List.empty[String], config.java.properties))
 
   test("project-level properties are ignored, user-level ones apply"):
     // given
@@ -49,5 +49,5 @@ class JavaConfigTest extends CatsEffectSuite:
 
     // when / then
     loadWith(Some(user), Some(project)).map { config =>
-      assertEquals(config.java.properties, List("javax.net.ssl.trustStore=/user/cacerts"))
+      expect.eql(List("javax.net.ssl.trustStore=/user/cacerts"), config.java.properties)
     }
