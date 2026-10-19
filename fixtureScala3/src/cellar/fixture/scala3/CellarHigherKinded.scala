@@ -23,3 +23,4 @@ trait CellarHigherKinded:
   def upper[F[A] <: Iterable[A]](fa: F[Int]): F[Int]
   def selfBounded[F[A <: Comparable[A]]](fa: F[String]): F[String]
   def bimap[G[_, _], A, B](g: G[A, B]): G[A, B]
+  def widen[F2[x] >: List[x]](fa: F2[Int]): F2[Int]
