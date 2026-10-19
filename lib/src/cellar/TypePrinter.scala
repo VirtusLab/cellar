@@ -1,6 +1,6 @@
 package cellar
 
-import tastyquery.Contexts.Context
+import tastyquery.Contexts.{Context, defn}
 import tastyquery.Modifiers.{OpenLevel, TermSymbolKind, Visibility}
 import tastyquery.Names.{SimpleName, UniqueName, UnsignedTermName, nme}
 import tastyquery.Symbols.{
@@ -386,10 +386,9 @@ object TypePrinter:
   private def printTypeParam(name: tastyquery.Names.TypeName, bounds: TypeBounds)(using ctx: Context): String =
     bounds match
       case b: AbstractTypeBounds =>
-        val lo      = printType(lambdaResult(b.low))
-        val hi      = printType(lambdaResult(b.high))
-        val loStr   = if lo == "Nothing" then "" else s" >: $lo"
-        val hiStr   = if hi == "Any" then "" else s" <: $hi"
+        val (lo, hi) = (lambdaResult(b.low), lambdaResult(b.high))
+        val loStr    = if isExactlyNothing(lo) then "" else s" >: ${printType(lo)}"
+        val hiStr    = if isTrivialUpperBound(hi) then "" else s" <: ${printType(hi)}"
         val tparams = b.high match
           case tl: TypeLambda => printHkParams(tl, mentionedIn = s"$loStr$hiStr")
           case _              => ""
@@ -401,6 +400,24 @@ object TypePrinter:
       case tl: TypeLambda => tl.resultType
       case other          => other
 
+  /** dotty's `isExactlyNothing`, which tasty-query keeps private: `scala.Nothing` itself, not an
+   *  alias of it.
+   */
+  private def isExactlyNothing(tpe: Type)(using Context): Boolean =
+    tpe match
+      case _: NothingType => true
+      case ref: TypeRef =>
+        ref.name.toString == "Nothing" && (ref.prefix match
+          case pkg: PackageRef => pkg.symbol == defn.scalaPackage
+          case _               => false)
+      case _ => false
+
+  /** An upper bound dotty leaves out: exactly `Any`, or Java's `Object` seen from Scala. */
+  private def isTrivialUpperBound(tpe: Type)(using Context): Boolean =
+    tpe.isFromJavaObject || (tpe match
+      case ref: TypeRef => ref.optSymbol.contains(defn.AnyClass)
+      case _            => false)
+
   /** `[x, _ <: B]`: a parameter keeps its name only where its own or a sibling's bounds, or the
    *  enclosing parameter's bounds (`mentionedIn`), refer to it.
    */
@@ -408,8 +425,8 @@ object TypePrinter:
     val rendered = tl.paramNames.zip(tl.paramTypeBounds).map { (name, bounds) =>
       val (lo, hi) = bounds match
         case b: AbstractTypeBounds =>
-          val lo = if printType(b.low) == "Nothing" then "" else s" >: ${printType(b.low)}"
-          val hi = if printType(b.high) == "Any" then "" else s" <: ${printType(b.high)}"
+          val lo = if isExactlyNothing(b.low) then "" else s" >: ${printType(b.low)}"
+          val hi = if isTrivialUpperBound(b.high) then "" else s" <: ${printType(b.high)}"
           (lo, hi)
         case _ => ("", "")
       (name.toString, lo, hi)
