@@ -36,3 +36,15 @@ class RepositoryUrlTest extends FunSuite:
 
   test("rejects a string that is not a URL at all"):
     assert(reason("not a url").contains("not a valid URL"))
+
+  test("moves URL credentials onto the repository, sent up front and over https only"):
+    val repo = RepositoryUrl.parse("https://alice:s3cret@pkgs.example.com/maven").fold(fail(_), identity)
+    val auth = repo.authentication.getOrElse(fail("expected credentials"))
+    assertEquals(repo.root, "https://pkgs.example.com/maven")
+    assertEquals((auth.userOpt, auth.passwordOpt), (Some("alice"), Some("s3cret")))
+    assert(!auth.optional && auth.httpsOnly, auth)
+
+  test("never echoes a URL password in an error"):
+    val message = reason("ftp://alice:s3cret@pkgs.example.com/maven")
+    assert(message.contains("ftp://alice:****@pkgs.example.com/maven"), message)
+    assert(!message.contains("s3cret"), message)

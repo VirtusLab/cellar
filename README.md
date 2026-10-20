@@ -306,8 +306,8 @@ maven {
 
 Maven Central and Ivy local stay available, and CLI `-r` values are appended to the configured list.
 Lists replace rather than merge, so a project-level `maven.repositories` overrides the user-level
-list and `repositories = []` clears it for that project. Configuration holds URLs only —
-credentials come from coursier, see [Private repositories](#private-repositories).
+list and `repositories = []` clears it for that project. For credentials, see
+[Private repositories](#private-repositories).
 
 Or via environment: `CELLAR_SBT_BINARY=sbtn cellar get --module core cats.Monad`
 
@@ -316,9 +316,13 @@ Or via environment: `CELLAR_SBT_BINARY=sbtn cellar get --module core cats.Monad`
 Project-aware commands get the classpath from your build tool, so they use whatever credentials
 the build already has.
 
-External commands resolve with coursier and read only coursier's credentials — the same ones the
-coursier CLI, scala-cli and Metals use. cellar never reads another tool's credentials
-(`~/.sbt/.credentials`, `~/.m2/settings.xml`, `~/.gradle/gradle.properties`). Coursier looks in:
+External commands resolve with coursier and use coursier's credentials — the same ones the
+coursier CLI, scala-cli and Metals read. cellar never reads another tool's credentials
+(`~/.sbt/.credentials`, `~/.m2/settings.xml`, `~/.gradle/gradle.properties`).
+
+#### Credential files and environment
+
+Coursier looks in:
 
 1. `COURSIER_CREDENTIALS` (or `-Dcoursier.credentials`): inline entries, or a path to a
    properties file. When set, the files in 2. are ignored.
@@ -341,8 +345,9 @@ company.https-only=true
 Inline, one entry per line: `artifactory.company.com alice:s3cret`, or
 `artifactory.company.com(Artifactory Realm) alice:s3cret` with a realm.
 
-Credentials apply to every request to a matching host, but are sent only after the server
-answers `401`; a repository that rejects anonymous requests some other way never gets them.
+These credentials apply to every repository on a matching host, but are held back until the
+server rejects an anonymous request with a `4xx` (`401`, `403` or `404`). Most servers do; Azure
+Artifacts is the known exception, see below.
 
 Coming from sbt, an `~/.sbt/.credentials` file maps one-to-one:
 
@@ -353,8 +358,34 @@ Coming from sbt, an `~/.sbt/.credentials` file maps one-to-one:
 | `user=…`           | `<name>.username=…`               |
 | `password=…`       | `<name>.password=…`               |
 
-A failed resolution lists every location coursier tried; a missing or wrong credential shows there
-as `unauthorized: <url> (<realm>)`.
+#### Credentials in the repository URL
+
+Azure Artifacts answers anonymous requests with `203` and a sign-in page rather than a `4xx`, so
+held-back credentials never reach it. Put them in the repository URL instead; they are then sent
+with every request to that repository:
+
+```hocon
+maven {
+  repositories = ["https://user:"${AZURE_ARTIFACTS_TOKEN}"@pkgs.dev.azure.com/org/_packaging/feed/maven/v1"]
+}
+```
+
+`${…}` is read from the environment, which keeps the token out of the file. The same URL works
+with `-r`. URL credentials are sent over HTTPS only, unless the URL itself is `http://`, and cellar
+masks the password in its own messages.
+
+#### Troubleshooting
+
+A failed resolution lists every location coursier tried:
+
+| Shown under `Tried:`                              | Meaning                                                    |
+|---------------------------------------------------|------------------------------------------------------------|
+| `unauthorized: <url> (<realm>)`                   | No credentials for that host, or the server rejected them  |
+| `forbidden: <url>`                                | No credentials for that host, or they lack access          |
+| `non-authoritative information: <url> (HTTP 203)` | The server wants credentials up front — put them in the URL |
+
+To see which credentials coursier sends to each URL, set `COURSIER_HTTP_DEBUG=true`. It names the
+user, never the password.
 
 Trust a TLS-intercepting proxy's CA. The native binary ignores `JAVA_TOOL_OPTIONS`, so set the
 trust store in `~/.cellar/cellar.conf` (same format as scala-cli's `java.properties`):

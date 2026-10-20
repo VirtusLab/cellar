@@ -8,11 +8,11 @@ object CoordinateCompleter:
   def suggest(coord: MavenCoordinate, extraRepos: Seq[Repository]): IO[List[String]] =
     IO.blocking {
       def release(artifact: String): Option[String] =
-        Some(Versions().withModule(coord.copy(artifact = artifact).toCoursierModule).addRepositories(extraRepos*).run())
+        Some(Versions(CoursierCache.instance).withModule(coord.copy(artifact = artifact).toCoursierModule).addRepositories(extraRepos*).run())
           .map(_.release0.asString)
           .filter(_.nonEmpty)
 
-      val complete    = Complete().addRepositories(extraRepos*).copy(input = s"${coord.group}:${coord.artifact}")
+      val complete    = Complete(CoursierCache.instance).addRepositories(extraRepos*).copy(input = s"${coord.group}:${coord.artifact}")
       val completions = complete.complete().unsafeRun()(using complete.cache.ec)._2.toList
 
       val exactMatch = completions.contains(coord.artifact)

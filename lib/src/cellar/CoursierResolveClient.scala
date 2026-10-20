@@ -14,7 +14,7 @@ object CoursierResolveClient:
   )(using logger: Logger[IO] = StderrLogger.off): IO[ResolvedDeps] =
     logger.debug(s"resolving dependency tree for ${coord.render}") *>
       IO.blocking {
-        val resolution = Resolve()
+        val resolution = Resolve(CoursierCache.instance)
           .addDependencies(coord.toCoursierDependency)
           .addRepositories(extraRepositories*)
           .run()
