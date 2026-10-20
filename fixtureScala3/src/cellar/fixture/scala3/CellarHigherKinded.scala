@@ -15,6 +15,8 @@ trait CellarHigherKinded:
     * type constructor is passed where `F[_]` is expected.
     */
   type HandWrittenEta = [A] =>> List[A]
+  type Abstract[_]
+  type ToLong[X <: Double] <: Long
 
   def wrap[F[_], A](fa: F[A]): F[A]
   def compose[F[_], G[_]](bf: CellarBox[F], bg: CellarBox[G]): CellarBox[[A] =>> F[G[A]]]
