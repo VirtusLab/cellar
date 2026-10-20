@@ -6,6 +6,7 @@ import tastyquery.Names.{SimpleName, UniqueName, UnsignedTermName, nme}
 import tastyquery.Symbols.{
   ClassSymbol,
   ClassTypeParamSymbol,
+  PackageSymbol,
   ParamSymbolsClause,
   Symbol,
   TermOrTypeSymbol,
@@ -216,7 +217,8 @@ object TypePrinter:
         // `AnyRef` is how the universal parent prints for a Scala 2 / Java symbol,
         // the same way `Object` is for a Scala 3 one -- neither carries information.
         val parents =
-          cls.parents.filterNot(p => cls.isEnum && isEnumBase(p)).map(printParent).filterNot(universalParents.contains)
+          cls.parents.filterNot(p => cls.isEnum && isEnumBase(p) || isCompilerAddedParent(cls, p))
+            .map(printParent).filterNot(universalParents.contains)
         val extendsStr = if parents.isEmpty then "" else s" extends ${parents.mkString(" with ")}"
         s"${visibilityModifier(cls)}${classModifiers(cls)}$kind $name$typeParams$extendsStr"
 
@@ -440,6 +442,42 @@ object TypePrinter:
             if lo.isEmpty && hi.isEmpty then "?" else s"?$lo$hi"
           case _ => "?"
       case t: Type => printType(t)
+
+  /** Parents a compiler adds to an object, which its declaration never names:
+   *  - dotty's `SyntheticMembers.addMirrorSupport`: `Mirror.Singleton` on a case object, and
+   *    `Mirror.Product` or `Mirror.Sum` on a companion;
+   *  - scalac's `Typers.typedModuleDef`: `java.io.Serializable` on the companion of a serializable
+   *    class (a written `Serializable` names the `scala.Serializable` alias, so it stays);
+   *  - scalac's `Unapplies.caseModuleDef`: `AbstractFunctionN` on a case class's companion, only
+   *    when scalac wrote the companion itself (`companionModuleDef` marks it synthetic); dotty
+   *    never adds it.
+   */
+  private def isCompilerAddedParent(cls: ClassSymbol, parent: Type)(using Context): Boolean =
+    cls.isModuleClass && parentClass(parent).exists { p =>
+      val name = p.name.toString
+      isMirror(p)
+      || name == "Serializable" && inPackage(p, "java.io") && cls.companionClass.exists(_.isSubClass(p))
+      || AbstractFunction.matches(name) && inPackage(p, "scala.runtime") && cls.isSynthetic
+    }
+
+  /** `scala.deriving.Mirror.{Singleton, Product, Sum}`, nested in the `Mirror` object. */
+  private def isMirror(cls: ClassSymbol): Boolean =
+    Set("Singleton", "Product", "Sum").contains(cls.name.toString) && (cls.owner match
+      case m: ClassSymbol => m.isModuleClass && m.name.toString == "Mirror$" && inPackage(m, "scala.deriving")
+      case _              => false)
+
+  private def inPackage(sym: Symbol, pkg: String): Boolean =
+    sym.owner match
+      case p: PackageSymbol => p.fullName.toString == pkg
+      case _                => false
+
+  private val AbstractFunction = """AbstractFunction\d+""".r
+
+  private def parentClass(parent: Type)(using Context): Option[ClassSymbol] =
+    parent match
+      case t: AppliedType => parentClass(t.tycon)
+      case t: TypeRef     => t.optSymbol.collect { case c: ClassSymbol => c }
+      case _              => None
 
   /** The supertype every enum gets implicitly, which its declaration never names. */
   private def isEnumBase(parent: Type): Boolean =

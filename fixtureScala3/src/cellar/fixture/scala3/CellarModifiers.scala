@@ -16,3 +16,12 @@ object CellarScope:
 enum CellarShape:
   case Circle, Square
   case Polygon(sides: Int)
+
+/** Fixture for the parents a compiler adds to objects: a companion and a case object get
+  * `Mirror`s, and a written `Serializable` stays.
+  */
+case class CellarPoint(x: Int)
+
+case object CellarOrigin
+
+object CellarSerializable extends Serializable
