@@ -1,6 +1,5 @@
 package cellar
 
-import coursier.cache.FileCache
 import coursier.util.Artifact
 import coursier.{Classifier, Fetch, Repository}
 import fs2.io.file.Path
@@ -32,7 +31,7 @@ object SourcesResolver:
     * jar is the same URL with the `-sources.jar` suffix, whichever repository served it.
     */
   private def fromCoursierCache(jar: Path): Option[Path] =
-    val cache    = FileCache()
+    val cache    = CoursierCache.instance
     val root     = Path.fromNioPath(cache.location.toPath)
     val relative = root.toNioPath.relativize(jar.toNioPath)
     Option.when(jar.toNioPath.startsWith(root.toNioPath) && relative.getNameCount > 2) {
@@ -48,7 +47,7 @@ object SourcesResolver:
   private def fromPomProperties(jar: Path, repositories: Seq[Repository]): Option[Path] =
     coordinate(jar).flatMap { (group, artifact, version) =>
       val dependency = MavenCoordinate(group, artifact, version).toCoursierDependency.copy(transitive = false)
-      Fetch()
+      Fetch(CoursierCache.instance)
         .addDependencies(dependency)
         .addRepositories(repositories*)
         .addClassifiers(Classifier.sources)

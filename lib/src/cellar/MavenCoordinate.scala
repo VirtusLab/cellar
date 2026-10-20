@@ -13,7 +13,7 @@ final case class MavenCoordinate(group: String, artifact: String, version: Strin
   def resolveLatest(extraRepos: Seq[Repository] = Seq.empty): IO[MavenCoordinate] =
     if version != "latest" then IO.pure(this)
     else IO.blocking {
-      val release = Versions().withModule(toCoursierModule).addRepositories(extraRepos*).run().release0.asString
+      val release = Versions(CoursierCache.instance).withModule(toCoursierModule).addRepositories(extraRepos*).run().release0.asString
       if release.nonEmpty then copy(version = release)
       else throw CellarError.CoordinateNotFound(this, new RuntimeException(s"No versions found for '$group:$artifact'"))
     }

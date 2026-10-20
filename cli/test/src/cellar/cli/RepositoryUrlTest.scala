@@ -38,3 +38,20 @@ object RepositoryUrlTest extends FunSuite:
 
   test("rejects a string that is not a URL at all"):
     reason("not a url")(message => expect(message.contains("not a valid URL")))
+
+  test("moves URL credentials onto the repository, sent up front and over https only"):
+    RepositoryUrl.parse("https://alice:s3cret@pkgs.example.com/maven").fold(
+      err => failure(s"expected the URL to be accepted, got: $err"),
+      repo =>
+        repo.authentication.fold(failure("expected credentials")) { auth =>
+          expect.eql("https://pkgs.example.com/maven", repo.root) and
+            expect.eql((Some("alice"), Some("s3cret")), (auth.userOpt, auth.passwordOpt)) and
+            expect(!auth.optional && auth.httpsOnly)
+        }
+    )
+
+  test("never echoes a URL password in an error"):
+    reason("ftp://alice:s3cret@pkgs.example.com/maven") { message =>
+      expect(message.contains("ftp://alice:****@pkgs.example.com/maven"), message) and
+        expect(!message.contains("s3cret"), message)
+    }
