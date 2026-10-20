@@ -26,6 +26,23 @@ object GetFormatterTest extends SequentialIOSuite:
       }
     }
 
+  test("formatSymbol lists every supertype, the compiler-added ones too"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        def supertypes(cls: tastyquery.Symbols.ClassSymbol) =
+          GetFormatter.formatSymbol(cls).linesIterator.find(_.startsWith("**Supertypes:**"))
+        val caseClass = ctx.findStaticClass("cellar.fixture.scala3.CellarA")
+        val companion = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarA")
+        expect.eql(
+          Some("**Supertypes:** java.io.Serializable, scala.Product, scala.Equals, cellar.fixture.scala3.CellarADT"),
+          supertypes(caseClass)
+        ) and
+          expect.eql(Some("**Supertypes:** scala.deriving.Mirror.Product, scala.deriving.Mirror"), supertypes(companion)) and
+          expect.eql(None, supertypes(ctx.findStaticClass("cellar.fixture.scala3.CellarBox")))
+      }
+    }
+
   test("formatSymbol for sealed trait produces Known subtypes line"):
     withCtx { ctx =>
       IO.blocking {
