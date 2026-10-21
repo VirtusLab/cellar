@@ -32,7 +32,7 @@ Query the current project's code and all its dependencies. Cellar auto-detects t
 - `--test`: query the test-scope classpath (sbt/scala-cli; for Mill, use the test module directly, e.g. `--module foo.test`)
 - `--no-cache`: skip classpath cache, re-extract from build tool
 - `--java-home <path>`: override JRE classpath
-- `-l`, `--limit <N>`: max results for `list`/`search` (default: 50), max members for `get`
+- `-l`, `--limit <N>`: max results for `list`/`search` (default: 50)
 - `--hide-inherited`: show only members declared on the type itself (`get` commands)
 - `--group-inherited`: group members by declaring type with section headers (`get` commands)
 - `-v`, `--verbose` / `--debug`: diagnostics to stderr. Use when a symbol you expect is reported as

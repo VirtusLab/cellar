@@ -15,7 +15,6 @@ object ProjectGetHandler:
       module: Option[String],
       javaHome: Option[Path] = None,
       noCache: Boolean = false,
-      limit: Option[Int] = None,
       hideInherited: Boolean = false,
       groupInherited: Boolean = false,
       cwd: Option[Path] = None,
@@ -27,5 +26,5 @@ object ProjectGetHandler:
     given Logger[IO] = logger
     ProjectHandler.run(javaHome, cwd, module, noCache, config, testScope, extraRepositories) { (ctx, classpath, _, sourceJars) =>
       given Context = ctx
-      GetHandler.runCore(fqn, classpath, coord = None, sourceJars, limit, hideInherited, groupInherited, logger)
+      GetHandler.runCore(fqn, classpath, coord = None, sourceJars, hideInherited, groupInherited, logger)
     }

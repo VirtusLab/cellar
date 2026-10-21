@@ -146,7 +146,7 @@ cellar deps <coordinate>
 
 | Command | Description |
 |---|---|
-| `get` | Symbol info from the current project (signature, flags, members, docs) |
+| `get` | Symbol info from the current project (signature, supertypes, flags, members, docs) |
 | `get-external` | Symbol info from a Maven coordinate |
 | `get-source` | Source code from the `-sources.jar` of the artifact defining the symbol, including transitive dependencies |
 | `list` | List public symbols in a package/class from the current project |
@@ -181,7 +181,6 @@ cellar get-external org.typelevel:cats-core_3:latest cats.Monad
 | `--java-home <path>` | all | Use a specific JDK for JRE classpath |
 | `-r`, `--repository <url>` | external commands | Extra Maven repository URL (repeatable), appended to the configured `maven.repositories`; must be an `http://`, `https://` or `file://` URL |
 | `-l`, `--limit <N>` | `list`, `list-external`, `search`, `search-external` | Max results (default: 50) |
-| `-l`, `--limit <N>` | `get`, `get-external` | Max members to display per section, including companion members (no default) |
 | `--hide-inherited` | `get`, `get-external` | Show only members declared on the type itself |
 | `--group-inherited` | `get`, `get-external` | Group members (and companion members) by declaring type with section headers |
 | `-v`, `--verbose` | all except `telemetry` | Log progress and warnings to stderr |
@@ -416,6 +415,8 @@ profiling {
     ```scala
     trait Monad[F] extends FlatMap[F] with Applicative[F]
     ```
+    **Supertypes:** cats.Applicative, cats.InvariantMonoidal, cats.FlatMap, cats.FlatMapArityFunctions, cats.Apply, cats.ApplyArityFunctions, cats.InvariantSemigroupal, cats.Semigroupal, cats.Functor, cats.Invariant, java.io.Serializable
+
     Monad.
     Allows composition of dependent effectful functions.
 
