@@ -32,7 +32,8 @@ Query the current project's code and all its dependencies. Cellar auto-detects t
 - `--test`: query the test-scope classpath (sbt/scala-cli; for Mill, use the test module directly, e.g. `--module foo.test`)
 - `--no-cache`: skip classpath cache, re-extract from build tool
 - `--java-home <path>`: override JRE classpath
-- `-l`, `--limit <N>`: max results for `list`/`search` (default: 50), max members for `get`
+- `-l`, `--limit <N>`: max results for `list`/`search` (default: 50). On `get` it truncates members with no way
+  to page; prefer `--hide-inherited` to shrink output
 - `--hide-inherited`: show only members declared on the type itself (`get` commands)
 - `--group-inherited`: group members by declaring type with section headers (`get` commands)
 - `-v`, `--verbose` / `--debug`: diagnostics to stderr. Use when a symbol you expect is reported as
@@ -95,26 +96,44 @@ cellar search --module lib flatMap
 
 ## Example output
 
-`cellar get-external --hide-inherited org.typelevel:cats-core_3:2.10.0 cats.Monad`
+`cellar get-external --hide-inherited -l 4 org.typelevel:cats-core_3:2.10.0 cats.Monad`
 
-```markdown
+````markdown
 ## cats.Monad
-`trait Monad[F] extends FlatMap[F] with Applicative[F]`
-**Flags:** abstract
+```scala
+trait Monad[F[_]] extends FlatMap[F] with Applicative[F]
+```
+**Supertypes:** cats.Applicative, cats.InvariantMonoidal, cats.FlatMap, cats.FlatMapArityFunctions, cats.Apply, cats.ApplyArityFunctions, cats.InvariantSemigroupal, cats.Semigroupal, cats.Functor, cats.Invariant, java.io.Serializable
+
+Monad.
+Allows composition of dependent effectful functions.
+
 **Origin:** cats.Monad
 **Members:**
-def iterateWhile[A](f: F[A]): (p: A => Boolean): F[A]
-def untilM[G, A](f: F[A]): (cond: => F[Boolean]): (G: Alternative[G]): F[G[A]]
-def whileM_[A](p: F[Boolean]): (body: => F[A]): F[Unit]
-def iterateUntil[A](f: F[A]): (p: A => Boolean): F[A]
-… (+ 7 more)
-**Companion members:**
-trait Ops[F, A]
-def apply[F](instance: Monad[F]): Monad[F]
-…
+```scala
+def iterateWhile[A](f: F[A])(p: A => Boolean): F[A]
+def untilM[G[_], A](f: F[A])(cond: => F[Boolean])(implicit G: Alternative[G]): F[G[A]]
+def ifElseM[A](branches: (F[Boolean], F[A])*)(els: F[A]): F[A]
+def iterateUntilM[A](init: A)(f: A => F[A])(p: A => Boolean): F[A]
+// … 6 more members
 ```
+**Companion members:**
+```scala
+trait Ops[F[_], A] extends Serializable
+object ops
+def apply[F[_]](implicit instance: Monad[F]): Monad[F]
+trait ToMonadOps extends Serializable
+// … 4 more members
+```
+````
 
-Use `--hide-inherited` to get only own members. Without it, all inherited members are shown (can be large for deep hierarchies).
+`**Supertypes:**` lists every ancestor, nearest first: the order Scala searches for a member's implementation.
+
+### Choosing member output
+
+- Default: every member callable on the type, inherited ones included. Use it to find what you can call.
+- `--hide-inherited`: only what the type itself declares. Use it for what a subtype adds, or when the full output is too large.
+- `--group-inherited`: members under `// Declared on` / `// Inherited from` headers. Use it when you need the declaring parent, e.g. to read its docs or find what to override.
 
 ## When Metals MCP is also available
 
