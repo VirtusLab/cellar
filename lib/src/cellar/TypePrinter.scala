@@ -39,6 +39,10 @@ object TypePrinter:
         t.prefix match
           case NoPrefix                          => name
           case _: ThisType                       => name
+          // A refinement member naming a sibling, `{ type A; def get: A }`, refers to it through
+          // the refinement's own `this` (dotty's `TypeAssigner` closes it over as a `RecThis`).
+          // Dotty's printer names that binder (`{z1 => … z1.A}`); the bare name is what was written.
+          case _: RecThis                        => name
           case p: Type if isElidedPrefix(p)      => name
           case p: Type                           => s"${printType(p)}.$name"
           case _                                 => name
@@ -71,8 +75,11 @@ object TypePrinter:
       case t: TermParamRef   => t.binder.paramNames(t.paramNum).toString
       case t: TypeParamRef   => printTypeParamName(t.binder.paramNames(t.paramNum))
       case t: RepeatedType   => s"${printType(t.elemType)}*"
-      case t: TypeRefinement => printType(t.parent)
-      case t: TermRefinement => printType(t.parent)
+      case t: TermRefinement if isRefinedFunction(t) => printMethodAsFunction(t.refinedType)
+      case t: (TypeRefinement | TermRefinement) =>
+        val (base, members) = refinements(t)
+        val body = s"{ ${members.mkString("; ")} }"
+        if isOmittedRefinementParent(base) then body else s"${printType(base)} $body"
       case t: RecType        => printType(t.parent)
       case t: ConstantType   => t.value.value.toString
       case t: MatchType      => s"${printType(t.scrutinee)} match { ... }"
@@ -285,6 +292,61 @@ object TypePrinter:
         }
         Option.when(passesThrough)(printType(app.tycon))
       case _ => None
+
+  /** The refined type and its members, outermost refinement last as it is declared last. */
+  private def refinements(tpe: Type)(using Context): (Type, List[String]) =
+    tpe match
+      case t: TypeRefinement =>
+        val (base, members) = refinements(t.parent)
+        val member = t.refinedBounds match
+          case alias: TypeAlias => s"type ${t.refinedName}${printAliasRhs(alias.alias)}"
+          case bounds           => s"type ${printTypeParam(t.refinedName, bounds)}"
+        (base, members :+ member)
+      case t: TermRefinement =>
+        val (base, members) = refinements(t.parent)
+        val member = t.refinedType match
+          case tpe: Type if t.isStable => s"val ${t.refinedName}: ${printType(tpe)}"
+          case tpe: Type               => s"def ${t.refinedName}: ${printType(tpe)}"
+          case methodic                => s"def ${t.refinedName}${printMethodic(methodic)}"
+        (base, members :+ member)
+      case other => (other, Nil)
+
+  /** `[X] => F[X] => G[X]` and the dependent `(x: A) => x.T`, which TASTy stores as a
+   *  `PolyFunction` or `FunctionN` refined with its `apply`; dotty's `RefinedPrinter` tests it
+   *  with `defn.isFunctionType`.
+   */
+  private def isRefinedFunction(t: TermRefinement): Boolean =
+    t.refinedName.toString == "apply" && (t.parent match
+      case ref: TypeRef     => isScalaPackage(ref.prefix) && ref.name.toString == "PolyFunction"
+      case app: AppliedType => asFunction(app).isDefined
+      case _                => false)
+
+  /** As dotty's `RefinedPrinter.toTextMethodAsFunction`, except that parameters print unnamed
+   *  when every name is one `Desugar.makePolyFunctionType` invented (`x$1`, `x$2`, …), as the
+   *  source wrote them; dotty does that only under capture checking.
+   */
+  private def printMethodAsFunction(tpe: TypeOrMethodic)(using Context): String =
+    tpe match
+      case t: PolyType => s"${printPolyParams(t)._1} => ${printMethodAsFunction(t.resultType)}"
+      case t: MethodType =>
+        val arrow = if t.isContextual then "?=>" else "=>"
+        val synthetic = t.paramNames.zipWithIndex.forall((n, i) => n.toString == s"x$$${i + 1}")
+        val params =
+          if !synthetic then t.paramNames.zip(t.paramTypes).map((n, tp) => s"$n: ${printType(tp)}").mkString("(", ", ", ")")
+          else t.paramTypes match
+            case single :: Nil if !t.isContextual && !functionArgNeedsParens(single) => printType(single)
+            case types => types.map(printType).mkString("(", ", ", ")")
+        s"$params $arrow ${printMethodAsFunction(t.resultType)}"
+      case t: Type => printType(t)
+
+  /** `{ type A }` has no parent in source: dotty's `Typer.typedRefinedTypeTree` fills it with
+   *  `Object`, scalac with `AnyRef`. Dotty's printer shows it (`Object{type A}`); omitting it
+   *  matches the source.
+   */
+  private def isOmittedRefinementParent(tpe: Type)(using Context): Boolean =
+    tpe.dealias match
+      case ref: TypeRef => ref.optSymbol.contains(defn.ObjectClass)
+      case _            => false
 
   /** TASTy stores `type F[A] = G[A]` and `type F = [A] =>> G[A]` alike; as dotty's
    *  `PlainPrinter.decomposeLambdas` does, a lambda's parameters print as the alias's own.

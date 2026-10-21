@@ -73,12 +73,13 @@ final class ScalaLanguage(val name: String, scala2: Boolean, val defaultLibrarie
 
   // Spellings of one type that differ only by syntax: kind-projector's `λ[α => F[α]]` as
   // `[α] =>> F[α]`; placeholders (`F[A, *]`, `F[A, ?]`, and the printer's `[_$1] =>> F[A, _$1]`)
-  // as `F[A, _]`, which also makes `?` and `_` wildcards alike; `with` as `&`; and qualifiers,
-  // since imports decide how much of a name the source spells out.
+  // as `F[A, _]`, which also makes `?` and `_` wildcards alike; `with` as `&`; a refinement's
+  // members split by lines rather than `;`; and qualifiers, since imports decide how much of a
+  // name the source spells out.
   def normalize(text: String): String =
     val unlambda = contractPlaceholders(kindProjectorAsLambda(text))
     val unqualified = qualifier.replaceAllIn(unlambda, "")
-    placeholder.replaceAllIn(unqualified, "_").replace(" with ", " & ").replaceAll("\\s+", " ").trim
+    placeholder.replaceAllIn(unqualified, "_").replace(" with ", " & ").replaceAll(";?\\s+", " ").trim
 
   /** `[_$1] =>> F[A, _$1]` as `F[A, _]`: the lambda's body runs to the first unbalanced `]` or `,`. */
   private def contractPlaceholders(text: String): String =
