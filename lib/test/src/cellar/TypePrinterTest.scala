@@ -195,6 +195,29 @@ object TypePrinterTest extends SequentialIOSuite:
       }
     }
 
+  test("printSymbolSignature leaves out the parents dotty adds to objects"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        def sig(name: String) = TypePrinter.printSymbolSignature(ctx.findStaticModuleClass(s"cellar.fixture.scala3.$name"))
+        expect.eql("object CellarPoint", sig("CellarPoint")) and
+          expect.eql("case object CellarOrigin extends Product with Serializable", sig("CellarOrigin")) and
+          expect.eql("object CellarSerializable extends Serializable", sig("CellarSerializable"))
+      }
+    }
+
+  test("printSymbolSignature leaves out the parents scalac adds to objects (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        def sig(name: String) = TypePrinter.printSymbolSignature(ctx.findStaticModuleClass(s"cellar.fixture.scala2.$name"))
+        expect.eql("object CellarSerialized", sig("CellarSerialized")) and
+          expect.eql("object CellarPair", sig("CellarPair")) and
+          expect.eql("object CellarWrapped extends AbstractFunction1[Int, CellarWrapped]", sig("CellarWrapped")) and
+          expect.eql("object CellarSerializable extends Serializable", sig("CellarSerializable"))
+      }
+    }
+
   test("printSymbolSignature renders lazy vals and vars (Scala 3)"):
     withCtx { ctx =>
       IO.blocking {
