@@ -327,9 +327,9 @@ object GetFormatterTest extends SequentialIOSuite:
         // CellarLeaf → CellarMid → CellarOuter
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarLeaf")
         val output = GetFormatter.formatSymbol(cls, groupInherited = true)
-        expect(output.contains("// Declared on CellarLeaf"), s"Expected declared section in:\n$output") and
-          expect(output.contains("// Inherited from CellarMid"), s"Expected CellarMid section in:\n$output") and
-          expect(output.contains("// Inherited from CellarOuter"), s"Expected CellarOuter section in:\n$output") and
+        expect(output.contains("// Declared on cellar.fixture.scala3.CellarLeaf\n"), s"Expected declared section in:\n$output") and
+          expect(output.contains("// Inherited from cellar.fixture.scala3.CellarMid\n"), s"Expected CellarMid section in:\n$output") and
+          expect(output.contains("// Inherited from cellar.fixture.scala3.CellarOuter\n"), s"Expected CellarOuter section in:\n$output") and
           expect(output.contains("leafMethod"), s"Expected leafMethod in:\n$output") and
           expect(output.contains("midMethod"), s"Expected midMethod in:\n$output")
       }
@@ -384,7 +384,7 @@ object GetFormatterTest extends SequentialIOSuite:
         val grouped  = GetFormatter.formatSymbol(cls, groupInherited = true)
         val flat     = GetFormatter.formatSymbol(cls)
         val companionOf = (out: String) => out.split("""\*\*Companion members:\*\*""")(1).takeWhile(_ != '#')
-        expect(companionOf(grouped).contains("// Declared on"), s"Expected section header in companion of:\n$grouped") and
+        expect(companionOf(grouped).contains("// Declared on cellar.fixture.scala3.CellarWithCompanion\n"), s"Expected section header in companion of:\n$grouped") and
           expect(!companionOf(flat).contains("// Declared on"), s"Unexpected section header in companion of:\n$flat")
       }
     }
