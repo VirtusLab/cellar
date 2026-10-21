@@ -17,7 +17,6 @@ object GetHandler:
       fqn: String,
       javaHome: Option[Path] = None,
       extraRepositories: Seq[Repository] = Seq.empty,
-      limit: Option[Int] = None,
       hideInherited: Boolean = false,
       groupInherited: Boolean = false,
       logger: Logger[IO] = StderrLogger.off
@@ -28,7 +27,7 @@ object GetHandler:
         jreClasspath <- javaHome.fold(JreClasspath.jrtPath())(JreClasspath.jrtPath)
         result   <- ContextResource.makeFromCoord(coord, jreClasspath, extraRepositories).use { (ctx, classpath, sourceJars) =>
           given Context = ctx
-          runCore(fqn, classpath, Some(coord), sourceJars, limit, hideInherited, groupInherited, logger)
+          runCore(fqn, classpath, Some(coord), sourceJars, hideInherited, groupInherited, logger)
         }
       yield result
 
@@ -39,7 +38,6 @@ object GetHandler:
       classpath: Classpath,
       coord: Option[MavenCoordinate],
       sourceJars: SourceJars,
-      limit: Option[Int] = None,
       hideInherited: Boolean = false,
       groupInherited: Boolean = false,
       logger: Logger[IO] = StderrLogger.off
@@ -52,7 +50,7 @@ object GetHandler:
           _         <- warnShadedDuplicate(fqn, classpath)
           docstring <- tastyDoc(fqn, symbols, jars, coord, sourceJars)
                          .map(_.orElse(symbols.headOption.flatMap(sourceDoc)))
-          formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols, docstring, limit, hideInherited, groupInherited))
+          formatted <- IO.blocking(GetFormatter.formatGetResult(fqn, symbols, docstring, hideInherited, groupInherited))
           _         <- Console[IO].println(formatted)
         yield ExitCode.Success
       case LookupResult.IsPackage =>
