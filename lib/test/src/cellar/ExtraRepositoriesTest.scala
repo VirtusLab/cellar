@@ -42,6 +42,16 @@ object ExtraRepositoriesTest extends SimpleIOSuite:
       bases(List("https://repo.example/maven"), List("https://repo.example/maven/", "https://other.example/maven"))
     )
 
+  pureTest("a duplicate carrying credentials wins over the configured one without"):
+    val withCredentials = MavenRepository("https://repo.example/maven", Some(coursier.core.Authentication("u", "p")))
+    expect.eql(
+      List(Some("u")),
+      ExtraRepositories.effective(List(MavenRepository("https://repo.example/maven")), List(withCredentials)).map {
+        case maven: MavenRepository => maven.authentication.flatMap(_.userOpt)
+        case _                      => None
+      }
+    )
+
   pureTest("no configured repositories leaves command-line values untouched"):
     expect.eql(List("https://cli.example/maven"), bases(Nil, List("https://cli.example/maven")))
 
