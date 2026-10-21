@@ -29,3 +29,5 @@ trait CellarHigherKinded:
   def refined: CellarBox[List] { type Elem = Int; def first: Int }
   def struct: { type A; def get: A }
   type Tupled[F[_]] = { type Ap[X, Y] = F[(X, Y)] }
+  def lift[F[_], G[_]](f: [X] => F[X] => G[X]): Int
+  def liftNamed(f: [X] => (fx: List[X], n: Int) => Option[X]): Int

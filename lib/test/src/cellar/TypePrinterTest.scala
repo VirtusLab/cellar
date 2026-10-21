@@ -422,6 +422,38 @@ object TypePrinterTest extends SequentialIOSuite:
       }
     }
 
+  test("printSymbolSignature prints a polymorphic function type as written"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "lift").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def lift[F[_], G[_]](f: [X] => F[X] => G[X]): Int", sig)
+      }
+    }
+
+  test("printSymbolSignature keeps a polymorphic function's parameter names"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "liftNamed").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def liftNamed(f: [X] => (fx: List[X], n: Int) => Option[X]): Int", sig)
+      }
+    }
+
   test("printSymbolSignature renders higher-kinded class type params (Scala 3)"):
     withCtx { ctx =>
       IO.blocking {
