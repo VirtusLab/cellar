@@ -125,8 +125,8 @@ object GetFormatter:
       }.toList
       if members.nonEmpty then
         val label =
-          if klass == cls then s"Declared on ${klass.name}"
-          else s"Inherited from ${klass.name}"
+          if klass == cls then s"Declared on ${displayFqn(klass)}"
+          else s"Inherited from ${displayFqn(klass)}"
         sections += ((label, members))
     }
     val all = sections.result()
