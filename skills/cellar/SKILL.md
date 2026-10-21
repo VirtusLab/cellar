@@ -97,24 +97,50 @@ cellar search --module lib flatMap
 
 `cellar get-external --hide-inherited org.typelevel:cats-core_3:2.10.0 cats.Monad`
 
-```markdown
+````markdown
 ## cats.Monad
-`trait Monad[F] extends FlatMap[F] with Applicative[F]`
-**Flags:** abstract
+```scala
+trait Monad[F[_]] extends FlatMap[F] with Applicative[F]
+```
+**Supertypes:** cats.Applicative, cats.InvariantMonoidal, cats.FlatMap, cats.FlatMapArityFunctions, cats.Apply, cats.ApplyArityFunctions, cats.InvariantSemigroupal, cats.Semigroupal, cats.Functor, cats.Invariant, java.io.Serializable
+
+Monad.
+Allows composition of dependent effectful functions.
+See: [[http://homepages.inf.ed.ac.uk/wadler/papers/marktoberdorf/baastad.pdf Monads for functional programming]]
+Must obey the laws defined in cats.laws.MonadLaws.
+
 **Origin:** cats.Monad
 **Members:**
-def iterateWhile[A](f: F[A]): (p: A => Boolean): F[A]
-def untilM[G, A](f: F[A]): (cond: => F[Boolean]): (G: Alternative[G]): F[G[A]]
-def whileM_[A](p: F[Boolean]): (body: => F[A]): F[Unit]
-def iterateUntil[A](f: F[A]): (p: A => Boolean): F[A]
-… (+ 7 more)
-**Companion members:**
-trait Ops[F, A]
-def apply[F](instance: Monad[F]): Monad[F]
-…
+```scala
+def iterateWhile[A](f: F[A])(p: A => Boolean): F[A]
+def untilM[G[_], A](f: F[A])(cond: => F[Boolean])(implicit G: Alternative[G]): F[G[A]]
+def ifElseM[A](branches: (F[Boolean], F[A])*)(els: F[A]): F[A]
+def iterateUntilM[A](init: A)(f: A => F[A])(p: A => Boolean): F[A]
+def map[A, B](fa: F[A])(f: A => B): F[B]
+def whileM_[A](p: F[Boolean])(body: => F[A]): F[Unit]
+def whileM[G[_], A](p: F[Boolean])(body: => F[A])(implicit G: Alternative[G]): F[G[A]]
+def untilM_[A](f: F[A])(cond: => F[Boolean]): F[Unit]
+def iterateUntil[A](f: F[A])(p: A => Boolean): F[A]
+def iterateWhileM[A](init: A)(f: A => F[A])(p: A => Boolean): F[A]
 ```
+**Companion members:**
+```scala
+trait Ops[F[_], A] extends Serializable
+object ops
+def apply[F[_]](implicit instance: Monad[F]): Monad[F]
+trait ToMonadOps extends Serializable
+object nonInheritedOps extends ToMonadOps
+trait AllOps[F[_], A] extends Ops[F, A] with FlatMap.AllOps[F, A] with Applicative.AllOps[F, A]
+```
+````
 
-Use `--hide-inherited` to get only own members. Without it, all inherited members are shown (can be large for deep hierarchies).
+`**Supertypes:**` lists every ancestor in linearization order, the order member lookup follows.
+
+### Choosing member output
+
+- Default: every member callable on the type, inherited ones included. Use it to find what you can call.
+- `--hide-inherited`: only what the type itself declares. Use it for what a subtype adds, or when the full output is too large.
+- `--group-inherited`: members under `// Declared on` / `// Inherited from` headers. Use it when you need the declaring parent, e.g. to read its docs or find what to override.
 
 ## When Metals MCP is also available
 
