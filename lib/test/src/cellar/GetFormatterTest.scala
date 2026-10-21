@@ -271,6 +271,27 @@ object GetFormatterTest extends SequentialIOSuite:
       }
     }
 
+  test("formatSymbol lists a nested object once, with its parents (Scala 3)"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarNestedObjects")
+        val output = GetFormatter.formatSymbol(cls)
+        val lines  = output.linesIterator.filter(_.contains("Plain")).toList
+        expect(clue(lines) == List("object Plain extends CellarNestedObjects"), s"Output:\n$output")
+      }
+    }
+
+  test("formatSymbol lists a nested object once (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val cls    = ctx.findStaticClass("cellar.fixture.scala2.CellarSources")
+        val output = GetFormatter.formatSymbol(cls)
+        expect(clue(output.linesIterator.count(_ == "object Lone")) == 1, s"Output:\n$output")
+      }
+    }
+
   test("formatSymbol lists a method with defaults once, without its default getters (Scala 3)"):
     withCtx { ctx =>
       IO.blocking {

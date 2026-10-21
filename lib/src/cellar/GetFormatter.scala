@@ -88,9 +88,9 @@ object GetFormatter:
       case cls: ClassSymbol =>
         // --hide-inherited silently wins over --group-inherited
         val syntax = TypePrinter.detectLanguage(cls)
-        if hideInherited then renderFlatMembers(cls.declarations.filter(PublicApiFilter.isPublic).toList, syntax)
+        if hideInherited then renderFlatMembers(cls.declarations.filter(PublicApiFilter.isListed).toList, syntax)
         else if groupInherited then renderGroupedMembers(cls)
-        else renderFlatMembers(SymbolResolver.collectClassMembers(cls).filter(PublicApiFilter.isPublic), syntax)
+        else renderFlatMembers(SymbolResolver.collectClassMembers(cls).filter(PublicApiFilter.isListed), syntax)
       case _ => None
 
   private def formatMember(m: TermOrTypeSymbol, syntax: DetectedLanguage)(using Context): String =
@@ -115,7 +115,7 @@ object GetFormatter:
         try klass.declarations
         catch case _: Exception => Nil
       val members = decls.flatMap {
-        case decl: TermOrTypeSymbol if PublicApiFilter.isPublic(decl) && !seen.contains(decl) =>
+        case decl: TermOrTypeSymbol if PublicApiFilter.isListed(decl) && !seen.contains(decl) =>
           val dominated = decl.overridingSymbol(cls).exists(_ != decl)
           if !dominated then
             seen += decl
@@ -140,7 +140,7 @@ object GetFormatter:
       case cls: ClassSymbol =>
         cls.companionClass.flatMap { companion =>
           if groupInherited then renderGroupedMembers(companion)
-          else renderFlatMembers(companion.declarations.filter(PublicApiFilter.isPublic).toList, TypePrinter.detectLanguage(companion))
+          else renderFlatMembers(companion.declarations.filter(PublicApiFilter.isListed).toList, TypePrinter.detectLanguage(companion))
         }
       case _ => None
 
