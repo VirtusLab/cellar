@@ -347,35 +347,6 @@ object GetFormatterTest extends SequentialIOSuite:
       }
     }
 
-  test("formatSymbol --limit caps member count and shows note"):
-    withCtx { ctx =>
-      IO.blocking {
-        given Context = ctx
-        val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarOverloaded")
-        val full   = GetFormatter.formatSymbol(cls)
-        val limited = GetFormatter.formatSymbol(cls, limit = Some(2))
-        // Full output has at least 3 process overloads + unique
-        val fullCount = full.linesIterator.count(l => l.contains("def process(") || l.contains("def unique"))
-        expect(fullCount >= 3, s"Expected >= 3 members in full, got $fullCount in:\n$full") and
-          // Limited output has exactly 2 member lines in the code block
-          expect(limited.contains("… "), s"Expected truncation note in: $limited") and
-          expect(limited.contains("more members"), s"Expected 'more members' in: $limited")
-      }
-    }
-
-  test("formatSymbol --limit caps companion members too"):
-    withCtx { ctx =>
-      IO.blocking {
-        given Context = ctx
-        val cls     = ctx.findStaticClass("cellar.fixture.scala3.CellarWithCompanion")
-        val full    = GetFormatter.formatSymbol(cls)
-        val limited = GetFormatter.formatSymbol(cls, limit = Some(1))
-        val companionOf = (out: String) => out.split("""\*\*Companion members:\*\*""")(1).takeWhile(_ != '#')
-        expect(companionOf(full).linesIterator.count(_.startsWith("def ")) >= 1, s"Expected companion members in:\n$full") and
-          expect(companionOf(limited).contains("more members"), s"Expected truncation note in companion section of:\n$limited")
-      }
-    }
-
   test("formatSymbol --group-inherited labels companion members by declaring type"):
     withCtx { ctx =>
       IO.blocking {

@@ -7,15 +7,14 @@ object GetFormatter:
   def formatSymbol(
       sym: Symbol,
       docstring: Option[String] = None,
-      limit: Option[Int] = None,
       hideInherited: Boolean = false,
       groupInherited: Boolean = false
   )(using ctx: Context): String =
     val fqn       = displayFqn(sym)
     val signature = TypePrinter.printSymbolSignature(sym)
     val origin    = renderOrigin(sym)
-    val members   = renderMembers(sym, limit, hideInherited, groupInherited)
-    val companion = renderCompanion(sym, limit, groupInherited && !hideInherited)
+    val members   = renderMembers(sym, hideInherited, groupInherited)
+    val companion = renderCompanion(sym, groupInherited && !hideInherited)
     val subtypes  = renderSubtypes(sym)
     val isJava    = TypePrinter.detectLanguage(sym) == DetectedLanguage.Java
     val fence     = if isJava then "java" else "scala"
@@ -38,12 +37,11 @@ object GetFormatter:
       @annotation.unused fqn: String,
       symbols: List[Symbol],
       docstring: Option[String] = None,
-      limit: Option[Int] = None,
       hideInherited: Boolean = false,
       groupInherited: Boolean = false
   )(using ctx: Context): String =
     dropRedundantCompanions(symbols).zipWithIndex.map { (sym, i) =>
-      formatSymbol(sym, if i == 0 then docstring else None, limit, hideInherited, groupInherited)
+      formatSymbol(sym, if i == 0 then docstring else None, hideInherited, groupInherited)
     }.mkString("\n\n---\n\n")
 
   /**
@@ -80,7 +78,6 @@ object GetFormatter:
 
   private def renderMembers(
       sym: Symbol,
-      limit: Option[Int],
       hideInherited: Boolean,
       groupInherited: Boolean
   )(using ctx: Context): Option[String] =
@@ -88,26 +85,22 @@ object GetFormatter:
       case cls: ClassSymbol =>
         // --hide-inherited silently wins over --group-inherited
         val syntax = TypePrinter.detectLanguage(cls)
-        if hideInherited then renderFlatMembers(cls.declarations.filter(PublicApiFilter.isPublic).toList, limit, syntax)
-        else if groupInherited then renderGroupedMembers(cls, limit)
-        else renderFlatMembers(SymbolResolver.collectClassMembers(cls).filter(PublicApiFilter.isPublic), limit, syntax)
+        if hideInherited then renderFlatMembers(cls.declarations.filter(PublicApiFilter.isPublic).toList, syntax)
+        else if groupInherited then renderGroupedMembers(cls)
+        else renderFlatMembers(SymbolResolver.collectClassMembers(cls).filter(PublicApiFilter.isPublic), syntax)
       case _ => None
 
   private def formatMember(m: TermOrTypeSymbol, syntax: DetectedLanguage)(using Context): String =
     TypePrinter.printSymbolSignatureSafe(m, syntax).linesIterator.mkString(" ").trim
 
-  private def renderFlatMembers(raw: List[TermOrTypeSymbol], limit: Option[Int], syntax: DetectedLanguage)(using
+  private def renderFlatMembers(raw: List[TermOrTypeSymbol], syntax: DetectedLanguage)(using
       Context
   ): Option[String] =
     val members = raw.map(formatMember(_, syntax))
     if members.isEmpty then None
-    else limit match
-      case Some(n) if members.length > n =>
-        Some(members.take(n).mkString("\n") + s"\n// … ${members.length - n} more members")
-      case _ =>
-        Some(members.mkString("\n"))
+    else Some(members.mkString("\n"))
 
-  private def renderGroupedMembers(cls: ClassSymbol, limit: Option[Int])(using ctx: Context): Option[String] =
+  private def renderGroupedMembers(cls: ClassSymbol)(using ctx: Context): Option[String] =
     val syntax = TypePrinter.detectLanguage(cls)
     val linearization =
       try cls.linearization
@@ -135,28 +128,16 @@ object GetFormatter:
     }
     val all = sections.result()
     if all.isEmpty then None
-    else
-      val totalMembers = all.map(_._2.length).sum
-      val needsTruncation = limit.exists(totalMembers > _)
-      val sb = new StringBuilder
-      var remaining = limit.getOrElse(Int.MaxValue)
-      for (header, members) <- all if remaining > 0 do
-        val take = members.take(remaining)
-        sb.append(s"// $header\n"): Unit
-        sb.append(take.mkString("\n")).append('\n'): Unit
-        remaining -= take.length
-      if needsTruncation then
-        sb.append(s"// … ${totalMembers - limit.get} more members\n"): Unit
-      Some(sb.toString.trim)
+    else Some(all.map((header, members) => s"// $header\n${members.mkString("\n")}").mkString("\n"))
 
-  private def renderCompanion(sym: Symbol, limit: Option[Int], groupInherited: Boolean)(using
+  private def renderCompanion(sym: Symbol, groupInherited: Boolean)(using
       ctx: Context
   ): Option[String] =
     sym match
       case cls: ClassSymbol =>
         cls.companionClass.flatMap { companion =>
-          if groupInherited then renderGroupedMembers(companion, limit)
-          else renderFlatMembers(companion.declarations.filter(PublicApiFilter.isPublic).toList, limit, TypePrinter.detectLanguage(companion))
+          if groupInherited then renderGroupedMembers(companion)
+          else renderFlatMembers(companion.declarations.filter(PublicApiFilter.isPublic).toList, TypePrinter.detectLanguage(companion))
         }
       case _ => None
 
