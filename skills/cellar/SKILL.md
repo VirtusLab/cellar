@@ -129,10 +129,8 @@ trait Ops[F[_], A] extends Serializable
 object ops
 def apply[F[_]](implicit instance: Monad[F]): Monad[F]
 trait ToMonadOps extends Serializable
-object ops
 object nonInheritedOps extends ToMonadOps
 trait AllOps[F[_], A] extends Ops[F, A] with FlatMap.AllOps[F, A] with Applicative.AllOps[F, A]
-object nonInheritedOps
 ```
 ````
 
