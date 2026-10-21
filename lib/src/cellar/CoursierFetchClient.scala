@@ -19,7 +19,7 @@ object CoursierFetchClient:
   )(using logger: Logger[IO] = StderrLogger.off): IO[Option[Path]] =
     logAttempt(coord, "fetching POM for", extraRepositories) *>
       IO.blocking {
-        Fetch(CoursierCache.instance)
+        Fetch()
           .addDependencies(coord.toCoursierDependency.copy(transitive = false))
           .addRepositories(extraRepositories*)
           .run()
@@ -58,7 +58,7 @@ object CoursierFetchClient:
     tracer.span("coursier.fetch").surround {
       logAttempt(coord, "resolving", extraRepositories) *>
         IO.blocking {
-          val files = Fetch(CoursierCache.instance)
+          val files = Fetch()
             .addDependencies(coord.toCoursierDependency)
             .addRepositories(extraRepositories*)
             .addClassifiers(Classifier.sources)

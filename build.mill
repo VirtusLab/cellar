@@ -205,6 +205,9 @@ object cli extends CellarPublishModule with NativeImageModule {
   //
   // GC-bound builds on 7 GB macOS runners outlast the default 10-minute deadlock watchdog.
   // Unsafe access is fixed at build time; otherwise every run warns about Scala's `LazyVals`.
+  // So is the JDK's list of auth schemes refused for HTTPS proxy tunnels, which makes the runtime
+  // opt-in in `JvmProperties` a no-op here; Basic must be allowed at build time for a proxy asking
+  // for credentials. Without a proxy user nothing answers the challenge either way.
   def nativeImageOptions = Seq(
     "--no-fallback",
     "--enable-url-protocols=http,https",
@@ -212,7 +215,8 @@ object cli extends CellarPublishModule with NativeImageModule {
     "-H:+UnlockExperimentalVMOptions",
     "-H:DeadlockWatchdogInterval=30",
     "-H:-UnlockExperimentalVMOptions",
-    "-J--sun-misc-unsafe-memory-access=allow"
+    "-J--sun-misc-unsafe-memory-access=allow",
+    "-Djdk.http.auth.tunneling.disabledSchemes="
   )
 
   def mvnDeps = Seq(

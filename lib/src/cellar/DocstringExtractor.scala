@@ -20,7 +20,7 @@ object DocstringExtractor:
     // yields "" and the fetch below asks for `scala3-library_3:` with no version at all.
     // Requires the Scala 3 stdlib (3.8+), where `library.properties` carries a 3.x version.
     val scalaVersion = scala.util.Properties.versionNumberString
-    coursier.Fetch(CoursierCache.instance)
+    coursier.Fetch()
       .addDependencies(MavenCoordinate("org.scala-lang", "scala3-library_3", scalaVersion).toCoursierDependency)
       .run()
       .map(file => Path.fromNioPath(file.toPath))

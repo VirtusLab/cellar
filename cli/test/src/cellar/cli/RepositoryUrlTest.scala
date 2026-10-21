@@ -50,8 +50,13 @@ object RepositoryUrlTest extends FunSuite:
         }
     )
 
-  test("never echoes a URL password in an error"):
-    reason("ftp://alice:s3cret@pkgs.example.com/maven") { message =>
-      expect(message.contains("ftp://alice:****@pkgs.example.com/maven"), message) and
-        expect(!message.contains("s3cret"), message)
-    }
+  test("never echoes URL credentials in an error, whatever characters they contain"):
+    def masked(raw: String, secret: String) =
+      reason(raw)(message => expect(message.contains("****@") && !message.contains(secret), message))
+    masked("ftp://alice:s3cret@pkgs.example.com/maven", "s3cret") and
+      masked("https://alice:ab/cd@pkgs.example.com/maven", "ab/cd") and
+      masked("https://alice:p@ss@pkgs.example.com/maven", "p@ss") and
+      masked("ftp://ghp_token@pkgs.example.com/maven", "ghp_token")
+
+  test("explains that credentials with URL delimiters cannot go in a URL"):
+    reason("https://alice:ab/cd@pkgs.example.com/maven")(message => expect(message.contains("COURSIER_CREDENTIALS"), message))

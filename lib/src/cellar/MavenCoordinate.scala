@@ -1,7 +1,7 @@
 package cellar
 
 import cats.effect.IO
-import coursier.{Dependency, Module, ModuleName, Organization, Repository, VersionConstraint, Versions}
+import coursier.{Dependency, Module, ModuleName, Organization, Repository, Resolve, VersionConstraint, Versions}
 
 final case class MavenCoordinate(group: String, artifact: String, version: String):
   def render: String = s"$group:$artifact:$version"
@@ -13,10 +13,28 @@ final case class MavenCoordinate(group: String, artifact: String, version: Strin
   def resolveLatest(extraRepos: Seq[Repository] = Seq.empty): IO[MavenCoordinate] =
     if version != "latest" then IO.pure(this)
     else IO.blocking {
-      val release = Versions(CoursierCache.instance).withModule(toCoursierModule).addRepositories(extraRepos*).run().release0.asString
-      if release.nonEmpty then copy(version = release)
-      else throw CellarError.CoordinateNotFound(this, new RuntimeException(s"No versions found for '$group:$artifact'"))
+      latestRelease(extraRepos).fold(
+        throw CellarError.CoordinateNotFound(this, new RuntimeException(s"No versions found for '$group:$artifact'"))
+      )(release => copy(version = release))
     }
+
+  /** The newest release of `group:artifact`, whatever `version` says; `None` when none is listed.
+    * Blocks while it queries the repositories.
+    */
+  def latestRelease(extraRepos: Seq[Repository]): Option[String] =
+    // `Versions` applies only coursier's own mirror files by default, `Resolve` also the scala-cli
+    // and Maven settings mirrors; a lookup that skips a mirror the fetch goes through fails behind
+    // a firewall.
+    Some(
+      Versions()
+        .noMirrors
+        .addMirrors(Resolve.defaultMirrors*)
+        .withModule(toCoursierModule)
+        .addRepositories(extraRepos*)
+        .run()
+        .release0
+        .asString
+    ).filter(_.nonEmpty)
 
 object MavenCoordinate:
   def parse(raw: String): Either[String, MavenCoordinate] =

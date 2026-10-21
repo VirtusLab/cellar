@@ -129,7 +129,7 @@ object CellarApp extends ProfilingIOApp:
       case Left(error) =>
         IO.blocking(System.err.println(error)).as(ExitCode.Error)
       case Right(properties) =>
-        IO(properties.foreach(sys.props.getOrElseUpdate(_, _))) *> runCommand(args)
+        JvmProperties.install(properties) *> runCommand(args)
 
   private def runCommand(args: List[String]): IO[ExitCode] =
     val versionOpt = Opts
