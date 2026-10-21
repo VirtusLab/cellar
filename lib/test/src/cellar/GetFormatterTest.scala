@@ -26,6 +26,23 @@ object GetFormatterTest extends SequentialIOSuite:
       }
     }
 
+  test("formatSymbol lists every supertype, the compiler-added ones too"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        def supertypes(cls: tastyquery.Symbols.ClassSymbol) =
+          GetFormatter.formatSymbol(cls).linesIterator.find(_.startsWith("**Supertypes:**"))
+        val caseClass = ctx.findStaticClass("cellar.fixture.scala3.CellarA")
+        val companion = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarA")
+        expect.eql(
+          Some("**Supertypes:** java.io.Serializable, scala.Product, scala.Equals, cellar.fixture.scala3.CellarADT"),
+          supertypes(caseClass)
+        ) and
+          expect.eql(Some("**Supertypes:** scala.deriving.Mirror.Product, scala.deriving.Mirror"), supertypes(companion)) and
+          expect.eql(None, supertypes(ctx.findStaticClass("cellar.fixture.scala3.CellarBox")))
+      }
+    }
+
   test("formatSymbol for sealed trait produces Known subtypes line"):
     withCtx { ctx =>
       IO.blocking {
@@ -348,9 +365,9 @@ object GetFormatterTest extends SequentialIOSuite:
         // CellarLeaf → CellarMid → CellarOuter
         val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarLeaf")
         val output = GetFormatter.formatSymbol(cls, groupInherited = true)
-        expect(output.contains("// Declared on CellarLeaf"), s"Expected declared section in:\n$output") and
-          expect(output.contains("// Inherited from CellarMid"), s"Expected CellarMid section in:\n$output") and
-          expect(output.contains("// Inherited from CellarOuter"), s"Expected CellarOuter section in:\n$output") and
+        expect(output.contains("// Declared on cellar.fixture.scala3.CellarLeaf\n"), s"Expected declared section in:\n$output") and
+          expect(output.contains("// Inherited from cellar.fixture.scala3.CellarMid\n"), s"Expected CellarMid section in:\n$output") and
+          expect(output.contains("// Inherited from cellar.fixture.scala3.CellarOuter\n"), s"Expected CellarOuter section in:\n$output") and
           expect(output.contains("leafMethod"), s"Expected leafMethod in:\n$output") and
           expect(output.contains("midMethod"), s"Expected midMethod in:\n$output")
       }
@@ -368,35 +385,6 @@ object GetFormatterTest extends SequentialIOSuite:
       }
     }
 
-  test("formatSymbol --limit caps member count and shows note"):
-    withCtx { ctx =>
-      IO.blocking {
-        given Context = ctx
-        val cls    = ctx.findStaticClass("cellar.fixture.scala3.CellarOverloaded")
-        val full   = GetFormatter.formatSymbol(cls)
-        val limited = GetFormatter.formatSymbol(cls, limit = Some(2))
-        // Full output has at least 3 process overloads + unique
-        val fullCount = full.linesIterator.count(l => l.contains("def process(") || l.contains("def unique"))
-        expect(fullCount >= 3, s"Expected >= 3 members in full, got $fullCount in:\n$full") and
-          // Limited output has exactly 2 member lines in the code block
-          expect(limited.contains("… "), s"Expected truncation note in: $limited") and
-          expect(limited.contains("more members"), s"Expected 'more members' in: $limited")
-      }
-    }
-
-  test("formatSymbol --limit caps companion members too"):
-    withCtx { ctx =>
-      IO.blocking {
-        given Context = ctx
-        val cls     = ctx.findStaticClass("cellar.fixture.scala3.CellarWithCompanion")
-        val full    = GetFormatter.formatSymbol(cls)
-        val limited = GetFormatter.formatSymbol(cls, limit = Some(1))
-        val companionOf = (out: String) => out.split("""\*\*Companion members:\*\*""")(1).takeWhile(_ != '#')
-        expect(companionOf(full).linesIterator.count(_.startsWith("def ")) >= 1, s"Expected companion members in:\n$full") and
-          expect(companionOf(limited).contains("more members"), s"Expected truncation note in companion section of:\n$limited")
-      }
-    }
-
   test("formatSymbol --group-inherited labels companion members by declaring type"):
     withCtx { ctx =>
       IO.blocking {
@@ -405,7 +393,7 @@ object GetFormatterTest extends SequentialIOSuite:
         val grouped  = GetFormatter.formatSymbol(cls, groupInherited = true)
         val flat     = GetFormatter.formatSymbol(cls)
         val companionOf = (out: String) => out.split("""\*\*Companion members:\*\*""")(1).takeWhile(_ != '#')
-        expect(companionOf(grouped).contains("// Declared on"), s"Expected section header in companion of:\n$grouped") and
+        expect(companionOf(grouped).contains("// Declared on cellar.fixture.scala3.CellarWithCompanion\n"), s"Expected section header in companion of:\n$grouped") and
           expect(!companionOf(flat).contains("// Declared on"), s"Unexpected section header in companion of:\n$flat")
       }
     }
@@ -469,5 +457,41 @@ object GetFormatterTest extends SequentialIOSuite:
             expect(output.contains("## myapp.Hello.fromInt"), s"Expected '## myapp.Hello.fromInt' heading in:\n$output") and
             expect(output.contains("**Origin:** myapp.Hello"), s"Expected origin 'myapp.Hello' in:\n$output")
         case other => failure(s"Expected Found, got $other")
+      }
+    }
+
+  test("formatSymbol puts Supertypes right below the signature, apart from the docstring"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val output = GetFormatter.formatSymbol(ctx.findStaticClass("cellar.fixture.scala3.CellarA"), docstring = Some("A case."))
+        expect(
+          output.contains(
+            "```\n**Supertypes:** java.io.Serializable, scala.Product, scala.Equals, cellar.fixture.scala3.CellarADT\n\nA case."
+          ),
+          s"Expected Supertypes between signature and docstring in:\n$output"
+        )
+      }
+    }
+
+  test("formatSymbol lists the parents scalac adds to a case class's companion (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val output = GetFormatter.formatSymbol(ctx.findStaticModuleClass("cellar.fixture.scala2.CellarADT.CellarAB"))
+        expect(
+          output.contains("**Supertypes:** java.io.Serializable, scala.runtime.AbstractFunction1, scala.Function1\n"),
+          s"Expected compiler-added parents in:\n$output"
+        )
+      }
+    }
+
+  test("formatSymbol lists a Java class's interfaces as supertypes, without Matchable"):
+    withJavaCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val output = GetFormatter.formatSymbol(ctx.findStaticClass("cellar.fixture.java.CellarJavaClass"))
+        expect(output.contains("**Supertypes:** cellar.fixture.java.CellarJavaInterface\n"), s"Output:\n$output") and
+          expect(!output.contains("Matchable"), s"Output:\n$output")
       }
     }

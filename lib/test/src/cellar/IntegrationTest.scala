@@ -38,6 +38,26 @@ object IntegrationTest extends SequentialIOSuite:
             )
         }
 
+  test("get: Scala3 case class prints its supertypes"):
+    val console = CapturingConsole()
+    given Console[IO] = console
+    TestFixtures.assumeFixturesAvailable *>
+      handlers.GetHandler
+        .run(
+          TestFixtures.scala3Coord,
+          "cellar.fixture.scala3.CellarA",
+          extraRepositories = Seq(TestFixtures.localM2Repo)
+        )
+        .map { code =>
+          expect(clue(code) == ExitCode.Success) and
+            expect(
+              console.outBuf.toString.contains(
+                "**Supertypes:** java.io.Serializable, scala.Product, scala.Equals, cellar.fixture.scala3.CellarADT"
+              ),
+              s"Output: ${console.outBuf}"
+            )
+        }
+
   test("get: Scala3 case class CellarA exits 0 with output"):
     val console = CapturingConsole()
     given Console[IO] = console

@@ -61,17 +61,22 @@ if [[ -n "$REPO_URL" ]]; then
   S3_MEMBER=CellarA
   S3_SEARCH=CellarADT
   S3_META='Cellar Scala 3 test fixture'
+  S3_SUPER_FQN=cellar.fixture.scala3.CellarA
+  S3_SUPER=cellar.fixture.scala3.CellarADT
   S2_COORD=cellar.test:cellar-fixture-scala2_2.13:0.1.0-SNAPSHOT
   S2_PKG=cellar.fixture.scala2
   S2_FQN=cellar.fixture.scala2.CellarTypeClass
   S2_SIG='trait CellarTypeClass[A]'
   S2_SEARCH=TypeClass
+  S2_SUPER_FQN=cellar.fixture.scala2.CellarADT.CellarAB
+  S2_SUPER=cellar.fixture.scala2.CellarADT
   J_COORD=cellar.test:cellar-fixture-java:0.1.0-SNAPSHOT
   J_PKG=cellar.fixture.java
   J_FQN=cellar.fixture.java.CellarJavaClass
   J_SIG='class CellarJavaClass'
   J_MEMBER=getDefault
   J_SEARCH=JavaEnum
+  J_SUPER=cellar.fixture.java.CellarJavaInterface
 else
   REPO_FLAGS=""
   S3_COORD=org.typelevel:cats-effect_3:3.6.1
@@ -81,17 +86,22 @@ else
   S3_MEMBER=flatMap
   S3_SEARCH=IOApp
   S3_META='cats-effect'
+  S3_SUPER_FQN=cats.effect.IO
+  S3_SUPER=cats.effect.IOPlatform
   S2_COORD=org.typelevel:cats-core_2.13:2.13.0
   S2_PKG=cats
   S2_FQN=cats.Monad
   S2_SIG='trait Monad[F[_]]'
   S2_SEARCH=Monad
+  S2_SUPER_FQN=cats.Monad
+  S2_SUPER=cats.Applicative
   J_COORD=com.google.guava:guava:33.4.0-jre
   J_PKG=com.google.common.collect
   J_FQN=com.google.common.collect.ImmutableSet
   J_SIG='class ImmutableSet'
   J_MEMBER=of
   J_SEARCH=ImmutableList
+  J_SUPER=com.google.common.collect.ImmutableCollection
 fi
 
 WORK="$(mktemp -d)"
@@ -115,6 +125,12 @@ run s3-get.md get-external $REPO_FLAGS "$S3_COORD" "$S3_FQN"
 assert_contains s3-get.md "## $S3_FQN"
 assert_contains s3-get.md "$S3_DOC"
 assert_clean s3-get.md
+
+step "get-external Scala 3: $S3_SUPER_FQN (supertypes)"
+run s3-super.md get-external $REPO_FLAGS "$S3_COORD" "$S3_SUPER_FQN"
+assert_contains s3-super.md '**Supertypes:** '
+assert_contains s3-super.md "$S3_SUPER"
+assert_clean s3-super.md
 
 step "list-external Scala 3: $S3_PKG"
 run s3-list.md list-external $REPO_FLAGS "$S3_COORD" "$S3_PKG"
@@ -152,6 +168,12 @@ run s2-get.md get-external $REPO_FLAGS "$S2_COORD" "$S2_FQN"
 assert_contains s2-get.md "$S2_SIG"
 assert_clean s2-get.md
 
+step "get-external Scala 2: $S2_SUPER_FQN (supertypes)"
+run s2-super.md get-external $REPO_FLAGS "$S2_COORD" "$S2_SUPER_FQN"
+assert_contains s2-super.md '**Supertypes:** '
+assert_contains s2-super.md "$S2_SUPER"
+assert_clean s2-super.md
+
 step "list-external Scala 2: $S2_PKG"
 run s2-list.md list-external $REPO_FLAGS "$S2_COORD" "$S2_PKG"
 assert_contains s2-list.md "${S2_FQN##*.}"
@@ -175,6 +197,8 @@ step "get-external Java: $J_FQN"
 run j-get.md get-external $REPO_FLAGS "$J_COORD" "$J_FQN"
 assert_contains j-get.md "$J_SIG"
 assert_contains j-get.md "$J_MEMBER"
+assert_contains j-get.md '**Supertypes:** '
+assert_contains j-get.md "$J_SUPER"
 assert_clean j-get.md
 
 step "list-external Java: $J_PKG"

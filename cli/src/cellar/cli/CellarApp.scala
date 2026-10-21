@@ -177,11 +177,6 @@ object CellarApp extends ProfilingIOApp:
       .option[Int]("limit", "Maximum number of results to return", short = "l", metavar = "N")
       .withDefault(50)
 
-  private val memberLimitOpt: Opts[Option[Int]] =
-    Opts
-      .option[Int]("limit", "Maximum number of members to display", short = "l", metavar = "N")
-      .orNone
-
   private val moduleOpt: Opts[Option[String]] =
     Opts.option[String]("module", "Build module name (required for Mill/sbt)", short = "m", metavar = "name").orNone
 
@@ -217,10 +212,10 @@ object CellarApp extends ProfilingIOApp:
 
   private val getSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("get", "Fetch symbol info from the current project") {
-      (symbolArg, moduleOpt, memberLimitOpt, hideInheritedOpt, groupInheritedOpt, javaHomeOpt, noCacheOpt, testScopeOpt, extraReposOpt, loggerOpt).mapN {
-        (fqn, module, limit, hideInherited, groupInherited, javaHome, noCache, testScope, extraRepos, logger) =>
+      (symbolArg, moduleOpt, hideInheritedOpt, groupInheritedOpt, javaHomeOpt, noCacheOpt, testScopeOpt, extraReposOpt, loggerOpt).mapN {
+        (fqn, module, hideInherited, groupInherited, javaHome, noCache, testScope, extraRepos, logger) =>
           traced("get") {
-            ProjectGetHandler.run(fqn, module, javaHome, noCache, limit, hideInherited, groupInherited, testScope = testScope, extraRepositories = extraRepos, logger = logger)
+            ProjectGetHandler.run(fqn, module, javaHome, noCache, hideInherited, groupInherited, testScope = testScope, extraRepositories = extraRepos, logger = logger)
           }
       }
     }
@@ -247,13 +242,13 @@ object CellarApp extends ProfilingIOApp:
 
   private val getExternalSubcmd: Opts[IO[ExitCode]] =
     Opts.subcommand("get-external", "Fetch symbol info from a Maven coordinate") {
-      (coordArg, symbolArg, memberLimitOpt, hideInheritedOpt, groupInheritedOpt, javaHomeOpt, extraReposOpt, loggerOpt).mapN {
-        (rawCoord, fqn, limit, hideInherited, groupInherited, javaHome, extraRepos, logger) =>
+      (coordArg, symbolArg, hideInheritedOpt, groupInheritedOpt, javaHomeOpt, extraReposOpt, loggerOpt).mapN {
+        (rawCoord, fqn, hideInherited, groupInherited, javaHome, extraRepos, logger) =>
           traced("get-external") {
             parseAndResolve(rawCoord, extraRepos).flatMap {
               case Left(err)    => IO.blocking(System.err.println(err)).as(ExitCode.Error)
               case Right(coord) =>
-                GetHandler.run(coord, fqn, javaHome, extraRepos, limit, hideInherited, groupInherited, logger)
+                GetHandler.run(coord, fqn, javaHome, extraRepos, hideInherited, groupInherited, logger)
             }
           }
       }
