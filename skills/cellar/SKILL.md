@@ -32,8 +32,7 @@ Query the current project's code and all its dependencies. Cellar auto-detects t
 - `--test`: query the test-scope classpath (sbt/scala-cli; for Mill, use the test module directly, e.g. `--module foo.test`)
 - `--no-cache`: skip classpath cache, re-extract from build tool
 - `--java-home <path>`: override JRE classpath
-- `-l`, `--limit <N>`: max results for `list`/`search` (default: 50). On `get` it truncates members with no way
-  to page; prefer `--hide-inherited` to shrink output
+- `-l`, `--limit <N>`: max results for `list`/`search` (default: 50), max members for `get`
 - `--hide-inherited`: show only members declared on the type itself (`get` commands)
 - `--group-inherited`: group members by declaring type with section headers (`get` commands)
 - `-v`, `--verbose` / `--debug`: diagnostics to stderr. Use when a symbol you expect is reported as
@@ -96,7 +95,7 @@ cellar search --module lib flatMap
 
 ## Example output
 
-`cellar get-external --hide-inherited -l 4 org.typelevel:cats-core_3:2.10.0 cats.Monad`
+`cellar get-external --hide-inherited org.typelevel:cats-core_3:2.10.0 cats.Monad`
 
 ````markdown
 ## cats.Monad
@@ -115,7 +114,12 @@ def iterateWhile[A](f: F[A])(p: A => Boolean): F[A]
 def untilM[G[_], A](f: F[A])(cond: => F[Boolean])(implicit G: Alternative[G]): F[G[A]]
 def ifElseM[A](branches: (F[Boolean], F[A])*)(els: F[A]): F[A]
 def iterateUntilM[A](init: A)(f: A => F[A])(p: A => Boolean): F[A]
-// … 6 more members
+def map[A, B](fa: F[A])(f: A => B): F[B]
+def whileM_[A](p: F[Boolean])(body: => F[A]): F[Unit]
+def whileM[G[_], A](p: F[Boolean])(body: => F[A])(implicit G: Alternative[G]): F[G[A]]
+def untilM_[A](f: F[A])(cond: => F[Boolean]): F[Unit]
+def iterateUntil[A](f: F[A])(p: A => Boolean): F[A]
+def iterateWhileM[A](init: A)(f: A => F[A])(p: A => Boolean): F[A]
 ```
 **Companion members:**
 ```scala
@@ -123,7 +127,10 @@ trait Ops[F[_], A] extends Serializable
 object ops
 def apply[F[_]](implicit instance: Monad[F]): Monad[F]
 trait ToMonadOps extends Serializable
-// … 4 more members
+object ops
+object nonInheritedOps extends ToMonadOps
+trait AllOps[F[_], A] extends Ops[F, A] with FlatMap.AllOps[F, A] with Applicative.AllOps[F, A]
+object nonInheritedOps
 ```
 ````
 
