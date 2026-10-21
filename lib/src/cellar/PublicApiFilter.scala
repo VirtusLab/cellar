@@ -6,6 +6,10 @@ object PublicApiFilter:
   def isPublic(sym: Symbol): Boolean =
     !isPrivateSym(sym) && !isSyntheticSym(sym)
 
+  /** [[isPublic]], listing each `object` once. Resolution still needs the value half. */
+  def isListed(sym: Symbol): Boolean =
+    isPublic(sym) && !isObjectValue(sym)
+
   private def isPrivateSym(sym: Symbol): Boolean =
     sym match
       case s: (ClassSymbol | TermSymbol | TypeSymbol) => s.isPrivate || isJavaPackagePrivate(s)
@@ -30,6 +34,15 @@ object PublicApiFilter:
       case c: ClassSymbol => c.isModuleClass
       case t: TermSymbol  => t.isModuleVal
       case _              => false)
+
+  /** The value half of an `object`, listed beside its module class, which carries the parents.
+   *  Mirrors scaladoc's `SyntheticSupport.isSyntheticField`. A given or implicit object keeps
+   *  it: the modifier lives only on the value (dotty's `Flags.RetainedModuleClassFlags`).
+   */
+  private def isObjectValue(sym: Symbol): Boolean =
+    sym match
+      case t: TermSymbol => t.isModuleVal && !t.isGivenOrUsing && !t.isImplicit
+      case _             => false
 
   /** Scala 2 pickles flag default getters synthetic; TASTy does not, so they surface by name.
    *  The default is already shown as `= ...` on the parameter itself.

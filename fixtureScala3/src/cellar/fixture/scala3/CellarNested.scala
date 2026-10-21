@@ -24,3 +24,12 @@ object CellarWithCompanion:
 
   trait CompanionNested:
     def nestedMethod: String
+
+/** Fixture for objects nested in a companion. */
+trait CellarNestedObjects
+
+object CellarNestedObjects:
+  object Plain extends CellarNestedObjects
+
+  given CellarTC[Boolean] with
+    def render(b: Boolean): String = b.toString

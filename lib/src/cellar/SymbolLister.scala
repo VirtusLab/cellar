@@ -36,10 +36,10 @@ object SymbolLister:
         Stream
           .eval(IO.blocking(pkg.declarations))
           .flatMap(decls => Stream.emits(decls))
-          .evalFilter(sym => IO.blocking(PublicApiFilter.isPublic(sym)))
+          .evalFilter(sym => IO.blocking(PublicApiFilter.isListed(sym)))
 
       case ListTarget.Cls(cls) =>
         Stream
           .eval(IO.blocking(SymbolResolver.collectClassMembers(cls)))
           .flatMap(syms => Stream.emits(syms))
-          .evalFilter(sym => IO.blocking(PublicApiFilter.isPublic(sym)))
+          .evalFilter(sym => IO.blocking(PublicApiFilter.isListed(sym)))
