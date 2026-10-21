@@ -358,6 +358,70 @@ object TypePrinterTest extends SequentialIOSuite:
       }
     }
 
+  test("printSymbolSignature keeps a refinement's members"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "refined").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def refined: CellarBox[List] { type Elem = Int; def first: Int }", sig)
+      }
+    }
+
+  test("printSymbolSignature prints a refinement member naming a sibling by its name (Scala 3)"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "struct").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def struct: { type A; def get: A }", sig)
+      }
+    }
+
+  test("printSymbolSignature prints a refinement of Object without the Object"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "Tupled").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("type Tupled[F[_]] = { type Ap[X, Y] = F[(X, Y)] }", sig)
+      }
+    }
+
+  test("printSymbolSignature prints a refinement member naming a sibling by its name (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala2.CellarHigherKinded").declarations
+          .find(_.name.toString == "struct").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def struct: { type A; def get: A }", sig)
+      }
+    }
+
   test("printSymbolSignature renders higher-kinded class type params (Scala 3)"):
     withCtx { ctx =>
       IO.blocking {

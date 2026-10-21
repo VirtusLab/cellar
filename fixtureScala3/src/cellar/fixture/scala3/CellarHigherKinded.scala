@@ -26,3 +26,6 @@ trait CellarHigherKinded:
   def selfBounded[F[A <: Comparable[A]]](fa: F[String]): F[String]
   def bimap[G[_, _], A, B](g: G[A, B]): G[A, B]
   def widen[F2[x] >: List[x]](fa: F2[Int]): F2[Int]
+  def refined: CellarBox[List] { type Elem = Int; def first: Int }
+  def struct: { type A; def get: A }
+  type Tupled[F[_]] = { type Ap[X, Y] = F[(X, Y)] }

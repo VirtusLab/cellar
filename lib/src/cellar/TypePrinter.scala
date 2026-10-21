@@ -39,6 +39,9 @@ object TypePrinter:
         t.prefix match
           case NoPrefix                          => name
           case _: ThisType                       => name
+          // A refinement member naming a sibling, `{ type A; def get: A }`, refers to it through
+          // the refinement's own `this` (dotty's `TypeAssigner` closes it over as a `RecThis`).
+          case _: RecThis                        => name
           case p: Type if isElidedPrefix(p)      => name
           case p: Type                           => s"${printType(p)}.$name"
           case _                                 => name
@@ -71,8 +74,10 @@ object TypePrinter:
       case t: TermParamRef   => t.binder.paramNames(t.paramNum).toString
       case t: TypeParamRef   => printTypeParamName(t.binder.paramNames(t.paramNum))
       case t: RepeatedType   => s"${printType(t.elemType)}*"
-      case t: TypeRefinement => printType(t.parent)
-      case t: TermRefinement => printType(t.parent)
+      case t: (TypeRefinement | TermRefinement) =>
+        val (base, members) = refinements(t)
+        val body = s"{ ${members.mkString("; ")} }"
+        if isOmittedRefinementParent(base) then body else s"${printType(base)} $body"
       case t: RecType        => printType(t.parent)
       case t: ConstantType   => t.value.value.toString
       case t: MatchType      => s"${printType(t.scrutinee)} match { ... }"
@@ -285,6 +290,32 @@ object TypePrinter:
         }
         Option.when(passesThrough)(printType(app.tycon))
       case _ => None
+
+  /** The refined type and its members, outermost refinement last as it is declared last. */
+  private def refinements(tpe: Type)(using Context): (Type, List[String]) =
+    tpe match
+      case t: TypeRefinement =>
+        val (base, members) = refinements(t.parent)
+        val member = t.refinedBounds match
+          case alias: TypeAlias => s"type ${t.refinedName}${printAliasRhs(alias.alias)}"
+          case bounds           => s"type ${printTypeParam(t.refinedName, bounds)}"
+        (base, members :+ member)
+      case t: TermRefinement =>
+        val (base, members) = refinements(t.parent)
+        val member = t.refinedType match
+          case tpe: Type if t.isStable => s"val ${t.refinedName}: ${printType(tpe)}"
+          case tpe: Type               => s"def ${t.refinedName}: ${printType(tpe)}"
+          case methodic                => s"def ${t.refinedName}${printMethodic(methodic)}"
+        (base, members :+ member)
+      case other => (other, Nil)
+
+  /** `{ type A }` has no parent in source: dotty's `Typer.typedRefinedTypeTree` fills it with
+   *  `Object`, scalac with `AnyRef`.
+   */
+  private def isOmittedRefinementParent(tpe: Type)(using Context): Boolean =
+    tpe.dealias match
+      case ref: TypeRef => ref.optSymbol.contains(defn.ObjectClass)
+      case _            => false
 
   /** TASTy stores `type F[A] = G[A]` and `type F = [A] =>> G[A]` alike; as dotty's
    *  `PlainPrinter.decomposeLambdas` does, a lambda's parameters print as the alias's own.
