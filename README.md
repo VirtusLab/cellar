@@ -146,7 +146,7 @@ cellar deps <coordinate>
 
 | Command | Description |
 |---|---|
-| `get` | Symbol info from the current project (signature, flags, members, docs) |
+| `get` | Symbol info from the current project (signature, supertypes, flags, members, docs) |
 | `get-external` | Symbol info from a Maven coordinate |
 | `get-source` | Source code from the `-sources.jar` of the artifact defining the symbol, including transitive dependencies |
 | `list` | List public symbols in a package/class from the current project |
@@ -415,6 +415,8 @@ profiling {
     ```scala
     trait Monad[F] extends FlatMap[F] with Applicative[F]
     ```
+    **Supertypes:** cats.Applicative, cats.InvariantMonoidal, cats.FlatMap, cats.FlatMapArityFunctions, cats.Apply, cats.ApplyArityFunctions, cats.InvariantSemigroupal, cats.Semigroupal, cats.Functor, cats.Invariant, java.io.Serializable
+
     Monad.
     Allows composition of dependent effectful functions.
 

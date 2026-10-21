@@ -16,6 +16,7 @@ object GetFormatter:
     val members   = renderMembers(sym, hideInherited, groupInherited)
     val companion = renderCompanion(sym, groupInherited && !hideInherited)
     val subtypes  = renderSubtypes(sym)
+    val supertypes = renderSupertypes(sym)
     val isJava    = TypePrinter.detectLanguage(sym) == DetectedLanguage.Java
     val fence     = if isJava then "java" else "scala"
     // Java statics are what tasty-query models as the companion's members.
@@ -24,6 +25,8 @@ object GetFormatter:
     val sb = new StringBuilder
     sb.append(s"## $fqn\n")
     sb.append(s"```$fence\n$signature\n```\n")
+    // A blank line, so the docstring after it is a paragraph of its own.
+    supertypes.foreach(s => sb.append(s"**Supertypes:** $s\n\n"))
     docstring.map(cleanDocstring).filter(_.nonEmpty).foreach { doc =>
       sb.append(s"$doc\n\n")
     }
@@ -139,6 +142,21 @@ object GetFormatter:
           if groupInherited then renderGroupedMembers(companion)
           else renderFlatMembers(companion.declarations.filter(PublicApiFilter.isPublic).toList, TypePrinter.detectLanguage(companion))
         }
+      case _ => None
+
+  /** Every class `sym` inherits from, nearest first, including the parents its signature leaves
+   *  out because no declaration names them.
+   */
+  private def renderSupertypes(sym: Symbol)(using ctx: Context): Option[String] =
+    sym match
+      case cls: ClassSymbol =>
+        val supers =
+          try cls.linearization.drop(1)
+          catch case _: Exception => Nil
+        // tasty-query puts `Matchable` in every linearization, a Java class's too.
+        val shown = supers.filterNot(k =>
+          SymbolResolver.universalBaseClasses.contains(k.displayFullName) || k.displayFullName == "scala.Matchable")
+        Option.when(shown.nonEmpty)(shown.map(displayFqn).mkString(", "))
       case _ => None
 
   private def renderSubtypes(sym: Symbol)(using ctx: Context): Option[String] =

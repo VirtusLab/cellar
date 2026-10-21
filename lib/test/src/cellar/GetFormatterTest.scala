@@ -26,6 +26,23 @@ object GetFormatterTest extends SequentialIOSuite:
       }
     }
 
+  test("formatSymbol lists every supertype, the compiler-added ones too"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        def supertypes(cls: tastyquery.Symbols.ClassSymbol) =
+          GetFormatter.formatSymbol(cls).linesIterator.find(_.startsWith("**Supertypes:**"))
+        val caseClass = ctx.findStaticClass("cellar.fixture.scala3.CellarA")
+        val companion = ctx.findStaticModuleClass("cellar.fixture.scala3.CellarA")
+        expect.eql(
+          Some("**Supertypes:** java.io.Serializable, scala.Product, scala.Equals, cellar.fixture.scala3.CellarADT"),
+          supertypes(caseClass)
+        ) and
+          expect.eql(Some("**Supertypes:** scala.deriving.Mirror.Product, scala.deriving.Mirror"), supertypes(companion)) and
+          expect.eql(None, supertypes(ctx.findStaticClass("cellar.fixture.scala3.CellarBox")))
+      }
+    }
+
   test("formatSymbol for sealed trait produces Known subtypes line"):
     withCtx { ctx =>
       IO.blocking {
@@ -419,5 +436,41 @@ object GetFormatterTest extends SequentialIOSuite:
             expect(output.contains("## myapp.Hello.fromInt"), s"Expected '## myapp.Hello.fromInt' heading in:\n$output") and
             expect(output.contains("**Origin:** myapp.Hello"), s"Expected origin 'myapp.Hello' in:\n$output")
         case other => failure(s"Expected Found, got $other")
+      }
+    }
+
+  test("formatSymbol puts Supertypes right below the signature, apart from the docstring"):
+    withCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val output = GetFormatter.formatSymbol(ctx.findStaticClass("cellar.fixture.scala3.CellarA"), docstring = Some("A case."))
+        expect(
+          output.contains(
+            "```\n**Supertypes:** java.io.Serializable, scala.Product, scala.Equals, cellar.fixture.scala3.CellarADT\n\nA case."
+          ),
+          s"Expected Supertypes between signature and docstring in:\n$output"
+        )
+      }
+    }
+
+  test("formatSymbol lists the parents scalac adds to a case class's companion (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val output = GetFormatter.formatSymbol(ctx.findStaticModuleClass("cellar.fixture.scala2.CellarADT.CellarAB"))
+        expect(
+          output.contains("**Supertypes:** java.io.Serializable, scala.runtime.AbstractFunction1, scala.Function1\n"),
+          s"Expected compiler-added parents in:\n$output"
+        )
+      }
+    }
+
+  test("formatSymbol lists a Java class's interfaces as supertypes, without Matchable"):
+    withJavaCtx { ctx =>
+      IO.blocking {
+        given Context = ctx
+        val output = GetFormatter.formatSymbol(ctx.findStaticClass("cellar.fixture.java.CellarJavaClass"))
+        expect(output.contains("**Supertypes:** cellar.fixture.java.CellarJavaInterface\n"), s"Output:\n$output") and
+          expect(!output.contains("Matchable"), s"Output:\n$output")
       }
     }
