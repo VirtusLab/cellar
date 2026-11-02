@@ -26,3 +26,15 @@ trait CellarHigherKinded:
   def selfBounded[F[A <: Comparable[A]]](fa: F[String]): F[String]
   def bimap[G[_, _], A, B](g: G[A, B]): G[A, B]
   def widen[F2[x] >: List[x]](fa: F2[Int]): F2[Int]
+  def refined: CellarBox[List] { type Elem = Int; def first: Int }
+  def struct: { type A; def get: A }
+  type Tupled[F[_]] = { type Ap[X, Y] = F[(X, Y)] }
+  def lift[F[_], G[_]](f: [X] => F[X] => G[X]): Int
+  def liftNamed(f: [X] => (fx: List[X], n: Int) => Option[X]): Int
+  def refinedAnd: (CellarBox[List] & CellarBox[Option]) { type T }
+  def refinedFunction: (Int => Int) { type T }
+  def liftHigher(f: ([X] => List[X] => Option[X]) => Int): Int
+  def andPoly: CellarBox[List] & ([X] => X => X)
+  def applyVal: Function0[Int] { val apply: Int }
+  def liftBounded(f: [X: Ordering] => X => X): Int
+  def liftContextual(f: [X] => X ?=> X): Int

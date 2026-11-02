@@ -358,6 +358,230 @@ object TypePrinterTest extends SequentialIOSuite:
       }
     }
 
+  test("printSymbolSignature keeps a refinement's members"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "refined").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def refined: CellarBox[List] { type Elem = Int; def first: Int }", sig)
+      }
+    }
+
+  test("printSymbolSignature prints a refinement member naming a sibling by its name (Scala 3)"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "struct").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def struct: { type A; def get: A }", sig)
+      }
+    }
+
+  test("printSymbolSignature prints a refinement of Object without the Object"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "Tupled").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("type Tupled[F[_]] = { type Ap[X, Y] = F[(X, Y)] }", sig)
+      }
+    }
+
+  test("printSymbolSignature prints a refinement member naming a sibling by its name (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala2.CellarHigherKinded").declarations
+          .find(_.name.toString == "struct").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def struct: { type A; def get: A }", sig)
+      }
+    }
+
+  test("printSymbolSignature prints a polymorphic function type as written"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "lift").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def lift[F[_], G[_]](f: [X] => F[X] => G[X]): Int", sig)
+      }
+    }
+
+  test("printSymbolSignature keeps a polymorphic function's parameter names"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "liftNamed").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def liftNamed(f: [X] => (fx: List[X], n: Int) => Option[X]): Int", sig)
+      }
+    }
+
+  test("printSymbolSignature parenthesises an intersection before a refinement (Scala 3)"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "refinedAnd").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def refinedAnd: (CellarBox[List] & CellarBox[Option]) { type T }", sig)
+      }
+    }
+
+  test("printSymbolSignature parenthesises an intersection before a refinement (Scala 2)"):
+    withScala2Ctx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala2.CellarHigherKinded").declarations
+          .find(_.name.toString == "refinedWith").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def refinedWith: (CellarHigherKinded & Serializable) { type T }", sig)
+      }
+    }
+
+  test("printSymbolSignature parenthesises a function before a refinement"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "refinedFunction").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def refinedFunction: (Int => Int) { type T }", sig)
+      }
+    }
+
+  test("printSymbolSignature parenthesises a polymorphic function as a function parameter"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "liftHigher").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def liftHigher(f: ([X] => List[X] => Option[X]) => Int): Int", sig)
+      }
+    }
+
+  test("printSymbolSignature parenthesises a polymorphic function in an intersection"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "andPoly").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def andPoly: CellarBox[List] & ([X] => X => X)", sig)
+      }
+    }
+
+  test("printSymbolSignature keeps a value named apply as a refinement member"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "applyVal").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def applyVal: (() => Int) { val apply: Int }", sig)
+      }
+    }
+
+  test("printSymbolSignature prints a polymorphic function's context bound as written"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "liftBounded").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def liftBounded(f: [X: Ordering] => X => X): Int", sig)
+      }
+    }
+
+  test("printSymbolSignature prints a polymorphic context function's parameter bare"):
+    withCtx { ctx =>
+      IO.blocking {
+        // given
+        given Context = ctx
+        val sym = ctx.findStaticClass("cellar.fixture.scala3.CellarHigherKinded").declarations
+          .find(_.name.toString == "liftContextual").get
+
+        // when
+        val sig = TypePrinter.printSymbolSignature(sym)
+
+        // then
+        expect.eql("abstract def liftContextual(f: [X] => X ?=> X): Int", sig)
+      }
+    }
+
   test("printSymbolSignature renders higher-kinded class type params (Scala 3)"):
     withCtx { ctx =>
       IO.blocking {
