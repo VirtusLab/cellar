@@ -50,36 +50,34 @@ object TypePrinter:
       case t: AppliedType =>
         asFunction(t) match
           case Some((contextual, params, result)) =>
-            val arrow = if contextual then " ?=> " else " => "
-            val lhs = params match
-              case single :: Nil if !functionArgNeedsParens(single) => printTypeOrWildcard(single)
-              case _ => params.map(printTypeOrWildcard).mkString("(", ", ", ")")
-            s"$lhs$arrow${printTypeOrWildcard(result)}"
+            printFunction(params, names = None, contextual, printTypeOrWildcard(result))
           case None =>
             asTuple(t) match
               case Some(elems) => elems.map(printTypeOrWildcard).mkString("(", ", ", ")")
               case None =>
                 asInfix(t) match
                   case Some((lhs, op, rhs)) =>
-                    s"${printTypeOrWildcard(lhs)} $op ${printTypeOrWildcard(rhs)}"
+                    s"${printInfixOperand(lhs)} $op ${printInfixOperand(rhs)}"
                   case None =>
                     val args = t.args.map(printTypeArgument).mkString(", ")
                     s"${printType(t.tycon)}[$args]"
 
       case t: ByNameType     => s"=> ${printType(t.resultType)}"
-      case t: AndType        => s"${printType(t.first)} & ${printType(t.second)}"
-      case t: OrType         => s"${printType(t.first)} | ${printType(t.second)}"
+      case t: AndType        => s"${printInfixOperand(t.first)} & ${printInfixOperand(t.second)}"
+      case t: OrType         => s"${printInfixOperand(t.first)} | ${printInfixOperand(t.second)}"
       case t: AnnotatedType  => printType(t.typ)
       case t: ThisType       => s"${t.tref.name}.this"
       case t: TermRef        => t.name.toString
       case t: TermParamRef   => t.binder.paramNames(t.paramNum).toString
       case t: TypeParamRef   => printTypeParamName(t.binder.paramNames(t.paramNum))
       case t: RepeatedType   => s"${printType(t.elemType)}*"
-      case t: TermRefinement if isRefinedFunction(t) => printMethodAsFunction(t.refinedType)
+      case t: TermRefinement if isRefinedFunction(t) => printMethodAsFunction(t.refinedType, Set.empty)
       case t: (TypeRefinement | TermRefinement) =>
         val (base, members) = refinements(t)
         val body = s"{ ${members.mkString("; ")} }"
-        if isOmittedRefinementParent(base) then body else s"${printType(base)} $body"
+        if isOmittedRefinementParent(base) then body
+        else if isInfixLike(base) then s"(${printType(base)}) $body"
+        else s"${printType(base)} $body"
       case t: RecType        => printType(t.parent)
       case t: ConstantType   => t.value.value.toString
       case t: MatchType      => s"${printType(t.scrutinee)} match { ... }"
@@ -149,7 +147,7 @@ object TypePrinter:
   /** `[A: Monoid, F[_]]` and the names of the evidence parameters those context bounds stand for:
    *  evidence typed by a type class applied to just one of `poly`'s type parameters.
    */
-  private def printPolyParams(poly: PolyType)(using Context): (String, Set[String]) =
+  private def printPolyParams(poly: PolyType, throughFunctions: Boolean = false)(using Context): (String, Set[String]) =
     def evidenceIn(tpe: TypeOrMethodic): List[(String, Int, String)] =
       tpe match
         case m: MethodType =>
@@ -163,6 +161,9 @@ object TypePrinter:
           here ++ evidenceIn(m.resultType)
         // An extension's evidence follows the method's own type parameters.
         case p: PolyType => evidenceIn(p.resultType)
+        // A polymorphic function's comes in a context function, `[X] => X => (ev: Ord[X]) ?=> X`;
+        // a method's result of that type was written so.
+        case t: TermRefinement if throughFunctions && isRefinedFunction(t) => evidenceIn(t.refinedType)
         case _           => Nil
     val evidence = evidenceIn(poly.resultType)
     val bounds   = evidence.groupMap(_._2)(_._3)
@@ -316,37 +317,83 @@ object TypePrinter:
    *  with `defn.isFunctionType`.
    */
   private def isRefinedFunction(t: TermRefinement): Boolean =
-    t.refinedName.toString == "apply" && (t.parent match
+    t.refinedName.toString == "apply" && t.refinedType.isInstanceOf[MethodType | PolyType] && (t.parent match
       case ref: TypeRef     => isScalaPackage(ref.prefix) && ref.name.toString == "PolyFunction"
       case app: AppliedType => asFunction(app).isDefined
       case _                => false)
 
   /** As dotty's `RefinedPrinter.toTextMethodAsFunction`, except that parameters print unnamed
    *  when every name is one `Desugar.makePolyFunctionType` invented (`x$1`, `x$2`, …), as the
-   *  source wrote them; dotty does that only under capture checking.
+   *  source wrote them; dotty does that only under capture checking. A context bound shows as
+   *  written, `[X: Ord] => …`, instead of its evidence clause.
    */
-  private def printMethodAsFunction(tpe: TypeOrMethodic)(using Context): String =
+  private def printMethodAsFunction(tpe: TypeOrMethodic, elided: Set[String])(using Context): String =
     tpe match
-      case t: PolyType => s"${printPolyParams(t)._1} => ${printMethodAsFunction(t.resultType)}"
+      case t: PolyType =>
+        val (typeParams, evidence) = printPolyParams(t, throughFunctions = true)
+        s"$typeParams => ${printMethodAsFunction(t.resultType, elided ++ evidence)}"
+      case t: MethodType if t.paramNames.nonEmpty && t.paramNames.forall(n => elided(n.toString)) =>
+        printMethodAsFunction(t.resultType, elided)
       case t: MethodType =>
-        val arrow = if t.isContextual then "?=>" else "=>"
         val synthetic = t.paramNames.zipWithIndex.forall((n, i) => n.toString == s"x$$${i + 1}")
-        val params =
-          if !synthetic then t.paramNames.zip(t.paramTypes).map((n, tp) => s"$n: ${printType(tp)}").mkString("(", ", ", ")")
-          else t.paramTypes match
-            case single :: Nil if !t.isContextual && !functionArgNeedsParens(single) => printType(single)
-            case types => types.map(printType).mkString("(", ", ", ")")
-        s"$params $arrow ${printMethodAsFunction(t.resultType)}"
+        val names     = Option.when(!synthetic)(t.paramNames.map(_.toString))
+        printFunction(t.paramTypes, names, t.isContextual, printMethodAsFunction(t.resultType, elided))
+      // A context bound's evidence comes as a dependent context function: `X => (ev: Ord[X]) ?=> X`.
+      case t: TermRefinement if isRefinedFunction(t) => printMethodAsFunction(t.refinedType, elided)
       case t: Type => printType(t)
+
+  /** `A => B`, `(A, B) ?=> C`, `(x: A) => x.T`. One unnamed parameter goes without parentheses,
+   *  as it is written, unless it is itself a function or a tuple.
+   */
+  private def printFunction(
+      params: List[TypeOrWildcard],
+      names: Option[List[String]],
+      contextual: Boolean,
+      result: String
+  )(using Context): String =
+    val lhs = (names, params) match
+      case (Some(ns), _)                                             => ns.zip(params).map((n, p) => s"$n: ${printTypeOrWildcard(p)}").mkString("(", ", ", ")")
+      case (None, single :: Nil) if !functionArgNeedsParens(single) => printTypeOrWildcard(single)
+      case (None, _)                                                 => params.map(printTypeOrWildcard).mkString("(", ", ", ")")
+    val arrow = if contextual then "?=>" else "=>"
+    s"$lhs $arrow $result"
+
+  /** Function arrows bind looser than infix types like `&` and `|`, so a function operand needs parentheses. */
+  private def printInfixOperand(tow: TypeOrWildcard)(using Context): String =
+    if isFunction(tow) then s"(${printTypeOrWildcard(tow)})" else printTypeOrWildcard(tow)
+
+  private def isFunction(tow: TypeOrWildcard): Boolean =
+    tow match
+      case t: AppliedType    => asFunction(t).isDefined
+      case t: TermRefinement => isRefinedFunction(t)
+      case _                 => false
+
+  /** A type the braces of a refinement would bind to only in part: `(A & B) { … }`, as dotty's
+   *  `toTextLocal` parenthesises the parent.
+   */
+  private def isInfixLike(tpe: Type): Boolean =
+    tpe match
+      case _: (AndType | OrType) => true
+      case t: AppliedType        => isFunction(t) || asInfix(t).isDefined
+      case t: TermRefinement     => isRefinedFunction(t)
+      case _                     => false
 
   /** `{ type A }` has no parent in source: dotty's `Typer.typedRefinedTypeTree` fills it with
    *  `Object`, scalac with `AnyRef`. Dotty's printer shows it (`Object{type A}`); omitting it
    *  matches the source.
    */
-  private def isOmittedRefinementParent(tpe: Type)(using Context): Boolean =
-    tpe.dealias match
-      case ref: TypeRef => ref.optSymbol.contains(defn.ObjectClass)
-      case _            => false
+  private def isOmittedRefinementParent(tpe: Type): Boolean =
+    tpe match
+      case ref: TypeRef =>
+        val name = ref.name.toString
+        isFromJavaObject(ref) || (name == "AnyRef" && isScalaPackage(ref.prefix)) ||
+          (name == "Object" && isJavaLangPackage(ref.prefix))
+      case _ => false
+
+  private def isJavaLangPackage(prefix: Prefix): Boolean =
+    prefix match
+      case p: PackageRef => p.fullyQualifiedName.toString == "java.lang"
+      case _             => false
 
   /** TASTy stores `type F[A] = G[A]` and `type F = [A] =>> G[A]` alike; as dotty's
    *  `PlainPrinter.decomposeLambdas` does, a lambda's parameters print as the alias's own.
@@ -611,4 +658,4 @@ object TypePrinter:
   private def functionArgNeedsParens(tow: TypeOrWildcard): Boolean =
     tow match
       case t: AppliedType => asFunction(t).isDefined || asTuple(t).isDefined
-      case _              => false
+      case t              => isFunction(t)

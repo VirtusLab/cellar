@@ -6,4 +6,5 @@ trait CellarHigherKinded {
   def bounded[F[X <: AnyRef]](fa: F[String]): F[String]
   def bimap[G[_, _], A, B](g: G[A, B]): G[A, B]
   def struct: { type A; def get: A }
+  def refinedWith: CellarHigherKinded with Serializable { type T }
 }
