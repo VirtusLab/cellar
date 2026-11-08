@@ -15,6 +15,6 @@ object `package` extends build.CommonScalaModule {
   def mainClass  = Some("cellar.bench.Main")
 
   object test extends ScalaTests with TestModule.Weaver {
-    def weaverVersion = "0.13.0"
+    def weaverVersion = "0.13.1"
   }
 }

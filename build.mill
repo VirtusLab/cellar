@@ -93,7 +93,7 @@ object lib extends CellarPublishModule {
     // Every test class boots its own tasty-query Context; one forked JVM per class saturates
     // the whole machine and starts failing under load, so run them in a single JVM.
     def testParallelism = false
-    def weaverVersion = "0.13.0"
+    def weaverVersion = "0.13.1"
     def forkArgs = Task {
       // Publish fixtures to ~/.m2 before running tests
       fixtureJava.publishM2LocalCached()
@@ -129,7 +129,7 @@ object profilingRuntime extends CellarPublishModule {
   )
 
   object test extends ScalaTests with TestModule.Weaver {
-    def weaverVersion = "0.13.0"
+    def weaverVersion = "0.13.1"
   }
 }
 
@@ -231,7 +231,7 @@ object cli extends CellarPublishModule with NativeImageModule {
   ) ++ Assembly.defaultRules
 
   object test extends ScalaTests with TestModule.Weaver {
-    def weaverVersion = "0.13.0"
+    def weaverVersion = "0.13.1"
   }
 }
 
