@@ -66,7 +66,7 @@ object lib extends CellarPublishModule {
     mvn"org.ow2.asm:asm:9.11.1",
     mvn"com.github.javaparser:javaparser-core:3.28.2",
     mvn"org.scalameta::parsers:4.17.4",
-    mvn"org.scala-lang:scala3-tasty-inspector_3:3.10.0",
+    mvn"org.scala-lang:scala3-tasty-inspector_3:3.10.1",
     mvn"com.github.pureconfig::pureconfig-core:0.17.11",
     mvn"org.typelevel::log4cats-core:2.8.0",
     mvn"org.typelevel::otel4s-core-trace:1.1.0"
