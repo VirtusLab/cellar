@@ -3,7 +3,7 @@ package cellar
 import cats.effect.IO
 import fs2.Stream
 import tastyquery.Contexts.Context
-import tastyquery.Symbols.{ClassSymbol, PackageSymbol, Symbol}
+import tastyquery.Symbols.{ClassSymbol, PackageSymbol, Symbol, TermOrTypeSymbol}
 
 sealed trait ListTarget
 object ListTarget:
@@ -34,7 +34,10 @@ object SymbolLister:
     target match
       case ListTarget.Package(pkg) =>
         Stream
-          .eval(IO.blocking(pkg.declarations))
+          .eval(IO.blocking(pkg.declarations.flatMap {
+            case s: TermOrTypeSymbol => SymbolResolver.expandPackageWrapper(s)
+            case s                   => List(s)
+          }))
           .flatMap(decls => Stream.emits(decls))
           .evalFilter(sym => IO.blocking(PublicApiFilter.isListed(sym)))
 

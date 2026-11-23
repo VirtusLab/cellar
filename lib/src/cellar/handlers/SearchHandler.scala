@@ -43,7 +43,7 @@ object SearchHandler:
     val isFqnQuery = lowerQuery.contains('.')
     def matchTarget(sym: tastyquery.Symbols.TermOrTypeSymbol): String =
       if isFqnQuery then
-        try sym.displayFullName
+        try GetFormatter.displayFqn(sym)
         catch case _: Exception => sym.name.toString
       else sym.name.toString
     val matchingStream = AllSymbolsStream

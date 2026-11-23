@@ -17,7 +17,7 @@ object AllSymbolsStream:
       .flatMap { entry =>
         Stream
           .eval(IO.blocking {
-            try ctx.findSymbolsByClasspathEntry(entry).toList
+            try ctx.findSymbolsByClasspathEntry(entry).toList.flatMap(SymbolResolver.expandPackageWrapper)
             catch
               case e: Throwable =>
                 if log.isLoggable(java.util.logging.Level.FINE) then
