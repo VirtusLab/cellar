@@ -94,6 +94,7 @@ object lib extends CellarPublishModule {
     // the whole machine and starts failing under load, so run them in a single JVM.
     def testParallelism = false
     def weaverVersion = "0.13.0"
+    def mvnDeps = super.mvnDeps() ++ Seq(mvn"org.typelevel::log4cats-testing:2.8.0")
     def forkArgs = Task {
       // Publish fixtures to ~/.m2 before running tests
       fixtureJava.publishM2LocalCached()
