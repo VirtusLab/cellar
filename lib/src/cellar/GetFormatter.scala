@@ -76,7 +76,8 @@ object GetFormatter:
 
   private def renderOrigin(sym: Symbol): String =
     sym.owner match
-      case owner: ClassSymbol => displayFqn(owner)
+      case owner: ClassSymbol if SymbolResolver.isPackageWrapper(owner) => displayFqn(owner.owner)
+      case owner: ClassSymbol                                            => displayFqn(owner)
       case _                  => displayFqn(sym)
 
   private def renderMembers(
@@ -175,10 +176,12 @@ object GetFormatter:
    *  Scala 3 top-level defs/types/objects live in a synthetic `<file>$package`
    *  class that is not part of the name a user would write, so that segment is
    *  dropped too: `pkg.Hello$package$.Hello$.fromInt` becomes `pkg.Hello.fromInt`.
+   *  The same holds for a Scala 2-style `package object`: `pkg.package$.Foo` becomes `pkg.Foo`,
+   *  while the package object itself stays `pkg.package`.
    */
   private[cellar] def displayFqn(sym: Symbol): String =
     val fqn = sym.displayFullName.replace("$.", ".")
     val unmangled = sym match
       case cls: ClassSymbol if cls.isModuleClass => fqn.stripSuffix("$")
       case _                                     => fqn
-    unmangled.split('.').iterator.filterNot(_.endsWith("$package")).mkString(".")
+    unmangled.replace(".package.", ".").split('.').iterator.filterNot(_.endsWith("$package")).mkString(".")

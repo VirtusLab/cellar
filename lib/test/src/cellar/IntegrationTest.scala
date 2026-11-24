@@ -641,6 +641,45 @@ object IntegrationTest extends SequentialIOSuite:
           expect(clue(code) == ExitCode.Error)
         }
 
+  // Package-level members live in a wrapper module class: `package$` for a Scala 2
+  // `package object`, `<file>$package$` for Scala 3 top-level decls. Listing the
+  // package shows the members in place of the wrapper.
+
+  test("list: Scala 2 package object members are listed in their package"):
+    val console = CapturingConsole()
+    given Console[IO] = console
+    TestFixtures.assumeFixturesAvailable *>
+    handlers.ListHandler
+      .run(
+        TestFixtures.scala2Coord,
+        "cellar.fixture.scala2",
+        limit = 50,
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        val out = console.outBuf.toString
+        expect(clue(code) == ExitCode.Success) and
+          expect(out.contains("type TC[A] = CellarTypeClass[A]"), s"Expected package object alias in output: $out") and
+          expect(!out.contains("object package"), s"Unexpected package wrapper in output: $out")
+      }
+
+  test("list: Scala 3 top-level members are listed in their package"):
+    val console = CapturingConsole()
+    given Console[IO] = console
+    TestFixtures.assumeFixturesAvailable *>
+    handlers.ListHandler
+      .run(
+        TestFixtures.scala3Coord,
+        "myapp",
+        limit = 50,
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        val out = console.outBuf.toString
+        expect(clue(code) == ExitCode.Success) and
+          expect(out.contains("opaque type Hello"), s"Expected top-level opaque type in output: $out")
+      }
+
   // ─── search subcommand ───────────────────────────────────────────────────
 
   test("search: 'CellarADT' query finds sealed trait"):
@@ -693,6 +732,38 @@ object IntegrationTest extends SequentialIOSuite:
           expect(clue(code) == ExitCode.Success) and
             expect.eql("", console.outBuf.toString.trim)
         }
+
+  test("search: FQN query finds Scala 2 package object member by its natural FQN"):
+    val console = CapturingConsole()
+    given Console[IO] = console
+    TestFixtures.assumeFixturesAvailable *>
+    handlers.SearchHandler
+      .run(
+        TestFixtures.scala2Coord,
+        "cellar.fixture.scala2.TC",
+        limit = 50,
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        expect(clue(code) == ExitCode.Success) and
+          expect(console.outBuf.toString.contains("cellar.fixture.scala2.TC — type TC"), s"Output: ${console.outBuf}")
+      }
+
+  test("search: Scala 3 top-level opaque type is found"):
+    val console = CapturingConsole()
+    given Console[IO] = console
+    TestFixtures.assumeFixturesAvailable *>
+    handlers.SearchHandler
+      .run(
+        TestFixtures.scala3Coord,
+        "Hello",
+        limit = 50,
+        extraRepositories = Seq(TestFixtures.localM2Repo)
+      )
+      .map { code =>
+        expect(clue(code) == ExitCode.Success) and
+          expect(console.outBuf.toString.contains("myapp.Hello — opaque type Hello"), s"Output: ${console.outBuf}")
+      }
 
   // ─── deps subcommand ─────────────────────────────────────────────────────
 

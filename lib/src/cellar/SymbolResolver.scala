@@ -297,9 +297,10 @@ object SymbolResolver:
     (best, firstError)
 
   /**
-   * Scala 3 top-level defs/types/objects in `pkg` live inside a synthetic
-   * `<filename>$package$` module class. Walks every such wrapper in `pkg` and
-   * applies `f` with the member name to be looked up.
+   * Members declared directly in `pkg` by source code live inside a module class:
+   * a synthetic `<filename>$package$` for Scala 3 top-level defs/types/objects, or
+   * `package$` for a Scala 2-style `package object`. Walks every such wrapper in
+   * `pkg` and applies `f` with the member name to be looked up.
    */
   private def withPackageWrappers[A](fqn: String)(f: (ClassSymbol, String) => IterableOnce[A])(using ctx: Context): List[A] =
     val idx = fqn.lastIndexOf('.')
@@ -307,11 +308,25 @@ object SymbolResolver:
     val name = fqn.substring(idx + 1)
     tryOrNone(ctx.findPackage(fqn.substring(0, idx))).toList.flatMap { pkg =>
       tryOrNone(pkg.declarations).getOrElse(Nil).flatMap {
-        case c: ClassSymbol if c.isModuleClass && c.name.toString.endsWith("$package$") =>
-          f(c, name).iterator.toList
+        case c: ClassSymbol if isPackageWrapper(c) => f(c, name).iterator.toList
         case _ => Nil
       }
     }
+
+  private[cellar] def isPackageWrapper(cls: ClassSymbol): Boolean =
+    val name = cls.name.toString
+    cls.isModuleClass && (name == "package$" || name.endsWith("$package$"))
+
+  /**
+   * Replaces a package wrapper (see `withPackageWrappers`) with its declarations and
+   * drops the wrapper's module val, so package-level members appear directly in their
+   * package. Any other symbol is returned unchanged.
+   */
+  private[cellar] def expandPackageWrapper(sym: TermOrTypeSymbol)(using ctx: Context): List[TermOrTypeSymbol] =
+    sym match
+      case c: ClassSymbol if isPackageWrapper(c)                                     => tryOrNone(c.declarations).getOrElse(Nil)
+      case t: TermSymbol if t.isModuleVal && t.moduleClass.exists(isPackageWrapper) => Nil
+      case other                                                                     => List(other)
 
   private def packageWrapperMembers(fqn: String)(using ctx: Context): List[Symbol] =
     withPackageWrappers[Symbol](fqn) { (w, name) =>

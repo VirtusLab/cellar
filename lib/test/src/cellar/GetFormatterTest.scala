@@ -495,3 +495,24 @@ object GetFormatterTest extends SequentialIOSuite:
           expect(!output.contains("Matchable"), s"Output:\n$output")
       }
     }
+
+  // A Scala 2-style `package object` compiles to a module class named `package$`.
+  // Its members are addressed by their natural FQN and the wrapper must not leak.
+  // Fixture: fixtureScala2/src/cellar/fixture/scala2/package.scala
+  //   package object scala2 extends CellarInstances {
+  //     type TC[A] = CellarTypeClass[A]
+  //     val TC: CellarTypeClass.type = CellarTypeClass
+  //   }
+
+  test("formatGetResult for package object member resolves and hides the package wrapper"):
+    withScala2Ctx { ctx =>
+      given Context = ctx
+      SymbolResolver.resolve("cellar.fixture.scala2.TC").map {
+        case LookupResult.Found(syms) =>
+          val output = GetFormatter.formatGetResult("cellar.fixture.scala2.TC", syms)
+          expect(output.contains("type TC[A] = CellarTypeClass[A]"), s"Expected type alias in:\n$output") and
+            expect(output.contains("**Origin:** cellar.fixture.scala2\n"), s"Expected origin 'cellar.fixture.scala2' in:\n$output") and
+            expect(!output.contains(".package"), s"Unexpected package wrapper in:\n$output")
+        case other => failure(s"Expected Found, got $other")
+      }
+    }
