@@ -79,7 +79,12 @@ object DocstringExtractor:
   /** The outcome of one inspector run, kept so the (blocking, non-IO) inspector callback can report
     * what happened without logging from inside the compiler run.
     */
-  private case class InspectionOutcome(callbackFired: Boolean, classpathSize: Int, docstring: Option[String])
+  private case class InspectionOutcome(
+      callbackFired: Boolean,
+      classpathSize: Int,
+      docstring: Option[String],
+      compilerErrors: Boolean
+  )
 
   private def extractAndInspect(jar: Path, tastyEntry: String, allJars: Seq[Path], fqn: String, jre: IO[Seq[Path]])(using
       logger: Logger[IO]
@@ -107,7 +112,7 @@ object DocstringExtractor:
         val cp = allJars.filterNot(p => isStdlib(p.fileName.toString)) ++ compilerStdlibJars ++ jreJars
         // `Driver.doCompile` reports a failed run with a bare `println`, so a compiler
         // problem would otherwise land in the middle of the Markdown cellar writes to stdout.
-        val _ = Console.withOut(Console.err) {
+        val compiled = Console.withOut(Console.err) {
           TastyInspector.inspectAllTastyFiles(
             List(tmp.toString),
             Nil,
@@ -118,17 +123,21 @@ object DocstringExtractor:
               docstring = lookupDocstring(fqn)(using q)
           )
         }
-        Right(InspectionOutcome(fired, cp.size, docstring))
+        Right(InspectionOutcome(fired, cp.size, docstring, !compiled))
       catch case t: Throwable => Left(t)
     }
-    logger.debug(s"inspecting $tastyEntry for $fqn") *> run.flatMap {
+    logger.debug(s"inspecting $tastyEntry for $fqn") *> run.flatTap {
+      case Right(outcome) if outcome.compilerErrors =>
+        logger.warn(s"compiler reported errors while inspecting $tastyEntry for $fqn")
+      case _ => IO.unit
+    }.flatMap {
       case Left(t) =>
         logger.warn(t)(s"TASTy inspection of $tastyEntry failed; no docstring for $fqn").as(None)
-      case Right(InspectionOutcome(false, cpSize, _)) =>
+      case Right(InspectionOutcome(false, cpSize, _, _)) =>
         logger.warn(s"TASTy inspector never ran for $tastyEntry ($cpSize classpath entries)").as(None)
-      case Right(InspectionOutcome(true, cpSize, None)) =>
+      case Right(InspectionOutcome(true, cpSize, None, _)) =>
         logger.debug(s"inspected $tastyEntry ($cpSize classpath entries), no docstring for $fqn").as(None)
-      case Right(InspectionOutcome(true, _, found)) =>
+      case Right(InspectionOutcome(true, _, found, _)) =>
         IO.pure(found)
     }
 
@@ -160,13 +169,15 @@ object DocstringExtractor:
     else
       val ownerFqn   = fqn.substring(0, lastDot)
       val memberName = fqn.substring(lastDot + 1)
-      val owner =
+      // `requiredClass` on a single-segment package name returns a stub class instead of
+      // throwing, and querying its members reports "Bad symbolic reference" on stderr (#275).
+      lazy val owner =
         try Symbol.requiredClass(ownerFqn)
         catch
           case _ =>
             try Symbol.requiredModule(ownerFqn)
             catch case _ => Symbol.noSymbol
-      if owner.isNoSymbol then None
+      if Symbol.requiredPackage(ownerFqn).isPackageDef || owner.isNoSymbol then None
       else
         val methods = owner.methodMember(memberName)
         val field   = owner.fieldMember(memberName)

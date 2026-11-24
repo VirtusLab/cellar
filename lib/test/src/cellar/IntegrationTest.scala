@@ -2,6 +2,7 @@ package cellar
 
 import cats.effect.{ExitCode, IO}
 import cats.effect.std.Console
+import org.typelevel.log4cats.testing.TestingLogger
 import org.typelevel.otel4s.trace.Tracer.Implicits.noop
 import weaver.Expectations
 
@@ -518,6 +519,26 @@ object IntegrationTest extends SequentialIOSuite:
             expect(out.contains("## cellar.fixture.scala3.CellarA"), s"Output: $out") and
             expect(!out.contains("/**"), s"Raw docstring markers leaked: $out") and
             noCompilerCrash(console)
+        }
+
+  test("get: undocumented symbol in a single-segment package inspects without compiler errors"):
+    val console = CapturingConsole()
+    given Console[IO] = console
+    val logger = TestingLogger.impl[IO]()
+    TestFixtures.assumeFixturesAvailable *>
+      handlers.GetHandler
+        .run(
+          TestFixtures.scala3Coord,
+          "myapp.hello",
+          extraRepositories = Seq(TestFixtures.localM2Repo),
+          logger = logger
+        )
+        .flatMap(code => logger.logged.map(code -> _))
+        .map { (code, logged) =>
+          val compilerErrors = logged.filter(_.message.startsWith("compiler reported errors"))
+          expect(clue(code) == ExitCode.Success) and
+            expect(console.outBuf.toString.contains("## myapp.hello"), s"Output: ${console.outBuf}") and
+            expect(compilerErrors.isEmpty, s"Compiler errors logged: $compilerErrors")
         }
 
   test("get: Java class renders signature without compiler crash"):
